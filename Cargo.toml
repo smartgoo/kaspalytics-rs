@@ -1,0 +1,21 @@
+[package]
+name = "kaspalytics-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.8", features = ["derive"] }
+dirs = "5.0.1"
+env_logger = "0.11.3"
+kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+log = "0.4"
+moka = {version = "0.12.7", features = ["future"] }
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }
+strum = "0.26.3"
+strum_macros = "0.26.3"
+tokio = { version = "1", features = ["full"] }
