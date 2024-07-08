@@ -1,21 +1,27 @@
 mod args;
+mod cache;
 mod database;
 mod kaspad;
+mod service;
 
 use args::Args;
+use cache::cache::Cache;
 use clap::Parser;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_rpc_core::{api::rpc::RpcApi, RpcBlock, RpcHash, RpcTransaction, RpcTransactionId};
 use env_logger::{Builder, Env};
 use log::{LevelFilter, info};
+// use moka::future::Cache as MokaCache;
 use std::io;
 
 
 const META_DB: &str = "meta";
 const CONSENSUS_DB: &str = "consensus";
 
+
 fn prompt_confirmation(prompt: &str) -> bool {
     println!("{}", prompt);
+    // println!("DANGER!!! Are you sure you want to drop and recreate the database? (y/N): ");
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
     matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
@@ -30,12 +36,11 @@ async fn main() -> () {
     let network = kaspad::network(args.kaspad_network.clone(), args.kaspad_network_suffix.clone());
 
     // Logger
-    // TODO log level controlled by an arg
     let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
     builder.filter(None, LevelFilter::Debug);
     builder.init();
 
-    // Optionally reset (drop and create) database based on CLI args
+    // Optionally drop database based on CLI args
     if args.reset_db {
         let db_name = args.db_url.split('/').last().expect("Invalid connection string");
 
@@ -86,11 +91,20 @@ async fn main() -> () {
     let consensus_db_dir = db_dir.join(CONSENSUS_DB).join(current_meta_dir);
 
     // If first time running, store pruning point UTXO set in PG DB
+    // TODO run on tokio loop and start at same time as other services?
     if db_network.is_none() {
         // Store network
         database::initialize::store_network_meta(&db_pool, server_info.network_id).await.unwrap();
         // Insert pruning point utxo set to Postgres
-        // So we can resolve all outpoints for transactions from PP up
+        // So we can resolve all outpoints for transactions from PP up and do analysis on this data
         kaspad::db::pp_utxo_set_to_pg(&db_pool, network, consensus_db_dir).await;
     }
+
+    service::initial_sync::initial_sync(rpc_client.clone()).await;
+
+    // TODO do I need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
+        // If node has block hash, utxo set should be in sync with that.
+        // If node has not have block hash, I think I'll have issues since UTXO set is for older data
+        // I can probably just use checkpoint as last indexed thing?
+
 }

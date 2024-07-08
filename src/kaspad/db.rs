@@ -41,9 +41,9 @@ pub async fn pp_utxo_set_to_pg(pool: &PgPool, network: NetworkId, consensus_db_d
     // Write the binary header per Postgres requiremnts
     // Signature: PGCOPY\n\377\r\n\0
     data.write_all(b"PGCOPY\n\xFF\r\n\0").unwrap();
-    // Flags: 32-bit integer, set to 0 since not including OIDs
+    // Flags field, 32-bit integer, set to 0, not including OIDs
     data.extend_from_slice(&0u32.to_be_bytes());
-    // Header extension area: 32-bit integer, hardcoding to 0 for this
+    // Header extension area, 32-bit integer, hardcoding to 0 for this
     data.extend_from_slice(&0u32.to_be_bytes());
 
     info!("Building PG COPY byte array...");
