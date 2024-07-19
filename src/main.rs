@@ -11,7 +11,6 @@ use kaspa_consensus_core::network::NetworkId;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use log::{info, LevelFilter};
-// use moka::future::Cache as MokaCache;
 use std::io;
 
 const META_DB: &str = "meta";
@@ -32,7 +31,7 @@ async fn main() {
 
     // Init Logger
     let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
-    builder.filter(None, LevelFilter::Debug);
+    builder.filter(None, LevelFilter::Info);
     builder.init();
 
     info!("Initializing application");
@@ -55,11 +54,6 @@ async fn main() {
     )
     .unwrap();
     rpc_client.connect(None).await.unwrap();
-
-    // Init PG DB connection pool
-    let db_pool = database::conn::open_connection_pool(&args.db_url)
-        .await
-        .unwrap();
 
     // Init Rusty Kaspa dirs
     let app_dir = kaspad::get_app_dir_from_args(&args);
@@ -95,6 +89,11 @@ async fn main() {
             database::conn::close_connection(conn).await.unwrap();
         }
     }
+
+    // Init PG DB connection pool
+    let db_pool = database::conn::open_connection_pool(&args.db_url)
+        .await
+        .unwrap();
 
     // Apply PG DB migrations and insert static records
     database::initialize::apply_migrations(&db_pool)
