@@ -1,2 +1,2 @@
-mod cache;
-pub mod initial_sync;
+pub mod cache;
+pub mod blocks;

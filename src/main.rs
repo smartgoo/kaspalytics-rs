@@ -8,7 +8,7 @@ use args::Args;
 use clap::Parser;
 use env_logger::{Builder, Env};
 use kaspa_consensus_core::network::NetworkId;
-use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use log::{info, LevelFilter};
 use std::io;
@@ -131,7 +131,12 @@ async fn main() {
         }
     }
 
-    service::initial_sync::initial_sync(rpc_client.clone()).await;
+    // TODO get last block hash checkpoint from DB. Temporarily hardcoded to pruning point hash
+    let GetBlockDagInfoResponse {
+        pruning_point_hash, ..
+    } = rpc_client.get_block_dag_info().await.unwrap();
+    let cache = service::cache::DAGCache::new();
+    service::blocks::BlocksProcess::run(pruning_point_hash, rpc_client, cache).await;
 
     // TODO need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
     // If node has block hash, utxo set should be in sync with that.
