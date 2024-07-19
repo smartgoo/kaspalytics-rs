@@ -87,11 +87,11 @@ pub async fn initial_sync(rpc_client: KaspaRpcClient) {
         info!("transactions_blocks cache size {}", cache.transactions_blocks.entry_count());
     }
 
-    let vspc = rpc_client
-        .get_virtual_chain_from_block_call(GetVirtualChainFromBlockRequest {
-            start_hash: pruning_point_hash,
-            include_accepted_transaction_ids: true,
-        })
-        .await
-        .unwrap();
+    // let vspc = rpc_client
+    //     .get_virtual_chain_from_block_call(GetVirtualChainFromBlockRequest {
+    //         start_hash: pruning_point_hash,
+    //         include_accepted_transaction_ids: true,
+    //     })
+    //     .await
+    //     .unwrap();
 }

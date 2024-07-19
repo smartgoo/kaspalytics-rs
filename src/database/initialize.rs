@@ -61,17 +61,19 @@ pub async fn get_meta_network_suffix(pool: &PgPool) -> Result<Option<String>, sq
 }
 
 pub async fn get_meta_network_id(pool: &PgPool) -> Result<Option<NetworkId>, sqlx::Error> {
-    let network = get_meta_network(pool).await?;
-    let netsuffix = get_meta_network_suffix(pool).await?;
+    let network = match get_meta_network(pool).await? {
+        Some(value) => value,
+        None => return Ok(None),
+    };
+    let network_type = NetworkType::from_str(&network).unwrap();
 
-    if network.is_none() {
-        return Ok(None)
-    }
+    let netsuffix = get_meta_network_suffix(pool)
+        .await?
+        .and_then(|value| value.parse::<u32>().ok());
 
-    let network_type = NetworkType::from_str(&network.unwrap()).unwrap();
     let network_id = match NetworkId::try_new(network_type) {
         Ok(network_id) => network_id,
-        Err(_) => NetworkId::with_suffix(network_type, netsuffix.unwrap().parse::<u32>().unwrap()),
+        Err(_) => NetworkId::with_suffix(network_type, netsuffix.unwrap()),
     };
 
     Ok(Some(network_id))

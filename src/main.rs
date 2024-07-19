@@ -18,7 +18,6 @@ const CONSENSUS_DB: &str = "consensus";
 
 fn prompt_confirmation(prompt: &str) -> bool {
     println!("{}", prompt);
-    // println!("DANGER!!! Are you sure you want to drop and recreate the database? (y/N): ");
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
     matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
@@ -101,7 +100,7 @@ async fn main() {
         .unwrap();
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
-    // Ensure RPC node is synced and is same network/network suffix as supplied CLI args
+    // Ensure RPC node is synced and is same network/suffix as supplied CLI args
     let server_info = rpc_client.get_server_info().await.unwrap();
     assert!(server_info.is_synced, "Kaspad node is not synced");
     if !server_info.is_synced {
@@ -122,9 +121,10 @@ async fn main() {
         database::initialize::insert_network_meta(&db_pool, server_info.network_id)
             .await
             .unwrap();
+
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
-        // kaspad::db::pp_utxo_set_to_pg(&db_pool, network, consensus_db_dir).await;
+        kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await;
     } else {
         // Database has been used in the past
         // Validate database meta network/suffix matches network supplied via CLI
@@ -135,8 +135,8 @@ async fn main() {
 
     service::initial_sync::initial_sync(rpc_client.clone()).await;
 
-    // TODO do I need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
+    // TODO need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
     // If node has block hash, utxo set should be in sync with that.
-    // If node has not have block hash, I think I'll have issues since UTXO set is for older data
+    // If node has not have block hash, I think it'll have issues since UTXO set is for older data
     // I can probably just use checkpoint as last indexed thing?
 }
