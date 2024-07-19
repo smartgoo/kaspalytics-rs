@@ -1,4 +1,6 @@
 use clap::{Parser, ValueEnum};
+use kaspa_consensus_core::network::NetworkType;
+use kaspa_wrpc_client::WrpcEncoding;
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -9,16 +11,19 @@ pub struct Args {
     pub reset_db: bool,
 
     #[arg(long)]
-    pub kaspad_app_dir: Option<String>,
+    pub app_dir: Option<String>,
 
     #[arg(long)]
-    pub kaspad_network: Network,
+    pub network: NetworkType,
 
     #[arg(long)]
-    pub kaspad_network_suffix: Option<u32>,
+    pub netsuffix: Option<u32>,
 
     #[arg(long)]
-    pub kaspad_rpc_url: String,
+    pub rpc_url: Option<String>,
+
+    #[arg(long)]
+    pub rpc_encoding: Option<WrpcEncoding>,
 }
 
 #[derive(Clone, Debug, ValueEnum)]

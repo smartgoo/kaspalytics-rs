@@ -20,18 +20,9 @@ pub fn get_app_dir() -> PathBuf {
     return get_home_dir().join(".rusty-kaspa");
 }
 
-pub fn network(network: Network, testnet_suffix: Option<u32>) -> NetworkId {
-    match network {
-        Network::Mainnet => NetworkId::new(NetworkType::Mainnet),
-        Network::Testnet => NetworkId::with_suffix(NetworkType::Testnet, testnet_suffix.unwrap()),
-        Network::Devnet => NetworkId::new(NetworkType::Devnet),
-        Network::Simnet => NetworkId::new(NetworkType::Simnet),
-    }
-}
-
 pub fn get_app_dir_from_args(args: &Args) -> PathBuf {
     let app_dir = args
-        .kaspad_app_dir
+        .app_dir
         .clone()
         .unwrap_or_else(|| get_app_dir().as_path().to_str().unwrap().to_string())
         .replace('~', get_home_dir().as_path().to_str().unwrap());

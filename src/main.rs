@@ -6,13 +6,13 @@ mod service;
 
 use args::Args;
 use clap::Parser;
-use kaspa_consensus_core::network::{NetworkId, NetworkType};
+use kaspa_consensus_core::network::NetworkId;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use env_logger::{Builder, Env};
 use log::{LevelFilter, info};
 // use moka::future::Cache as MokaCache;
-use std::io;
+use std::{io, str::FromStr};
 
 
 const META_DB: &str = "meta";
@@ -29,16 +29,37 @@ fn prompt_confirmation(prompt: &str) -> bool {
 
 #[tokio::main]
 async fn main() {
-    info!("Initializing application");
-
     // Parse CLI args
     let args = Args::parse();
-    let network = kaspad::network(args.kaspad_network.clone(), args.kaspad_network_suffix);
 
-    // Logger
+    // Init Logger
     let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
     builder.filter(None, LevelFilter::Debug);
     builder.init();
+
+    info!("Initializing application");
+
+    // Get NetworkId based on CLI args
+    let network_id = match NetworkId::try_new(args.network) {
+        Ok(network_id) => network_id,
+        Err(_) => NetworkId::with_suffix(args.network, args.netsuffix.unwrap())
+    };
+
+    // Init RPC Client
+    let resolver = Resolver::default();
+    let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
+    let rpc_client = KaspaRpcClient::new(encoding, args.rpc_url.as_deref(), Some(resolver), Some(network_id), None).unwrap();
+    rpc_client.connect(None).await.unwrap();
+
+    // Init PG DB connection pool
+    let db_pool = database::conn::open_connection_pool(&args.db_url).await.unwrap();
+
+    // Init Rusty Kaspa dirs
+    let app_dir = kaspad::get_app_dir_from_args(&args);
+    let db_dir = kaspad::get_db_dir(app_dir, network_id);
+    let meta_db_dir = db_dir.join(META_DB);
+    let current_meta_dir = kaspad::db::meta_db_dir(meta_db_dir);
+    let consensus_db_dir = db_dir.join(CONSENSUS_DB).join(current_meta_dir);
 
     // Optionally drop database based on CLI args
     if args.reset_db {
@@ -62,37 +83,18 @@ async fn main() {
         }
     }
 
-    // Init PG DB connection pool
-    let db_pool = database::conn::open_connection_pool(&args.db_url).await.unwrap();
-
     // Apply PG DB migrations and insert static records
     database::initialize::apply_migrations(&db_pool).await.unwrap();
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
-    // Init RPC client
-    // TODO use resolver and pool of kaspad's
-    let resolver = Resolver::default();
-    let network_id = NetworkId::new(NetworkType::Mainnet); // TODO expose as CLI arg
-    // TODO build RPC client per CLI args
-    // let rpc_client = KaspaRpcClient::new(WrpcEncoding::Borsh, Some(args.kaspad_rpc_url.as_str()), Some(resolver), Some(network_id), None).unwrap();
-    let rpc_client = KaspaRpcClient::new(WrpcEncoding::Borsh, None, Some(resolver), Some(network_id), None).unwrap();
-    rpc_client.connect(None).await.unwrap();
-
     // Ensure RPC node is synced and is same network/network suffix as supplied CLI args
     let server_info = rpc_client.get_server_info().await.unwrap();
     assert!(server_info.is_synced, "Kaspad node is not synced");
-    assert_eq!(server_info.network_id.network_type, *network, "Kaspad RPC host is for different network/suffix than supplied");
+    assert_eq!(server_info.network_id.network_type, *network_id, "Kaspad RPC host is for different network/suffix than supplied");
 
     // TODO Validate PG DB meta network/suffix matches supplied CLI
     let db_network = database::initialize::get_meta_network(&db_pool).await.unwrap();
     let db_network_suffix = database::initialize::get_meta_network(&db_pool).await.unwrap();
-
-    // Rusty Kaspa dirs
-    let app_dir = kaspad::get_app_dir_from_args(&args);
-    let db_dir = kaspad::get_db_dir(app_dir, network);
-    let meta_db_dir = db_dir.join(META_DB);
-    let current_meta_dir = kaspad::db::meta_db_dir(meta_db_dir);
-    let consensus_db_dir = db_dir.join(CONSENSUS_DB).join(current_meta_dir);
 
     // If first time running, store pruning point UTXO set in PG DB
     // TODO run on tokio loop and start at same time as other services?
