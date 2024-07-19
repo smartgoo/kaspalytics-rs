@@ -18,7 +18,7 @@ pub enum Granularity {
     Day,
     Month,
     Quarter,
-    Year
+    Year,
 }
 
 #[derive(Debug, Display, EnumIter)]

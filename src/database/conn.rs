@@ -1,4 +1,7 @@
-use sqlx::{postgres::{PgPool, PgPoolOptions}, Connection, Executor, PgConnection};
+use sqlx::{
+    postgres::{PgPool, PgPoolOptions},
+    Connection, Executor, PgConnection,
+};
 
 pub fn parse_base_url(url: &str) -> String {
     let mut conn_parts: Vec<&str> = url.split('/').collect();
@@ -7,11 +10,8 @@ pub fn parse_base_url(url: &str) -> String {
 }
 
 pub async fn open_connection_pool(url: &str) -> Result<PgPool, sqlx::Error> {
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(url)
-        .await?;
-    
+    let pool = PgPoolOptions::new().max_connections(5).connect(url).await?;
+
     Ok(pool)
 }
 
@@ -26,11 +26,13 @@ pub async fn close_connection(conn: PgConnection) -> Result<(), sqlx::Error> {
 }
 
 pub async fn drop_db(conn: &mut PgConnection, database: &str) -> Result<(), sqlx::Error> {
-    conn.execute(format!("DROP DATABASE {}", database).as_str()).await?;
+    conn.execute(format!("DROP DATABASE {}", database).as_str())
+        .await?;
     Ok(())
 }
 
 pub async fn create_db(conn: &mut PgConnection, database: &str) -> Result<(), sqlx::Error> {
-    conn.execute(format!("CREATE DATABASE {}", database).as_str()).await?;
+    conn.execute(format!("CREATE DATABASE {}", database).as_str())
+        .await?;
     Ok(())
 }

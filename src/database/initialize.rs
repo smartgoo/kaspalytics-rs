@@ -1,14 +1,12 @@
 use crate::database;
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use sqlx::postgres::PgPool;
-use strum::IntoEnumIterator;
 use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 pub async fn apply_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     // Run sqlx migrations
-    sqlx::migrate!()
-        .run(pool)
-        .await?;
+    sqlx::migrate!().run(pool).await?;
 
     Ok(())
 }
@@ -65,12 +63,11 @@ pub async fn get_meta_network_suffix(pool: &PgPool) -> Result<Option<String>, sq
 pub async fn get_meta_network_id(pool: &PgPool) -> Result<Option<NetworkId>, sqlx::Error> {
     let network = get_meta_network(pool).await?.unwrap();
     let netsuffix = get_meta_network_suffix(pool).await?.unwrap();
-    
-    let network_type = NetworkType::from_str(&network).unwrap();
 
+    let network_type = NetworkType::from_str(&network).unwrap();
     let network_id = match NetworkId::try_new(network_type) {
         Ok(network_id) => network_id,
-        Err(_) => NetworkId::with_suffix(network_type, netsuffix.parse::<u32>().unwrap())
+        Err(_) => NetworkId::with_suffix(network_type, netsuffix.parse::<u32>().unwrap()),
     };
 
     Ok(Some(network_id))

@@ -31,5 +31,5 @@ pub enum Network {
     Mainnet,
     Testnet,
     Devnet,
-    Simnet
+    Simnet,
 }

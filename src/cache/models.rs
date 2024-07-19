@@ -1,17 +1,20 @@
 use kaspa_consensus_core::tx::{TransactionId, TransactionIndexType};
-use kaspa_rpc_core::{RpcBlock, RpcBlockVerboseData, RpcHeader, RpcSubnetworkId, RpcTransaction, RpcTransactionOutpoint, RpcTransactionVerboseData};
+use kaspa_rpc_core::{
+    RpcBlock, RpcBlockVerboseData, RpcHeader, RpcSubnetworkId, RpcTransaction,
+    RpcTransactionOutpoint, RpcTransactionVerboseData,
+};
 
 #[derive(Clone)]
 pub struct CacheBlock {
     header: RpcHeader,
-    verbose_data: Option<RpcBlockVerboseData>
+    verbose_data: Option<RpcBlockVerboseData>,
 }
 
 impl From<RpcBlock> for CacheBlock {
     fn from(value: RpcBlock) -> Self {
         Self {
-            header: value.header, 
-            verbose_data: value.verbose_data
+            header: value.header,
+            verbose_data: value.verbose_data,
         }
     }
 }
@@ -49,9 +52,9 @@ pub struct CacheTransactionOutpoint {
 
 impl From<RpcTransactionOutpoint> for CacheTransactionOutpoint {
     fn from(value: RpcTransactionOutpoint) -> Self {
-        Self { transaction_id: value.transaction_id, index: value.index }
+        Self {
+            transaction_id: value.transaction_id,
+            index: value.index,
+        }
     }
 }
-
-// pub type CacheTransactionInput = RpcTransactionInput;
-// pub type CacheTransactionOutput = RpcTransactionOutput;

@@ -1,17 +1,22 @@
 pub mod models;
 
-use std::{collections::BTreeMap, sync::{Arc, Mutex}};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 pub struct Cache<K, V> {
     cache: Arc<Mutex<BTreeMap<K, V>>>,
 }
 
 impl<K, V> Cache<K, V>
-where 
+where
     K: Ord,
 {
     pub fn new() -> Self {
-        Self { cache: Arc::new(Mutex::new(BTreeMap::new())) }
+        Self {
+            cache: Arc::new(Mutex::new(BTreeMap::new())),
+        }
     }
 
     pub fn insert(&self, key: K, value: V) {
@@ -19,8 +24,8 @@ where
         cache.insert(key, value);
     }
 
-    pub fn get(&self, key: &K) -> Option<V> 
-    where 
+    pub fn get(&self, key: &K) -> Option<V>
+    where
         V: Clone,
     {
         let cache = self.cache.lock().unwrap();

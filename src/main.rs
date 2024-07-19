@@ -6,18 +6,16 @@ mod service;
 
 use args::Args;
 use clap::Parser;
-use kaspa_consensus_core::network::NetworkId;
-use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
-use kaspa_rpc_core::api::rpc::RpcApi;
 use env_logger::{Builder, Env};
-use log::{LevelFilter, info};
+use kaspa_consensus_core::network::NetworkId;
+use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
+use log::{info, LevelFilter};
 // use moka::future::Cache as MokaCache;
 use std::io;
 
-
 const META_DB: &str = "meta";
 const CONSENSUS_DB: &str = "consensus";
-
 
 fn prompt_confirmation(prompt: &str) -> bool {
     println!("{}", prompt);
@@ -42,17 +40,26 @@ async fn main() {
     // Get NetworkId based on CLI args
     let network_id = match NetworkId::try_new(args.network) {
         Ok(network_id) => network_id,
-        Err(_) => NetworkId::with_suffix(args.network, args.netsuffix.unwrap())
+        Err(_) => NetworkId::with_suffix(args.network, args.netsuffix.unwrap()),
     };
 
     // Init RPC Client
     let resolver = Resolver::default();
     let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
-    let rpc_client = KaspaRpcClient::new(encoding, args.rpc_url.as_deref(), Some(resolver), Some(network_id), None).unwrap();
+    let rpc_client = KaspaRpcClient::new(
+        encoding,
+        args.rpc_url.as_deref(),
+        Some(resolver),
+        Some(network_id),
+        None,
+    )
+    .unwrap();
     rpc_client.connect(None).await.unwrap();
 
     // Init PG DB connection pool
-    let db_pool = database::conn::open_connection_pool(&args.db_url).await.unwrap();
+    let db_pool = database::conn::open_connection_pool(&args.db_url)
+        .await
+        .unwrap();
 
     // Init Rusty Kaspa dirs
     let app_dir = kaspad::get_app_dir_from_args(&args);
@@ -63,9 +70,16 @@ async fn main() {
 
     // Optionally drop database based on CLI args
     if args.reset_db {
-        let db_name = args.db_url.split('/').last().expect("Invalid connection string");
+        let db_name = args
+            .db_url
+            .split('/')
+            .last()
+            .expect("Invalid connection string");
 
-        let prompt = format!("DANGER!!! Are you sure you want to drop and recreate the database {}? (y/N)?", db_name);
+        let prompt = format!(
+            "DANGER!!! Are you sure you want to drop and recreate the database {}? (y/N)?",
+            db_name
+        );
         let reset_db = prompt_confirmation(prompt.as_str());
         if reset_db {
             // Connect without specifying database in order to drop and recreate
@@ -77,13 +91,15 @@ async fn main() {
 
             info!("Creating database {}", db_name);
             database::conn::create_db(&mut conn, db_name).await.unwrap();
-            
+
             database::conn::close_connection(conn).await.unwrap();
         }
     }
 
     // Apply PG DB migrations and insert static records
-    database::initialize::apply_migrations(&db_pool).await.unwrap();
+    database::initialize::apply_migrations(&db_pool)
+        .await
+        .unwrap();
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
     // Ensure RPC node is synced and is same network/network suffix as supplied CLI args
@@ -97,12 +113,16 @@ async fn main() {
     }
 
     // Get NetworkId of PG DB instance
-    let db_network_id = database::initialize::get_meta_network_id(&db_pool).await.unwrap();
+    let db_network_id = database::initialize::get_meta_network_id(&db_pool)
+        .await
+        .unwrap();
     if db_network_id.is_none() {
         // First time running with this database
         // TODO run on tokio loop and start at same time as other services?
         // Store network
-        database::initialize::insert_network_meta(&db_pool, server_info.network_id).await.unwrap();
+        database::initialize::insert_network_meta(&db_pool, server_info.network_id)
+            .await
+            .unwrap();
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
         // kaspad::db::pp_utxo_set_to_pg(&db_pool, network, consensus_db_dir).await;
@@ -117,8 +137,7 @@ async fn main() {
     service::initial_sync::initial_sync(rpc_client.clone()).await;
 
     // TODO do I need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
-        // If node has block hash, utxo set should be in sync with that.
-        // If node has not have block hash, I think I'll have issues since UTXO set is for older data
-        // I can probably just use checkpoint as last indexed thing?
-
+    // If node has block hash, utxo set should be in sync with that.
+    // If node has not have block hash, I think I'll have issues since UTXO set is for older data
+    // I can probably just use checkpoint as last indexed thing?
 }

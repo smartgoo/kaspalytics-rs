@@ -1,7 +1,4 @@
-use crate::cache::{
-    Cache,
-    models::*,
-};
+use crate::cache::{models::*, Cache};
 use kaspa_consensus_core::tx::TransactionId;
 use kaspa_rpc_core::{RpcHash, RpcTransaction, RpcTransactionId, RpcTransactionOutput};
 
@@ -26,7 +23,7 @@ impl DAGCache {
             blocks_transactions: Cache::<RpcHash, Vec<RpcTransactionId>>::new(),
             transactions_blocks: Cache::<RpcTransactionId, Vec<RpcHash>>::new(),
             acceptances: Cache::<RpcHash, Vec<TransactionId>>::new(),
-            outputs: Cache::<CacheTransactionOutpoint , RpcTransactionOutput>::new(),
+            outputs: Cache::<CacheTransactionOutpoint, RpcTransactionOutput>::new(),
         }
     }
 }
