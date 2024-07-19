@@ -1,7 +1,8 @@
 use crate::database;
-use kaspa_consensus_core::network::NetworkId;
+use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use sqlx::postgres::PgPool;
 use strum::IntoEnumIterator;
+use std::str::FromStr;
 
 pub async fn apply_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     // Run sqlx migrations
@@ -44,24 +45,38 @@ pub async fn insert_enums(pool: &PgPool) -> Result<(), sqlx::Error> {
 }
 
 pub async fn get_meta_network(pool: &PgPool) -> Result<Option<String>, sqlx::Error> {
-    let db_network: (Option<String>,) = sqlx::query_as("SELECT value FROM meta WHERE key = $1")
+    let network: (Option<String>,) = sqlx::query_as("SELECT value FROM meta WHERE key = $1")
         .bind(database::Meta::Network.to_string())
         .fetch_one(pool)
         .await?;
 
-    Ok(db_network.0)
+    Ok(network.0)
 }
 
 pub async fn get_meta_network_suffix(pool: &PgPool) -> Result<Option<String>, sqlx::Error> {
-    let db_network: (Option<String>,) = sqlx::query_as("SELECT value FROM meta WHERE key = $1")
+    let suffix: (Option<String>,) = sqlx::query_as("SELECT value FROM meta WHERE key = $1")
         .bind(database::Meta::NetworkSuffix.to_string())
         .fetch_one(pool)
         .await?;
 
-    Ok(db_network.0)
+    Ok(suffix.0)
 }
 
-pub async fn store_network_meta(pool: &PgPool, network_id: NetworkId) -> Result<(), sqlx::Error> {
+pub async fn get_meta_network_id(pool: &PgPool) -> Result<Option<NetworkId>, sqlx::Error> {
+    let network = get_meta_network(pool).await?.unwrap();
+    let netsuffix = get_meta_network_suffix(pool).await?.unwrap();
+    
+    let network_type = NetworkType::from_str(&network).unwrap();
+
+    let network_id = match NetworkId::try_new(network_type) {
+        Ok(network_id) => network_id,
+        Err(_) => NetworkId::with_suffix(network_type, netsuffix.parse::<u32>().unwrap())
+    };
+
+    Ok(Some(network_id))
+}
+
+pub async fn insert_network_meta(pool: &PgPool, network_id: NetworkId) -> Result<(), sqlx::Error> {
     // Set network in PG meta table
     sqlx::query("UPDATE meta SET value = $1 WHERE key = $2")
         .bind(format!("{:?}", network_id.network_type))

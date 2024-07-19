@@ -12,7 +12,7 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use env_logger::{Builder, Env};
 use log::{LevelFilter, info};
 // use moka::future::Cache as MokaCache;
-use std::{io, str::FromStr};
+use std::io;
 
 
 const META_DB: &str = "meta";
@@ -65,7 +65,6 @@ async fn main() {
     if args.reset_db {
         let db_name = args.db_url.split('/').last().expect("Invalid connection string");
 
-        // Get user confirmation first
         let prompt = format!("DANGER!!! Are you sure you want to drop and recreate the database {}? (y/N)?", db_name);
         let reset_db = prompt_confirmation(prompt.as_str());
         if reset_db {
@@ -90,20 +89,29 @@ async fn main() {
     // Ensure RPC node is synced and is same network/network suffix as supplied CLI args
     let server_info = rpc_client.get_server_info().await.unwrap();
     assert!(server_info.is_synced, "Kaspad node is not synced");
-    assert_eq!(server_info.network_id.network_type, *network_id, "Kaspad RPC host is for different network/suffix than supplied");
+    if !server_info.is_synced {
+        panic!("Kaspad node is not synced")
+    }
+    if server_info.network_id.network_type != *network_id {
+        panic!("Kaspad RPC host network does not match network supplied via CLI")
+    }
 
-    // TODO Validate PG DB meta network/suffix matches supplied CLI
-    let db_network = database::initialize::get_meta_network(&db_pool).await.unwrap();
-    let db_network_suffix = database::initialize::get_meta_network(&db_pool).await.unwrap();
-
-    // If first time running, store pruning point UTXO set in PG DB
-    // TODO run on tokio loop and start at same time as other services?
-    if db_network.is_none() {
+    // Get NetworkId of PG DB instance
+    let db_network_id = database::initialize::get_meta_network_id(&db_pool).await.unwrap();
+    if db_network_id.is_none() {
+        // First time running with this database
+        // TODO run on tokio loop and start at same time as other services?
         // Store network
-        database::initialize::store_network_meta(&db_pool, server_info.network_id).await.unwrap();
+        database::initialize::insert_network_meta(&db_pool, server_info.network_id).await.unwrap();
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
         // kaspad::db::pp_utxo_set_to_pg(&db_pool, network, consensus_db_dir).await;
+    } else {
+        // Database has been used in the past
+        // Validate database meta network/suffix matches network supplied via CLI
+        if network_id != db_network_id.unwrap() {
+            panic!("Database network does not match network supplied via CLI")
+        }
     }
 
     service::initial_sync::initial_sync(rpc_client.clone()).await;
