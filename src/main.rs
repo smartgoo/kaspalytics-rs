@@ -29,17 +29,15 @@ async fn main() {
     let args = Args::parse();
 
     // Init Logger
-    let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
-    builder.filter(None, LevelFilter::Info);
-    builder.init();
+    let _ = Builder::from_env(Env::default().default_filter_or("info"))
+        .filter(None, LevelFilter::Info)
+        .init();
 
     info!("Initializing application");
 
     // Get NetworkId based on CLI args
-    let network_id = match NetworkId::try_new(args.network) {
-        Ok(network_id) => network_id,
-        Err(_) => NetworkId::with_suffix(args.network, args.netsuffix.unwrap()),
-    };
+    let network_id = NetworkId::try_new(args.network)
+        .unwrap_or_else(|_| NetworkId::with_suffix(args.network, args.netsuffix.unwrap()));
 
     // Init RPC Client
     let resolver = Resolver::default();

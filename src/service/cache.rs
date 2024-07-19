@@ -4,14 +4,10 @@ use kaspa_rpc_core::{RpcHash, RpcTransaction, RpcTransactionId, RpcTransactionOu
 
 pub struct DAGCache {
     pub blocks: Cache<RpcHash, CacheBlock>,
-
     pub transactions: Cache<RpcTransactionId, RpcTransaction>,
-
     pub blocks_transactions: Cache<RpcHash, Vec<RpcTransactionId>>,
     pub transactions_blocks: Cache<RpcTransactionId, Vec<RpcHash>>,
-
     pub acceptances: Cache<RpcHash, Vec<TransactionId>>,
-
     pub outputs: Cache<CacheTransactionOutpoint, RpcTransactionOutput>,
 }
 

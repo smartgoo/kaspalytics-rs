@@ -71,10 +71,8 @@ pub async fn get_meta_network_id(pool: &PgPool) -> Result<Option<NetworkId>, sql
         .await?
         .and_then(|value| value.parse::<u32>().ok());
 
-    let network_id = match NetworkId::try_new(network_type) {
-        Ok(network_id) => network_id,
-        Err(_) => NetworkId::with_suffix(network_type, netsuffix.unwrap()),
-    };
+    let network_id = NetworkId::try_new(network_type)
+        .unwrap_or_else(|_| NetworkId::with_suffix(network_type, netsuffix.unwrap()));
 
     Ok(Some(network_id))
 }

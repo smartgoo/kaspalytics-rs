@@ -25,11 +25,3 @@ pub struct Args {
     #[arg(long)]
     pub rpc_encoding: Option<WrpcEncoding>,
 }
-
-#[derive(Clone, Debug, ValueEnum)]
-pub enum Network {
-    Mainnet,
-    Testnet,
-    Devnet,
-    Simnet,
-}

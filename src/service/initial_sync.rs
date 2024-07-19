@@ -12,7 +12,6 @@ pub async fn initial_sync(rpc_client: KaspaRpcClient) {
     let GetBlockDagInfoResponse {
         pruning_point_hash, ..
     } = rpc_client.get_block_dag_info().await.unwrap();
-    println!("{}", pruning_point_hash);
 
     let mut low_hash = pruning_point_hash;
     info!("Filling blocks cache from {}", low_hash);
