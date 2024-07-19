@@ -3,14 +3,13 @@ use sqlx::{postgres::{PgPool, PgPoolOptions}, Connection, Executor, PgConnection
 pub fn parse_base_url(url: &str) -> String {
     let mut conn_parts: Vec<&str> = url.split('/').collect();
     conn_parts.pop();
-    let base_url = conn_parts.join("/");
-    base_url
+    conn_parts.join("/")
 }
 
 pub async fn open_connection_pool(url: &str) -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&url)
+        .connect(url)
         .await?;
     
     Ok(pool)

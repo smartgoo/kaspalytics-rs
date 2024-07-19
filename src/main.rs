@@ -5,10 +5,10 @@ mod kaspad;
 mod service;
 
 use args::Args;
-use cache::cache::Cache;
 use clap::Parser;
-use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspa_rpc_core::{api::rpc::RpcApi, RpcBlock, RpcHash, RpcTransaction, RpcTransactionId};
+use kaspa_consensus_core::network::{NetworkId, NetworkType};
+use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
+use kaspa_rpc_core::api::rpc::RpcApi;
 use env_logger::{Builder, Env};
 use log::{LevelFilter, info};
 // use moka::future::Cache as MokaCache;
@@ -28,12 +28,12 @@ fn prompt_confirmation(prompt: &str) -> bool {
 }
 
 #[tokio::main]
-async fn main() -> () {
+async fn main() {
     info!("Initializing application");
 
     // Parse CLI args
     let args = Args::parse();
-    let network = kaspad::network(args.kaspad_network.clone(), args.kaspad_network_suffix.clone());
+    let network = kaspad::network(args.kaspad_network.clone(), args.kaspad_network_suffix);
 
     // Logger
     let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
@@ -53,10 +53,10 @@ async fn main() -> () {
             let mut conn = database::conn::open_connection(&base_url).await.unwrap();
 
             info!("Dropping database {}", db_name);
-            database::conn::drop_db(&mut conn, &db_name).await.unwrap();
+            database::conn::drop_db(&mut conn, db_name).await.unwrap();
 
             info!("Creating database {}", db_name);
-            database::conn::create_db(&mut conn, &db_name).await.unwrap();
+            database::conn::create_db(&mut conn, db_name).await.unwrap();
             
             database::conn::close_connection(conn).await.unwrap();
         }
@@ -71,7 +71,11 @@ async fn main() -> () {
 
     // Init RPC client
     // TODO use resolver and pool of kaspad's
-    let rpc_client = KaspaRpcClient::new(WrpcEncoding::Borsh, Some(args.kaspad_rpc_url.as_str()), None, None, None).unwrap();
+    let resolver = Resolver::default();
+    let network_id = NetworkId::new(NetworkType::Mainnet); // TODO expose as CLI arg
+    // TODO build RPC client per CLI args
+    // let rpc_client = KaspaRpcClient::new(WrpcEncoding::Borsh, Some(args.kaspad_rpc_url.as_str()), Some(resolver), Some(network_id), None).unwrap();
+    let rpc_client = KaspaRpcClient::new(WrpcEncoding::Borsh, None, Some(resolver), Some(network_id), None).unwrap();
     rpc_client.connect(None).await.unwrap();
 
     // Ensure RPC node is synced and is same network/network suffix as supplied CLI args
@@ -97,7 +101,7 @@ async fn main() -> () {
         database::initialize::store_network_meta(&db_pool, server_info.network_id).await.unwrap();
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
-        kaspad::db::pp_utxo_set_to_pg(&db_pool, network, consensus_db_dir).await;
+        // kaspad::db::pp_utxo_set_to_pg(&db_pool, network, consensus_db_dir).await;
     }
 
     service::initial_sync::initial_sync(rpc_client.clone()).await;

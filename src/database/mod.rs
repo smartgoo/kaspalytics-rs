@@ -23,8 +23,16 @@ pub enum Granularity {
 
 #[derive(Debug, Display, EnumIter)]
 pub enum DataPoint {
-    TotalSPCBlocks,
-    TotalNonSPCBlocks,
+    TotalSpcBlocks,
+    TotalNonSpcBlocks,
     TotalAcceptingBlocks,
     TotalMergedBlues,
+    MeanTxPerSpcBlock,
+    MedianTxPerSpcBlock,
+    MinTxPerSpcBlock,
+    MaxTxPerSpcBlock,
+    MeanTxPerBlock,
+    MedianTxPerBlock,
+    MinTxPerBlock,
+    MaxTxPerBlock,
 }

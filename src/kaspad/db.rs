@@ -20,7 +20,7 @@ pub fn meta_db_dir(meta_db_dir: PathBuf) -> PathBuf {
     PathBuf::from_str(active_consensus_dir.as_str()).unwrap()
 }
 
-pub async fn pp_utxo_set_to_pg(pool: &PgPool, network: NetworkId, consensus_db_dir: PathBuf) -> () {
+pub async fn pp_utxo_set_to_pg(pool: &PgPool, network: NetworkId, consensus_db_dir: PathBuf) {
     // TODO return result
     info!("Inserting pruning point UTXO set to Postgres...");
 
@@ -57,10 +57,10 @@ pub async fn pp_utxo_set_to_pg(pool: &PgPool, network: NetworkId, consensus_db_d
         data.extend_from_slice(&transaction_id_bytes[..]);
 
         data.extend_from_slice(&4u32.to_be_bytes());
-        data.extend_from_slice(&(key.index as u32).to_be_bytes());
+        data.extend_from_slice(&(key.index).to_be_bytes());
 
         data.extend_from_slice(&8u32.to_be_bytes());
-        data.extend_from_slice(&(entry.amount as u64).to_be_bytes());
+        data.extend_from_slice(&(entry.amount).to_be_bytes());
 
         let script_public_key_bytes = entry.script_public_key.script();
         data.extend_from_slice(&(script_public_key_bytes.len() as u32).to_be_bytes());

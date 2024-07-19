@@ -1,7 +1,6 @@
 pub mod db;
 
 use crate::args::{Args, Network};
-use dirs;
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use std::path::PathBuf;
 

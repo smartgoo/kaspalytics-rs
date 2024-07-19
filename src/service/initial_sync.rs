@@ -1,64 +1,82 @@
-use crate::cache::cache::Cache;
-use kaspa_consensus_core::Hash;
-use kaspa_rpc_core::api::rpc;
+use super::cache::DAGCache;
+use kaspa_consensus_core::tx::TransactionOutpoint;
 use kaspa_rpc_core::message::GetBlockDagInfoResponse;
-use kaspa_rpc_core::{GetBlocksRequest, GetVirtualChainFromBlockRequest, RpcTransactionInputVerboseData, RpcTransactionVerboseData};
-use kaspa_rpc_core::{api::rpc::RpcApi, RpcBlock, RpcHash, RpcTransactionId};
+use kaspa_rpc_core::{GetBlocksRequest, GetVirtualChainFromBlockRequest};
+use kaspa_rpc_core::{api::rpc::RpcApi, RpcTransactionId};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
-use std::time::Duration;
-use std::thread;
+use std::{thread, time::Duration};
 
-pub async fn initial_sync(rpc_client: KaspaRpcClient) -> () {
-    let block_cache = Cache::<RpcHash, RpcBlock>::new();
-    let tx_cache = Cache::<RpcTransactionId, Vec<RpcHash>>::new();
+pub async fn initial_sync(rpc_client: KaspaRpcClient) {
+    // TODO return type
+    let cache = DAGCache::new();
 
     let GetBlockDagInfoResponse { pruning_point_hash, .. } = rpc_client.get_block_dag_info().await.unwrap();
     println!("{}", pruning_point_hash);
 
-    let mut low_hash = pruning_point_hash.clone();
+    let mut low_hash = pruning_point_hash;
     info!("Filling blocks cache from {}", low_hash);
+
     loop {
-        // TODO loop and analyze in chunks... shouldn't loda all blocks and vspc into mem
+        // TODO loop and analyze in chunks... shouldn't loda all blocks and vspc into mem?
         let GetBlockDagInfoResponse { tip_hashes, .. } = rpc_client.get_block_dag_info().await.unwrap();
 
         let blocks_response = rpc_client.get_blocks_call(GetBlocksRequest {
-            low_hash: Some(low_hash.clone()),
+            low_hash: Some(low_hash),
             include_blocks: true,
             include_transactions: true
         }).await.unwrap();
 
         for i in 0..blocks_response.block_hashes.len() {
-            let block_hash = &blocks_response.block_hashes[i];
-            let block = &blocks_response.blocks[i];
+            let block_hash = blocks_response.block_hashes[i];
+            let block = blocks_response.blocks[i].clone();
 
-            block_cache.insert(block_hash.clone(), block.clone());
+            // Insert block into cache
+            cache.blocks.insert(block_hash, block.clone().into());
 
-            let _ = block.transactions.clone().into_iter().map(|tx| {
-                let transaction_id = &tx.verbose_data.unwrap().transaction_id;
-                let in_cache = tx_cache.get(&transaction_id);
+            let mut transactions = Vec::<RpcTransactionId>::new();
+            for transaction in block.transactions {
+                let transaction_id = transaction.verbose_data.clone().unwrap().transaction_id;
+                transactions.push(transaction_id);
+
+                let in_cache = cache.transactions.get(&transaction_id);
                 match in_cache {
-                    Some(mut blocks) => {
-                        blocks.push(block_hash.clone());
-                        tx_cache.update(&transaction_id, blocks);
+                    Some(_) => {
+                        // Transaction exists already in cache
+                        // Update transactions_blocks by adding block hash
+                        let mut blocks = cache.transactions_blocks.get(&transaction_id).unwrap();
+                        blocks.push(block_hash);
+                        cache.transactions_blocks.update(&transaction_id, blocks);
                     },
                     None => {
-                        tx_cache.insert(*transaction_id, vec![*block_hash]);
+                        // Transaction is not in cache
+                        cache.transactions.insert(transaction_id, transaction.clone());
+                        cache.transactions_blocks.insert(transaction_id, vec![block_hash]);
+                        
+                        // Insert outputs
+                        for (index, output) in transaction.outputs.into_iter().enumerate() {
+                            let outpoint = TransactionOutpoint::new(transaction_id, index as u32);
+                            cache.outputs.insert(outpoint.into(), output);
+                        }
                     }
                 }
-            });
+            }
+
+            cache.blocks_transactions.insert(block_hash, transactions);
         };
 
         if tip_hashes.contains(&low_hash) {
             // TODO trigger real-time service to start
             info!("Synced to tip hash. Starting analysis and real-time service.");
-            // thread::sleep(Duration::from_millis(5000));
-            break;
+            thread::sleep(Duration::from_millis(5000));
         }
 
-        low_hash = blocks_response.block_hashes.last().unwrap().clone();
-        info!("Blocks cache size {}", block_cache.entry_count());
-        info!("Transactions cache size {}", tx_cache.entry_count());
+        low_hash = *blocks_response.block_hashes.last().unwrap();
+        info!("blocks cache size {}", cache.blocks.entry_count());
+        info!("transactions cache size {}", cache.transactions.entry_count());
+        info!("outputs cache size {}", cache.outputs.entry_count());
+        info!("blocks_transactions cache size {}", cache.blocks_transactions.entry_count());
+        info!("transactions_blocks cache size {}", cache.transactions_blocks.entry_count());
     }
 
     let vspc = rpc_client.get_virtual_chain_from_block_call(GetVirtualChainFromBlockRequest{
