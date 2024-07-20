@@ -1,6 +1,6 @@
 use super::cache::DAGCache;
 use kaspa_consensus_core::tx::TransactionOutpoint;
-use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcHash, RpcTransactionId};
+use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcTransactionId};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
 use std::{thread, time::Duration};
@@ -8,8 +8,8 @@ use std::{thread, time::Duration};
 pub struct BlocksProcess;
 
 impl BlocksProcess {
-    pub async fn run(mut low_hash: RpcHash, rpc_client: KaspaRpcClient, cache: DAGCache) -> ! {
-        info!("Filling blocks cache from {}", low_hash);
+    pub async fn run(rpc_client: KaspaRpcClient, mut cache: DAGCache) -> ! {
+        info!("Filling blocks cache from low_hash {}", cache.low_hash);
 
         loop {
             // TODO loop and analyze in chunks... shouldn't loda all blocks and vspc into mem?
@@ -18,7 +18,7 @@ impl BlocksProcess {
     
             let blocks_response = rpc_client
                 .get_blocks_call(GetBlocksRequest {
-                    low_hash: Some(low_hash),
+                    low_hash: Some(cache.low_hash),
                     include_blocks: true,
                     include_transactions: true,
                 })
@@ -67,13 +67,13 @@ impl BlocksProcess {
                 cache.blocks_transactions.insert(block_hash, transactions);
             }
     
-            if tip_hashes.contains(&low_hash) {
+            if tip_hashes.contains(&cache.low_hash) {
                 // TODO trigger real-time service to start
                 info!("Synced to tip hash. Starting analysis and real-time service.");
                 thread::sleep(Duration::from_millis(5000));
             }
     
-            low_hash = *blocks_response.block_hashes.last().unwrap();
+            cache.set_low_hash(*blocks_response.block_hashes.last().unwrap());
             info!("blocks cache size {}", cache.blocks.entry_count());
             info!("transactions cache size {}", cache.transactions.entry_count());
             info!("outputs cache size {}", cache.outputs.entry_count());

@@ -135,8 +135,8 @@ async fn main() {
     let GetBlockDagInfoResponse {
         pruning_point_hash, ..
     } = rpc_client.get_block_dag_info().await.unwrap();
-    let cache = service::cache::DAGCache::new();
-    service::blocks::BlocksProcess::run(pruning_point_hash, rpc_client, cache).await;
+    let cache = service::cache::DAGCache::new(pruning_point_hash);
+    service::blocks::BlocksProcess::run(rpc_client, cache).await;
 
     // TODO need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
     // If node has block hash, utxo set should be in sync with that.
