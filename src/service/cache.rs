@@ -29,16 +29,15 @@ impl DAGCache {
         // TODO hardcoded to 1000 temporarily
         while self.blocks.len() > 1000 {
             if let Some((block_hash, _)) = self.blocks.pop_last() {
-
                 // Remove blocks_transactions entry for given block
                 let transactions = self.blocks_transactions.remove(&block_hash).unwrap();
 
                 for transaction in transactions {
                     // If block_hash is only entry in transactions_blocks...
-                        // transactions.remove(transaction_id)
-                        // transactions_blocks.remove(transaction_id)
-                        // outputs.remove()
-                        // acceptances.remove()
+                    // transactions.remove(transaction_id)
+                    // transactions_blocks.remove(transaction_id)
+                    // outputs.remove()
+                    // acceptances.remove()
                 }
             }
         }

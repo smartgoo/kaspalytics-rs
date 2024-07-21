@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use kaspa_consensus_core::network::NetworkType;
 use kaspa_wrpc_client::WrpcEncoding;
 

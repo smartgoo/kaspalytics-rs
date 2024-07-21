@@ -89,10 +89,10 @@ pub async fn insert_network_meta(pool: &PgPool, network_id: NetworkId) -> Result
 
     if let Some(suffix_str) = suffix {
         sqlx::query("UPDATE meta SET value = $1 WHERE key = $2")
-        .bind(suffix_str)
-        .bind(database::Meta::NetworkSuffix.to_string())
-        .execute(pool)
-        .await?;
+            .bind(suffix_str)
+            .bind(database::Meta::NetworkSuffix.to_string())
+            .execute(pool)
+            .await?;
     }
 
     Ok(())

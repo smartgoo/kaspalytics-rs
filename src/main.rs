@@ -11,7 +11,10 @@ use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use log::{info, LevelFilter};
 use std::{io, sync::Arc};
-use tokio::{sync::{mpsc, Mutex}, task};
+use tokio::{
+    sync::{mpsc, Mutex},
+    task,
+};
 
 const META_DB: &str = "meta";
 const CONSENSUS_DB: &str = "consensus";
@@ -29,7 +32,7 @@ async fn main() {
     let args = Args::parse();
 
     // Init Logger
-    let _ = Builder::from_env(Env::default().default_filter_or("info"))
+    Builder::from_env(Env::default().default_filter_or("info"))
         .filter(None, LevelFilter::Info)
         .init();
 
@@ -136,21 +139,21 @@ async fn main() {
         pruning_point_hash, ..
     } = rpc_client.get_block_dag_info().await.unwrap();
 
-    let cache = Arc::new(Mutex::new(
-        service::cache::DAGCache::new()
-    ));
+    let cache = Arc::new(Mutex::new(service::cache::DAGCache::new()));
     let rpc_client = Arc::new(rpc_client);
 
     let (tx, rx) = mpsc::channel::<service::Event>(32);
 
-    let blocks_processor = service::blocks::BlocksProcess::new(rpc_client.clone(), cache.clone(), tx);
+    let blocks_processor =
+        service::blocks::BlocksProcess::new(rpc_client.clone(), cache.clone(), tx);
     let blocks_handle = task::spawn(async move {
-        blocks_processor.run(pruning_point_hash.clone()).await;
+        blocks_processor.run(pruning_point_hash).await;
     });
 
-    let mut vspc_processor = service::vspc::VirtualChainProcess::new(rpc_client.clone(), cache.clone(), rx);
+    let mut vspc_processor =
+        service::vspc::VirtualChainProcess::new(rpc_client.clone(), cache.clone(), rx);
     let vspc_handle = task::spawn(async move {
-        vspc_processor.run(pruning_point_hash.clone()).await;
+        vspc_processor.run(pruning_point_hash).await;
     });
 
     let _ = tokio::join!(blocks_handle, vspc_handle);
