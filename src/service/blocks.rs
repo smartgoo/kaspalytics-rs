@@ -1,30 +1,40 @@
-use super::cache::DAGCache;
+use super::{cache::DAGCache, Event};
 use kaspa_consensus_core::tx::TransactionOutpoint;
-use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcTransactionId};
+use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcHash, RpcTransactionId};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
-use std::{thread, time::Duration};
+use std::{sync::Arc, thread, time::Duration};
+use tokio::sync::{mpsc, Mutex};
 
-pub struct BlocksProcess;
+pub struct BlocksProcess {
+    rpc_client: Arc<KaspaRpcClient>,
+    cache: Arc<Mutex<DAGCache>>,
+    tx: mpsc::Sender<Event>,
+}
 
 impl BlocksProcess {
-    pub async fn run(rpc_client: KaspaRpcClient, mut cache: DAGCache) -> ! {
-        info!("Filling blocks cache from low_hash {}", cache.low_hash);
+    pub fn new(rpc_client: Arc<KaspaRpcClient>, cache: Arc<Mutex<DAGCache>>, tx: mpsc::Sender<Event>) -> Self {
+        Self { tx, rpc_client, cache }
+    }
+
+    pub async fn run(&self, mut low_hash: RpcHash) -> ! {
+        info!("Filling blocks cache from low_hash {}", low_hash);
 
         loop {
             // TODO loop and analyze in chunks... shouldn't loda all blocks and vspc into mem?
             let GetBlockDagInfoResponse { tip_hashes, .. } =
-                rpc_client.get_block_dag_info().await.unwrap();
+                self.rpc_client.get_block_dag_info().await.unwrap();
     
-            let blocks_response = rpc_client
+            let blocks_response = self.rpc_client
                 .get_blocks_call(GetBlocksRequest {
-                    low_hash: Some(cache.low_hash),
+                    low_hash: Some(low_hash),
                     include_blocks: true,
                     include_transactions: true,
                 })
                 .await
                 .unwrap();
-    
+            
+            let mut cache = self.cache.lock().await;
             for i in 0..blocks_response.block_hashes.len() {
                 let block_hash = blocks_response.block_hashes[i];
                 let block = blocks_response.blocks[i].clone();
@@ -42,9 +52,9 @@ impl BlocksProcess {
                         Some(_) => {
                             // Transaction exists already in cache
                             // Update transactions_blocks by adding block hash
-                            let mut blocks = cache.transactions_blocks.get(&transaction_id).unwrap();
+                            let mut blocks = cache.transactions_blocks.get(&transaction_id).unwrap().clone();
                             blocks.push(block_hash);
-                            cache.transactions_blocks.update(&transaction_id, blocks);
+                            cache.transactions_blocks.insert(transaction_id, blocks); // TODO ensure this is correct, should create if key doesn't exist, update if key does
                         }
                         None => {
                             // Transaction is not in cache
@@ -67,18 +77,31 @@ impl BlocksProcess {
                 cache.blocks_transactions.insert(block_hash, transactions);
             }
     
-            if tip_hashes.contains(&cache.low_hash) {
+            if tip_hashes.contains(&low_hash) {
                 // TODO trigger real-time service to start
                 info!("Synced to tip hash. Starting analysis and real-time service.");
+
+                // Emit message on channel to VSPC Processor
+                if let Err(e) = self.tx.send(Event::InitialSyncReachedTip).await {
+                    println!("Failed to send event: {:?}", e);
+                }
+
                 thread::sleep(Duration::from_millis(5000));
             }
+
+            cache.prune();
     
-            cache.set_low_hash(*blocks_response.block_hashes.last().unwrap());
-            info!("blocks cache size {}", cache.blocks.entry_count());
-            info!("transactions cache size {}", cache.transactions.entry_count());
-            info!("outputs cache size {}", cache.outputs.entry_count());
-            info!("blocks_transactions cache size {}", cache.blocks_transactions.entry_count());
-            info!("transactions_blocks cache size {}", cache.transactions_blocks.entry_count());
+            low_hash = *blocks_response.block_hashes.last().unwrap();
+            info!("blocks cache size {}", cache.blocks.len());
+            info!("transactions cache size {}", cache.transactions.len());
+            info!("outputs cache size {}", cache.outputs.len());
+            info!("blocks_transactions cache size {}", cache.blocks_transactions.len());
+            info!("transactions_blocks cache size {}", cache.transactions_blocks.len());
+
+            // Emit event
+            if let Err(e) = self.tx.send(Event::GetBlocksBatch).await {
+                println!("Failed to send event: {:?}", e);
+            }
         }
     }
 }
