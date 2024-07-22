@@ -3,7 +3,7 @@ use kaspa_consensus_core::tx::TransactionOutpoint;
 use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcHash, RpcTransactionId};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
-use std::{sync::Arc, thread, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, Mutex};
 
 pub struct BlocksProcess {
@@ -28,8 +28,8 @@ impl BlocksProcess {
     pub async fn run(&self, mut low_hash: RpcHash) -> ! {
         info!("Filling blocks cache from low_hash {}", low_hash);
 
-        loop {
-            // TODO loop and analyze in chunks... shouldn't loda all blocks and vspc into mem?
+        loop {            
+            // TODO loop and analyze in chunks... shouldn't load all blocks and vspc into mem?
             let GetBlockDagInfoResponse { tip_hashes, .. } =
                 self.rpc_client.get_block_dag_info().await.unwrap();
 
@@ -42,6 +42,7 @@ impl BlocksProcess {
                 })
                 .await
                 .unwrap();
+            tokio::task::yield_now().await;
 
             let mut cache = self.cache.lock().await;
             for i in 0..blocks_response.block_hashes.len() {
@@ -56,8 +57,7 @@ impl BlocksProcess {
                     let transaction_id = transaction.verbose_data.clone().unwrap().transaction_id;
                     transactions.push(transaction_id);
 
-                    let in_cache = cache.transactions.get(&transaction_id);
-                    match in_cache {
+                    match cache.transactions.get(&transaction_id) {
                         Some(_) => {
                             // Transaction exists already in cache
                             // Update transactions_blocks by adding block hash
@@ -90,21 +90,21 @@ impl BlocksProcess {
                 }
 
                 cache.blocks_transactions.insert(block_hash, transactions);
-            }
 
-            if tip_hashes.contains(&low_hash) {
-                // TODO trigger real-time service to start
-                info!("Synced to tip hash. Starting analysis and real-time service.");
+                if tip_hashes.contains(&low_hash) {
+                    // TODO trigger real-time service to start
+                    info!("Synced to tip hash. Starting analysis and real-time service.");
 
-                // Emit message on channel to VSPC Processor
-                if let Err(e) = self.tx.send(Event::InitialSyncReachedTip).await {
-                    println!("Failed to send event: {:?}", e);
+                    // Emit message on channel to VSPC Processor
+                    if let Err(e) = self.tx.send(Event::InitialSyncReachedTip).await {
+                        println!("Failed to send event: {:?}", e);
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(5_000)).await;
                 }
-
-                thread::sleep(Duration::from_millis(5000));
             }
 
-            cache.prune();
+            // cache.prune();
 
             low_hash = *blocks_response.block_hashes.last().unwrap();
             info!("blocks cache size {}", cache.blocks.len());
