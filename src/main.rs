@@ -8,9 +8,12 @@ use clap::Parser;
 use env_logger::{Builder, Env};
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
-use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
+use kaspa_wrpc_client::{
+    client::{ConnectOptions, ConnectStrategy},
+    KaspaRpcClient, Resolver, WrpcEncoding,
+};
 use log::{info, LevelFilter};
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 use tokio::{
     sync::{mpsc, Mutex},
     task,
@@ -43,7 +46,10 @@ async fn main() {
         .unwrap_or_else(|_| NetworkId::with_suffix(args.network, args.netsuffix.unwrap()));
 
     // Init RPC Client
-    let resolver = Resolver::default();
+    let resolver = match &args.rpc_url {
+        Some(url) => Resolver::new(vec![Arc::new(url.clone())]),
+        None => Resolver::default(),
+    };
     let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
     let rpc_client = KaspaRpcClient::new(
         encoding,
@@ -53,6 +59,13 @@ async fn main() {
         None,
     )
     .unwrap();
+    // let options = ConnectOptions {
+    //     block_async_connect: true,
+    //     connect_timeout: Some(Duration::from_millis(5_000)),
+    //     retry_interval: Some(Duration::from_millis(5_000)),
+    //     strategy: ConnectStrategy::Fallback,
+    //     url: Some(args.rpc_url.clone().unwrap().to_string()),
+    // };
     rpc_client.connect(None).await.unwrap();
 
     // Init Rusty Kaspa dirs
@@ -125,7 +138,7 @@ async fn main() {
 
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
-        kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await;
+        // kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await; TODO
     } else {
         // Database has been used in the past
         // Validate database meta network/suffix matches network supplied via CLI
@@ -157,6 +170,7 @@ async fn main() {
     });
 
     let _ = tokio::join!(blocks_handle, vspc_handle);
+    // let _ = tokio::join!(blocks_handle);
 
     // TODO need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
     // If node has block hash, utxo set should be in sync with that.
