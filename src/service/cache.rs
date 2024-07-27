@@ -136,13 +136,15 @@ impl DAGCache {
         while self.daas_blocks.len() > 600 {
             let (daa_score, hashes) = self.daas_blocks.pop_first().unwrap();
 
-            self.move_daas_to_buffer(daa_score, &hashes);
+            // self.move_daas_to_buffer(daa_score, &hashes);
 
             for hash in hashes {
                 self.remove_block(&hash);
             }
         }
-        info!("buffer size: {}", self.buffer.len());
+        let (daa, _) = self.daas_blocks.first_key_value().unwrap();
+        info!("oldest daa in cache {}", daa);
+        // info!("buffer size: {}", self.buffer.len());
 
         // if self.buffer.len() > 86_400 / 10 {
         //     self.flush_to_file();
