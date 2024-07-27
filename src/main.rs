@@ -138,7 +138,7 @@ async fn main() {
 
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
-        // kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await; TODO
+        kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await;
     } else {
         // Database has been used in the past
         // Validate database meta network/suffix matches network supplied via CLI

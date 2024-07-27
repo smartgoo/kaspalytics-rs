@@ -61,9 +61,7 @@ impl VirtualChainProcess {
     }
 
     pub async fn run(&mut self, low_hash: RpcHash) {
-        // Perform initial request and store result
-        // Store virtual_chain_result on cache
-        // self.get_virtual_chain(low_hash).await;
+        self.get_virtual_chain(low_hash).await;
 
         while let Some(event) = self.rx.recv().await {
             match event {
