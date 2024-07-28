@@ -12,6 +12,7 @@ indexmap = "2.2.6"
 kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-grpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }

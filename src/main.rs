@@ -7,7 +7,8 @@ use args::Args;
 use clap::Parser;
 use env_logger::{Builder, Env};
 use kaspa_consensus_core::network::NetworkId;
-use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
+use kaspa_grpc_client::GrpcClient;
+use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse, notify::mode::NotificationMode};
 use kaspa_wrpc_client::{
     client::{ConnectOptions, ConnectStrategy},
     KaspaRpcClient, Resolver, WrpcEncoding,
@@ -46,27 +47,31 @@ async fn main() {
         .unwrap_or_else(|_| NetworkId::with_suffix(args.network, args.netsuffix.unwrap()));
 
     // Init RPC Client
-    let resolver = match &args.rpc_url {
-        Some(url) => Resolver::new(vec![Arc::new(url.clone())]),
-        None => Resolver::default(),
-    };
-    let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
-    let rpc_client = KaspaRpcClient::new(
-        encoding,
-        args.rpc_url.as_deref(),
-        Some(resolver),
-        Some(network_id),
-        None,
-    )
-    .unwrap();
-    // let options = ConnectOptions {
-    //     block_async_connect: true,
-    //     connect_timeout: Some(Duration::from_millis(5_000)),
-    //     retry_interval: Some(Duration::from_millis(5_000)),
-    //     strategy: ConnectStrategy::Fallback,
-    //     url: Some(args.rpc_url.clone().unwrap().to_string()),
+    // let resolver = match &args.rpc_url {
+    //     Some(url) => Resolver::new(vec![Arc::new(url.clone())]),
+    //     None => Resolver::default(),
     // };
-    rpc_client.connect(None).await.unwrap();
+    // let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
+    // let rpc_client = KaspaRpcClient::new(
+    //     encoding,
+    //     args.rpc_url.as_deref(),
+    //     Some(resolver),
+    //     Some(network_id),
+    //     None,
+    // )
+    // .unwrap();
+    // rpc_client.connect(None).await.unwrap();
+
+    let rpc_client = GrpcClient::connect_with_args(
+        NotificationMode::Direct,
+        args.rpc_url.clone().unwrap(),
+        None,
+        true,
+        None,
+        false,
+        Some(120_000),
+        Default::default()
+    ).await.unwrap();
 
     // Init Rusty Kaspa dirs
     let app_dir = kaspad::get_app_dir_from_args(&args);
@@ -114,7 +119,8 @@ async fn main() {
         .unwrap();
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
-    // Ensure RPC node is synced and is same network/suffix as supplied CLI args
+    // Ensure RPC node is synced, is same network/suffix as supplied CLI args, is utxoindexed
+    // TODO is utxo indexed
     let server_info = rpc_client.get_server_info().await.unwrap();
     assert!(server_info.is_synced, "Kaspad node is not synced");
     if !server_info.is_synced {

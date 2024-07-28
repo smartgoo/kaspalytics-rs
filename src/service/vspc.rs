@@ -1,4 +1,5 @@
 use super::{cache::DAGCache, Event};
+use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcHash};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
@@ -6,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
 pub struct VirtualChainProcess {
-    rpc_client: Arc<KaspaRpcClient>,
+    rpc_client: Arc<GrpcClient>,
     cache: Arc<Mutex<DAGCache>>,
     rx: mpsc::Receiver<Event>,
     // virtual_chain_response: Option<GetVirtualChainFromBlockResponse>,
@@ -15,7 +16,7 @@ pub struct VirtualChainProcess {
 
 impl VirtualChainProcess {
     pub fn new(
-        rpc_client: Arc<KaspaRpcClient>,
+        rpc_client: Arc<GrpcClient>,
         cache: Arc<Mutex<DAGCache>>,
         rx: mpsc::Receiver<Event>,
     ) -> Self {

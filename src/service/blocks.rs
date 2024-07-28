@@ -1,5 +1,6 @@
 use super::{cache::DAGCache, Event};
 use kaspa_consensus_core::{tx::TransactionOutpoint, Hash};
+use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcBlock, RpcHash, RpcTransactionId};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
@@ -7,14 +8,14 @@ use std::{collections::HashMap, os::unix, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, Mutex};
 
 pub struct BlocksProcess {
-    rpc_client: Arc<KaspaRpcClient>,
+    rpc_client: Arc<GrpcClient>,
     cache: Arc<Mutex<DAGCache>>,
     tx: mpsc::Sender<Event>,
 }
 
 impl BlocksProcess {
     pub fn new(
-        rpc_client: Arc<KaspaRpcClient>,
+        rpc_client: Arc<GrpcClient>,
         cache: Arc<Mutex<DAGCache>>,
         tx: mpsc::Sender<Event>,
     ) -> Self {
