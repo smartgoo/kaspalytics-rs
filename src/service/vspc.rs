@@ -76,7 +76,7 @@ impl VirtualChainProcess {
                         .all(|block| 
                             cache.added_chain_block_hashes.contains(block)
                         );
-                    
+
                     info!("all blocks in vspc cache: {}", all_exist);
                 },
                 _ => unimplemented!(),

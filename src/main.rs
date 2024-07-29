@@ -69,7 +69,7 @@ async fn main() {
         true,
         None,
         false,
-        Some(120_000),
+        Some(600_000),
         Default::default()
     ).await.unwrap();
 
@@ -176,7 +176,6 @@ async fn main() {
     });
 
     let _ = tokio::join!(blocks_handle, vspc_handle);
-    // let _ = tokio::join!(blocks_handle);
 
     // TODO need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
     // If node has block hash, utxo set should be in sync with that.
