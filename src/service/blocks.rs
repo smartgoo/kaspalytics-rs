@@ -2,9 +2,9 @@ use super::{cache::DAGCache, Event};
 use kaspa_consensus_core::{tx::TransactionOutpoint, Hash};
 use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::{api::rpc::RpcApi, message::*, RpcBlock, RpcHash, RpcTransactionId};
-use kaspa_wrpc_client::KaspaRpcClient;
+// use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
-use std::{collections::HashMap, os::unix, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, Mutex};
 
 pub struct BlocksProcess {
@@ -36,24 +36,17 @@ impl BlocksProcess {
         let mut cache = self.cache.lock().await;
 
         // Insert block into DAA cache
-        cache
-            .blocks
-            .insert(hash.clone(), block.clone().into());
+        cache.blocks.insert(hash, block.clone());
 
         // Insert block into daa cache
         if let Some(blocks) = cache.daas_blocks.get_mut(&block.header.daa_score) {
             if !blocks.contains(&hash) {
-                blocks.push(hash.clone());
+                blocks.push(hash);
             }
         } else {
             cache
                 .daas_blocks
-                .insert(block.header.daa_score, vec![hash.clone()]);
-        }
-
-        // TODO is this needed if using get_virtual_chain_from_block ? I think so...
-        if block.verbose_data.unwrap().is_chain_block {
-            cache.chain_blocks.insert(hash, true);
+                .insert(block.header.daa_score, vec![hash]);
         }
 
         let mut transactions = Vec::<RpcTransactionId>::new();
@@ -78,14 +71,11 @@ impl BlocksProcess {
                     cache
                         .transactions
                         .insert(transaction_id, transaction.clone());
-                    cache
-                        .transactions_blocks
-                        .insert(transaction_id, vec![hash]);
+                    cache.transactions_blocks.insert(transaction_id, vec![hash]);
 
                     // Insert outputs
                     for (index, output) in transaction.outputs.into_iter().enumerate() {
-                        let outpoint =
-                            TransactionOutpoint::new(transaction_id, index as u32);
+                        let outpoint = TransactionOutpoint::new(transaction_id, index as u32);
                         cache.outputs.insert(outpoint.into(), output);
                     }
                 }
@@ -94,7 +84,7 @@ impl BlocksProcess {
 
         cache.blocks_transactions.insert(hash, transactions);
     }
-    
+
     pub async fn run(&self, mut low_hash: RpcHash) -> ! {
         info!("Starting from low_hash {}", low_hash);
 

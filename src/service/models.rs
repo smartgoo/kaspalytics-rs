@@ -1,4 +1,4 @@
-use kaspa_consensus_core::tx::{TransactionId, TransactionIndexType, TransactionOutpoint};
+use kaspa_consensus_core::tx::{TransactionId, TransactionIndexType};
 use kaspa_rpc_core::{
     RpcBlock, RpcBlockVerboseData, RpcHeader, RpcSubnetworkId, RpcTransaction,
     RpcTransactionOutpoint, RpcTransactionVerboseData,

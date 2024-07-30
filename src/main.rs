@@ -8,13 +8,13 @@ use clap::Parser;
 use env_logger::{Builder, Env};
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_grpc_client::GrpcClient;
-use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse, notify::mode::NotificationMode};
-use kaspa_wrpc_client::{
-    client::{ConnectOptions, ConnectStrategy},
-    KaspaRpcClient, Resolver, WrpcEncoding,
-};
+use kaspa_rpc_core::{api::rpc::RpcApi, notify::mode::NotificationMode, GetBlockDagInfoResponse};
+// use kaspa_wrpc_client::{
+//     client::{ConnectOptions, ConnectStrategy},
+//     KaspaRpcClient, Resolver, WrpcEncoding,
+// };
 use log::{info, LevelFilter};
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc};
 use tokio::{
     sync::{mpsc, Mutex},
     task,
@@ -70,8 +70,10 @@ async fn main() {
         None,
         false,
         Some(600_000),
-        Default::default()
-    ).await.unwrap();
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     // Init Rusty Kaspa dirs
     let app_dir = kaspad::get_app_dir_from_args(&args);
@@ -163,16 +165,20 @@ async fn main() {
 
     let (tx, rx) = mpsc::channel::<service::Event>(32);
 
-    let blocks_processor =
-        service::blocks::BlocksProcess::new(rpc_client.clone(), cache.clone(), tx);
-    let blocks_handle = task::spawn(async move {
-        blocks_processor.run(pruning_point_hash).await;
-    });
-
     let mut vspc_processor =
         service::vspc::VirtualChainProcess::new(rpc_client.clone(), cache.clone(), rx);
+    let blocks_processor =
+        service::blocks::BlocksProcess::new(rpc_client.clone(), cache.clone(), tx);
+
+    // Get virtual selected parent chain first as this is prerequisite for data anlysis
+    vspc_processor.get_vspc(pruning_point_hash).await;
+
+    // Run processors
     let vspc_handle = task::spawn(async move {
         vspc_processor.run(pruning_point_hash).await;
+    });
+    let blocks_handle = task::spawn(async move {
+        blocks_processor.run(pruning_point_hash).await;
     });
 
     let _ = tokio::join!(blocks_handle, vspc_handle);
