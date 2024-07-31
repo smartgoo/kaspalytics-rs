@@ -58,7 +58,6 @@ impl DAGCache {
         // TODO return result
         self.blocks.remove(hash);
         self.chain_blocks.remove(hash);
-        self.chain_blocks.remove(hash);
 
         let transaction_ids = self.blocks_transactions.remove(hash).unwrap();
         for transaction_id in transaction_ids {
@@ -66,7 +65,7 @@ impl DAGCache {
 
             match transaction_in_blocks.len() {
                 1 => {
-                    // Transaction is only in this block, remove
+                    // Transaction is only in one cached block, remove
                     let transaction = self.transactions.remove(&transaction_id).unwrap();
                     self.transactions_blocks.remove(&transaction_id);
                     self.transaction_accepting_block.remove(&transaction_id);
@@ -78,7 +77,7 @@ impl DAGCache {
                     });
                 }
                 _ => {
-                    // Transaction is in other blocks, remove from self.transactions_blocks vec
+                    // Transaction is in other cached blocks, remove block from self.transactions_blocks vec
                     transaction_in_blocks.retain(|&inner_hash| *hash != inner_hash);
                 }
             }

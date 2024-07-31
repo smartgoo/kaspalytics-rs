@@ -64,10 +64,10 @@ impl VirtualChainProcess {
                 obj.accepted_transaction_ids.clone(),
             );
 
-            for transaction in obj.accepted_transaction_ids {
+            for transaction_id in obj.accepted_transaction_ids {
                 cache
                     .transaction_accepting_block
-                    .insert(obj.accepting_block_hash, transaction);
+                    .insert(transaction_id, obj.accepting_block_hash);
             }
         }
 
