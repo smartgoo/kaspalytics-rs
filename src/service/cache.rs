@@ -54,33 +54,37 @@ impl DAGCache {
 }
 
 impl DAGCache {
-    fn remove_block(&mut self, hash: &Hash) {
-        // TODO return result
-        self.blocks.remove(hash);
-        self.chain_blocks.remove(hash);
+    fn remove_transaction(&mut self, block_hash: Hash, transaction_id: Hash) {
+        let transaction_in_blocks = self.transactions_blocks.get_mut(&transaction_id).unwrap();
 
-        let transaction_ids = self.blocks_transactions.remove(hash).unwrap();
-        for transaction_id in transaction_ids {
-            let transaction_in_blocks = self.transactions_blocks.get_mut(&transaction_id).unwrap();
+        match transaction_in_blocks.len() {
+            1 => {
+                // Transaction is only in one cached block, remove
+                let transaction = self.transactions.remove(&transaction_id).unwrap();
+                self.transactions_blocks.remove(&transaction_id);
+                self.transaction_accepting_block.remove(&transaction_id);
 
-            match transaction_in_blocks.len() {
-                1 => {
-                    // Transaction is only in one cached block, remove
-                    let transaction = self.transactions.remove(&transaction_id).unwrap();
-                    self.transactions_blocks.remove(&transaction_id);
-                    self.transaction_accepting_block.remove(&transaction_id);
-
-                    // Remove only spent outputs
-                    // TODO cap how many ouputs are in cache for memory purposes, while keeping as many as possible
-                    transaction.inputs.iter().for_each(|input| {
-                        self.outputs.remove(&input.previous_outpoint.into());
-                    });
-                }
-                _ => {
-                    // Transaction is in other cached blocks, remove block from self.transactions_blocks vec
-                    transaction_in_blocks.retain(|&inner_hash| *hash != inner_hash);
-                }
+                // Remove only spent outputs
+                // TODO cap how many ouputs are in cache for memory purposes, while keeping as many as possible
+                transaction.inputs.iter().for_each(|input| {
+                    self.outputs.remove(&input.previous_outpoint.into());
+                });
             }
+            _ => {
+                // Transaction is in other cached blocks, remove block from self.transactions_blocks vec
+                transaction_in_blocks.retain(|&inner_hash| block_hash != inner_hash);
+            }
+        }
+    }
+
+    fn remove_block(&mut self, block_hash: &Hash) {
+        // TODO return result
+        self.blocks.remove(block_hash);
+        self.chain_blocks.remove(block_hash);
+
+        let transaction_ids = self.blocks_transactions.remove(block_hash).unwrap();
+        for transaction_id in transaction_ids {
+            self.remove_transaction(block_hash.clone(), transaction_id);
         }
     }
 
@@ -88,10 +92,10 @@ impl DAGCache {
         // Keep 600 DAAs of blocks in memory
         // TODO make this adjust based on network block speed?
         while self.daas_blocks.len() > 600 {
-            let (_, hashes) = self.daas_blocks.pop_first().unwrap();
+            let (_, block_hashes) = self.daas_blocks.pop_first().unwrap();
 
-            for hash in hashes {
-                self.remove_block(&hash);
+            for block_hash in block_hashes {
+                self.remove_block(&block_hash);
             }
         }
         let (daa, _) = self.daas_blocks.first_key_value().unwrap();
