@@ -160,7 +160,7 @@ async fn main() {
         pruning_point_hash, ..
     } = rpc_client.get_block_dag_info().await.unwrap();
 
-    let cache = Arc::new(Mutex::new(service::cache::DAGCache::new()));
+    let cache = Arc::new(Mutex::new(service::cache::DAGCache::new(db_pool)));
     let rpc_client = Arc::new(rpc_client);
 
     let (tx, rx) = mpsc::channel::<service::Event>(32);

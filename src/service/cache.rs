@@ -1,10 +1,13 @@
 use super::models::*;
 use kaspa_consensus_core::Hash;
-use kaspa_rpc_core::{RpcBlock, RpcHash, RpcTransaction, RpcTransactionId, RpcTransactionOutput};
+use kaspa_rpc_core::{RpcBlock, RpcHash, RpcScriptPublicKey, RpcTransaction, RpcTransactionId, RpcTransactionOutput};
 use log::info;
+use sqlx::PgPool;
 use std::collections::BTreeMap;
 
 pub struct DAGCache {
+    db_pool: PgPool,
+
     pub daas_blocks: BTreeMap<u64, Vec<RpcHash>>,
     pub blocks: BTreeMap<RpcHash, RpcBlock>,
     pub blocks_transactions: BTreeMap<RpcHash, Vec<RpcTransactionId>>,
@@ -17,12 +20,14 @@ pub struct DAGCache {
 }
 
 impl DAGCache {
-    pub fn new() -> Self {
+    pub fn new(db_pool: PgPool) -> Self {
         Self {
+            db_pool, 
+
             daas_blocks: BTreeMap::<u64, Vec<RpcHash>>::new(),
             blocks: BTreeMap::<RpcHash, RpcBlock>::new(),
             blocks_transactions: BTreeMap::<RpcHash, Vec<RpcTransactionId>>::new(),
-            transactions: BTreeMap::<RpcTransactionId, RpcTransaction>::new(),
+            transactions: BTreeMap::<RpcTransactionId, RpcTransaction>::new(), // TODO is this really needed if full TX is in block?
             transactions_blocks: BTreeMap::<RpcTransactionId, Vec<RpcHash>>::new(),
             outputs: BTreeMap::<CacheTransactionOutpoint, RpcTransactionOutput>::new(),
 
@@ -50,10 +55,89 @@ impl DAGCache {
             "transaction_accepting_block size: {}",
             self.transaction_accepting_block.len()
         );
+        // info!(
+        //     "output_db_staging: {}",
+        //     self.output_staging.as_ref().unwrap().len()
+        // );
     }
 }
 
 impl DAGCache {
+    async fn insert_outputs_to_db(&self, outputs: Vec<DbTransactionOutput>) -> Result<(), sqlx::Error> {
+        let query = r#"
+            INSERT INTO outpoints (transaction_id, transaction_index, value, script_public_key)
+            VALUES ($1, $2, $3, $4)
+            -- ON CONFLICT (transaction_id, transaction_index) DO NOTHING
+        "#;
+
+        let mut tx = self.db_pool.begin().await?;
+
+        for output in outputs {
+            sqlx::query(query)
+                .bind(output.transaction_id.as_bytes()) 
+                .bind(output.index as i32)
+                .bind(output.value as i64)
+                .bind(output.script_public_key.script())
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    fn outputs_to_db(&self, block_hashes: &Vec<Hash>) {
+        let mut outputs = Vec::<DbTransactionOutput>::new();
+        
+        for block_hash in block_hashes {
+            let block = self.blocks.get(block_hash).unwrap();
+            for transaction in &block.transactions {
+                for (idx, output) in transaction.outputs.iter().enumerate() {
+                    let db_output = DbTransactionOutput {
+                        transaction_id: transaction.verbose_data.as_ref().unwrap().transaction_id.clone(),
+                        index: idx as u32,
+                        value: output.value,
+                        script_public_key: output.script_public_key.clone(),
+                    };
+                    outputs.push(db_output);
+                }
+            }
+        }
+
+        let db_pool = self.db_pool.clone();
+        tokio::task::spawn(async move {
+            let query = r#"
+                INSERT INTO outpoints (transaction_id, transaction_index, value, script_public_key)
+                VALUES ($1, $2, $3, $4)
+                -- ON CONFLICT (transaction_id, transaction_index) DO NOTHING
+            "#;
+    
+            let start = std::time::Instant::now();
+    
+            let mut tx = db_pool.begin().await.unwrap();
+            let mut count = 0;
+    
+            for output in outputs {
+                sqlx::query(query)
+                    .bind(output.transaction_id.as_bytes()) 
+                    .bind(output.index as i32)
+                    .bind(output.value as i64)
+                    .bind(output.script_public_key.script())
+                    .execute(&mut *tx)
+                    .await
+                    .unwrap();
+                count += 1;
+            }
+    
+            tx.commit().await.unwrap();
+    
+            let duration = start.elapsed();
+    
+            info!("Inserted {} records in {:?}", count, duration);
+        });
+    }
+
     fn remove_transaction(&mut self, block_hash: Hash, transaction_id: Hash) {
         let transaction_in_blocks = self.transactions_blocks.get_mut(&transaction_id).unwrap();
 
@@ -92,10 +176,22 @@ impl DAGCache {
         // Keep 600 DAAs of blocks in memory
         // TODO make this adjust based on network block speed?
         while self.daas_blocks.len() > 600 {
-            let (_, block_hashes) = self.daas_blocks.pop_first().unwrap();
+            let (daa, block_hashes) = self.daas_blocks.pop_first().unwrap();
 
-            for block_hash in block_hashes {
-                self.remove_block(&block_hash);
+            // TODO Testing getting chainblock for DAA
+            let mut chain_blocks = Vec::<Hash>::new();
+            for block_hash in &block_hashes {
+                let block = self.blocks.get(&block_hash).unwrap();
+                if block.verbose_data.as_ref().unwrap().is_chain_block {
+                    chain_blocks.push(block_hash.clone());
+                }
+            }
+            info!("DAA {:?} chain block(s) {:?}", daa, chain_blocks);
+
+            self.outputs_to_db(&block_hashes);
+
+            for block_hash in &block_hashes {
+                self.remove_block(block_hash);
             }
         }
         let (daa, _) = self.daas_blocks.first_key_value().unwrap();

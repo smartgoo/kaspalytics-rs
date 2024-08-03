@@ -32,9 +32,9 @@ CREATE TABLE IF NOT EXISTS analysis (
 CREATE TABLE IF NOT EXISTS outpoints (
     transaction_id BYTEA,
     transaction_index INTEGER,
-    amount BIGINT,
+    value BIGINT,
     script_public_key BYTEA,
-    -- created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    -- spent TIMESTAMPTZ,
+    created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    spent TIMESTAMPTZ,
     CONSTRAINT outpoints_primary_key UNIQUE (transaction_id, transaction_index)
 )

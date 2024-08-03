@@ -1,7 +1,7 @@
 use kaspa_consensus_core::tx::{TransactionId, TransactionIndexType};
 use kaspa_rpc_core::{
-    RpcBlock, RpcBlockVerboseData, RpcHeader, RpcSubnetworkId, RpcTransaction,
-    RpcTransactionOutpoint, RpcTransactionVerboseData,
+    RpcBlock, RpcBlockVerboseData, RpcHeader, RpcScriptPublicKey, RpcSubnetworkId, RpcTransaction,
+    RpcTransactionId, RpcTransactionOutpoint, RpcTransactionVerboseData,
 };
 
 #[derive(Clone)]
@@ -46,8 +46,8 @@ impl From<RpcTransaction> for CacheTransaction {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct CacheTransactionOutpoint {
-    pub transaction_id: TransactionId,
-    pub index: TransactionIndexType,
+    pub transaction_id: RpcTransactionId,
+    pub index: u32,
 }
 
 impl From<RpcTransactionOutpoint> for CacheTransactionOutpoint {
@@ -57,4 +57,11 @@ impl From<RpcTransactionOutpoint> for CacheTransactionOutpoint {
             index: value.index,
         }
     }
+}
+
+pub struct DbTransactionOutput {
+    pub transaction_id: RpcTransactionId,
+    pub index: u32,
+    pub value: u64,
+    pub script_public_key: RpcScriptPublicKey,
 }
