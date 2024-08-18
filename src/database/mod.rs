@@ -1,5 +1,6 @@
 pub mod conn;
 pub mod initialize;
+pub mod rdb;
 
 use strum_macros::{Display, EnumIter};
 

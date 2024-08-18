@@ -17,12 +17,14 @@ pub struct DAGCache {
 
     pub chain_blocks: BTreeMap<RpcHash, Vec<RpcTransactionId>>,
     pub transaction_accepting_block: BTreeMap<RpcTransactionId, RpcHash>,
+    
+    db_output_buffer: BTreeMap<Hash, Vec<DbTransactionOutput>>,
 }
 
 impl DAGCache {
     pub fn new(db_pool: PgPool) -> Self {
         Self {
-            db_pool, 
+            db_pool,
 
             daas_blocks: BTreeMap::<u64, Vec<RpcHash>>::new(),
             blocks: BTreeMap::<RpcHash, RpcBlock>::new(),
@@ -33,6 +35,9 @@ impl DAGCache {
 
             chain_blocks: BTreeMap::<RpcHash, Vec<RpcTransactionId>>::new(),
             transaction_accepting_block: BTreeMap::<RpcTransactionId, RpcHash>::new(),
+
+            // db_checkpoint_hash: Vec<u64>
+            db_output_buffer: BTreeMap::<Hash, Vec<DbTransactionOutput>>::new(),
         }
     }
 
@@ -55,62 +60,22 @@ impl DAGCache {
             "transaction_accepting_block size: {}",
             self.transaction_accepting_block.len()
         );
-        // info!(
-        //     "output_db_staging: {}",
-        //     self.output_staging.as_ref().unwrap().len()
-        // );
+        info!(
+            "db_output_buffer: {}",
+            self.db_output_buffer.len()
+        );
     }
 }
 
 impl DAGCache {
-    async fn insert_outputs_to_db(&self, outputs: Vec<DbTransactionOutput>) -> Result<(), sqlx::Error> {
-        let query = r#"
-            INSERT INTO outpoints (transaction_id, transaction_index, value, script_public_key)
-            VALUES ($1, $2, $3, $4)
-            -- ON CONFLICT (transaction_id, transaction_index) DO NOTHING
-        "#;
-
-        let mut tx = self.db_pool.begin().await?;
-
-        for output in outputs {
-            sqlx::query(query)
-                .bind(output.transaction_id.as_bytes()) 
-                .bind(output.index as i32)
-                .bind(output.value as i64)
-                .bind(output.script_public_key.script())
-                .execute(&mut *tx)
-                .await?;
-        }
-
-        tx.commit().await?;
-
-        Ok(())
-    }
-
-    fn outputs_to_db(&self, block_hashes: &Vec<Hash>) {
-        let mut outputs = Vec::<DbTransactionOutput>::new();
-        
-        for block_hash in block_hashes {
-            let block = self.blocks.get(block_hash).unwrap();
-            for transaction in &block.transactions {
-                for (idx, output) in transaction.outputs.iter().enumerate() {
-                    let db_output = DbTransactionOutput {
-                        transaction_id: transaction.verbose_data.as_ref().unwrap().transaction_id.clone(),
-                        index: idx as u32,
-                        value: output.value,
-                        script_public_key: output.script_public_key.clone(),
-                    };
-                    outputs.push(db_output);
-                }
-            }
-        }
-
+    // TODO
+    fn outputs_processor(&self, outputs: Vec<DbTransactionOutput>) {
         let db_pool = self.db_pool.clone();
         tokio::task::spawn(async move {
             let query = r#"
                 INSERT INTO outpoints (transaction_id, transaction_index, value, script_public_key)
                 VALUES ($1, $2, $3, $4)
-                -- ON CONFLICT (transaction_id, transaction_index) DO NOTHING
+                ON CONFLICT (transaction_id, transaction_index) DO NOTHING
             "#;
     
             let start = std::time::Instant::now();
@@ -175,20 +140,48 @@ impl DAGCache {
     pub fn prune(&mut self) {
         // Keep 600 DAAs of blocks in memory
         // TODO make this adjust based on network block speed?
-        while self.daas_blocks.len() > 600 {
+
+        while self.daas_blocks.len() > 86600 {
             let (daa, block_hashes) = self.daas_blocks.pop_first().unwrap();
+
+            // Collect outputs for DB insertion batch
+            let mut outputs = Vec::<DbTransactionOutput>::new();
+            for block_hash in &block_hashes {
+                let block = self.blocks.get(&block_hash).unwrap();
+                for transaction in &block.transactions {
+                    for (idx, output) in transaction.outputs.iter().enumerate() {
+                        let db_output = DbTransactionOutput {
+                            transaction_id: transaction.verbose_data.as_ref().unwrap().transaction_id.clone(),
+                            index: idx as u32,
+                            value: output.value,
+                            script_public_key: output.script_public_key.clone(),
+                        };
+                        outputs.push(db_output);
+                    }
+                }
+            }
 
             // TODO Testing getting chainblock for DAA
             let mut chain_blocks = Vec::<Hash>::new();
             for block_hash in &block_hashes {
-                let block = self.blocks.get(&block_hash).unwrap();
-                if block.verbose_data.as_ref().unwrap().is_chain_block {
-                    chain_blocks.push(block_hash.clone());
+                if let Some(_) = self.chain_blocks.get(&block_hash) {
+                    chain_blocks.push(*block_hash)
                 }
             }
-            info!("DAA {:?} chain block(s) {:?}", daa, chain_blocks);
 
-            self.outputs_to_db(&block_hashes);
+            match chain_blocks.len() {
+                0 => {
+                    // DAA does not have a chain block
+                    // All blocks for this DAA should be moved to db_outputs_buffer how????
+                    println!("daa {} has no chain blocks", daa)
+                },
+                1 => {
+                    println!("daa {} has 1 chain blocks", daa);
+                    self.db_output_buffer.insert(chain_blocks[0], outputs);
+                    ()
+                },
+                _ => println!("daa {} has multiple chain blocks", daa),
+            }
 
             for block_hash in &block_hashes {
                 self.remove_block(block_hash);

@@ -1,12 +1,13 @@
 mod args;
 mod database;
+mod dirs;
 mod kaspad;
 mod service;
 
 use args::Args;
 use clap::Parser;
 use env_logger::{Builder, Env};
-use kaspa_consensus_core::network::NetworkId;
+use kaspa_consensus_core::network::{self, NetworkId};
 use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::{api::rpc::RpcApi, notify::mode::NotificationMode, GetBlockDagInfoResponse};
 // use kaspa_wrpc_client::{
@@ -14,14 +15,12 @@ use kaspa_rpc_core::{api::rpc::RpcApi, notify::mode::NotificationMode, GetBlockD
 //     KaspaRpcClient, Resolver, WrpcEncoding,
 // };
 use log::{info, LevelFilter};
-use std::{io, sync::Arc};
+use service::cache;
+use std::{io, path::PathBuf, sync::Arc};
 use tokio::{
     sync::{mpsc, Mutex},
     task,
 };
-
-const META_DB: &str = "meta";
-const CONSENSUS_DB: &str = "consensus";
 
 fn prompt_confirmation(prompt: &str) -> bool {
     println!("{}", prompt);
@@ -45,6 +44,10 @@ async fn main() {
     // Get NetworkId based on CLI args
     let network_id = NetworkId::try_new(args.network)
         .unwrap_or_else(|_| NetworkId::with_suffix(args.network, args.netsuffix.unwrap()));
+
+    // RDB instance
+    let dirs = dirs::Dirs::new(args.app_dir.map(PathBuf::from), network_id);
+    let db = database::rdb::Database::new(dirs.db_dir);
 
     // Init RPC Client
     // let resolver = match &args.rpc_url {
@@ -76,11 +79,12 @@ async fn main() {
     .unwrap();
 
     // Init Rusty Kaspa dirs
-    let app_dir = kaspad::get_app_dir_from_args(&args);
-    let db_dir = kaspad::get_db_dir(app_dir, network_id);
-    let meta_db_dir = db_dir.join(META_DB);
-    let current_meta_dir = kaspad::db::meta_db_dir(meta_db_dir);
-    let consensus_db_dir = db_dir.join(CONSENSUS_DB).join(current_meta_dir);
+    let kaspad_dirs = dirs::KaspadDirs::new(args.kaspad_app_dir.map(PathBuf::from), network_id);
+    // let app_dir = kaspad::get_app_dir_from_args(&args);
+    // let db_dir = kaspad::get_db_dir(app_dir, network_id);
+    // let meta_db_dir = db_dir.join(META_DB);
+    // let current_meta_dir = kaspad::db::meta_db_dir(meta_db_dir);
+    // let consensus_db_dir = db_dir.join(CONSENSUS_DB).join(current_meta_dir);
 
     // Optionally drop database based on CLI args
     if args.reset_db {
@@ -146,7 +150,7 @@ async fn main() {
 
         // Insert pruning point utxo set to Postgres
         // So we can resolve all outpoints for transactions from PP up and do analysis on this data
-        kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await;
+        // kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await; TODO
     } else {
         // Database has been used in the past
         // Validate database meta network/suffix matches network supplied via CLI
@@ -161,6 +165,16 @@ async fn main() {
     } = rpc_client.get_block_dag_info().await.unwrap();
 
     let cache = Arc::new(Mutex::new(service::cache::DAGCache::new(db_pool)));
+    kaspad::db::load_pp_utxo_set(network_id, kaspad_dirs.active_consensus_db_dir, cache).await;
+
+    let mut system = sysinfo::System::new_all();
+    system.refresh_all();
+    let pid = std::process::id() as usize;
+    let memory_usage = system.process(pid.into()).unwrap().memory();
+    println!("Memory usage of the process: {} KB", memory_usage);
+
+    return;
+
     let rpc_client = Arc::new(rpc_client);
 
     let (tx, rx) = mpsc::channel::<service::Event>(32);

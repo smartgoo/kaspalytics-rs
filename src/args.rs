@@ -14,6 +14,9 @@ pub struct Args {
     pub app_dir: Option<String>,
 
     #[arg(long)]
+    pub kaspad_app_dir: Option<String>,
+
+    #[arg(long)]
     pub network: NetworkType,
 
     #[arg(long)]
