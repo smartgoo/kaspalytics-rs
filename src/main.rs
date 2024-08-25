@@ -1,26 +1,16 @@
 mod args;
 mod database;
-mod dirs;
 mod kaspad;
 mod service;
 
 use args::Args;
 use clap::Parser;
 use env_logger::{Builder, Env};
-use kaspa_consensus_core::network::{self, NetworkId};
-use kaspa_grpc_client::GrpcClient;
-use kaspa_rpc_core::{api::rpc::RpcApi, notify::mode::NotificationMode, GetBlockDagInfoResponse};
-// use kaspa_wrpc_client::{
-//     client::{ConnectOptions, ConnectStrategy},
-//     KaspaRpcClient, Resolver, WrpcEncoding,
-// };
+use kaspa_consensus_core::network::NetworkId;
+use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use log::{info, LevelFilter};
-use service::cache;
 use std::{io, path::PathBuf, sync::Arc};
-use tokio::{
-    sync::{mpsc, Mutex},
-    task,
-};
 
 fn prompt_confirmation(prompt: &str) -> bool {
     println!("{}", prompt);
@@ -45,48 +35,25 @@ async fn main() {
     let network_id = NetworkId::try_new(args.network)
         .unwrap_or_else(|_| NetworkId::with_suffix(args.network, args.netsuffix.unwrap()));
 
-    // RDB instance
-    let dirs = dirs::Dirs::new(args.app_dir.map(PathBuf::from), network_id);
-    let db = database::rdb::Database::new(dirs.db_dir);
+    // Init and connect RPC Client
+    let resolver = match &args.rpc_url {
+        Some(url) => Resolver::new(vec![Arc::new(url.clone())]),
+        None => Resolver::default(),
+    };
+    let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
+    let rpc_client = Arc::new(
+        KaspaRpcClient::new(
+            encoding,
+            args.rpc_url.as_deref(),
+            Some(resolver),
+            Some(network_id),
+            None,
+        )
+        .unwrap(),
+    );
+    rpc_client.connect(None).await.unwrap();
 
-    // Init RPC Client
-    // let resolver = match &args.rpc_url {
-    //     Some(url) => Resolver::new(vec![Arc::new(url.clone())]),
-    //     None => Resolver::default(),
-    // };
-    // let encoding = args.rpc_encoding.unwrap_or(WrpcEncoding::Borsh);
-    // let rpc_client = KaspaRpcClient::new(
-    //     encoding,
-    //     args.rpc_url.as_deref(),
-    //     Some(resolver),
-    //     Some(network_id),
-    //     None,
-    // )
-    // .unwrap();
-    // rpc_client.connect(None).await.unwrap();
-
-    let rpc_client = GrpcClient::connect_with_args(
-        NotificationMode::Direct,
-        args.rpc_url.clone().unwrap(),
-        None,
-        true,
-        None,
-        false,
-        Some(600_000),
-        Default::default(),
-    )
-    .await
-    .unwrap();
-
-    // Init Rusty Kaspa dirs
-    let kaspad_dirs = dirs::KaspadDirs::new(args.kaspad_app_dir.map(PathBuf::from), network_id);
-    // let app_dir = kaspad::get_app_dir_from_args(&args);
-    // let db_dir = kaspad::get_db_dir(app_dir, network_id);
-    // let meta_db_dir = db_dir.join(META_DB);
-    // let current_meta_dir = kaspad::db::meta_db_dir(meta_db_dir);
-    // let consensus_db_dir = db_dir.join(CONSENSUS_DB).join(current_meta_dir);
-
-    // Optionally drop database based on CLI args
+    // Optionally drop & recreate PG database based on CLI args
     if args.reset_db {
         let db_name = args
             .db_url
@@ -95,31 +62,31 @@ async fn main() {
             .expect("Invalid connection string");
 
         let prompt = format!(
-            "DANGER!!! Are you sure you want to drop and recreate the database {}? (y/N)?",
+            "DANGER!!! Are you sure you want to drop and recreate the PG database {}? (y/N)?",
             db_name
         );
         let reset_db = prompt_confirmation(prompt.as_str());
         if reset_db {
-            // Connect without specifying database in order to drop and recreate
+            // Connect without specifying PG database in order to drop and recreate
             let base_url = database::conn::parse_base_url(&args.db_url);
             let mut conn = database::conn::open_connection(&base_url).await.unwrap();
 
-            info!("Dropping database {}", db_name);
+            info!("Dropping PG database {}", db_name);
             database::conn::drop_db(&mut conn, db_name).await.unwrap();
 
-            info!("Creating database {}", db_name);
+            info!("Creating PG database {}", db_name);
             database::conn::create_db(&mut conn, db_name).await.unwrap();
 
             database::conn::close_connection(conn).await.unwrap();
         }
     }
 
-    // Init PG DB connection pool
+    // Init PG database connection pool
     let db_pool = database::conn::open_connection_pool(&args.db_url)
         .await
         .unwrap();
 
-    // Apply PG DB migrations and insert static records
+    // Apply PG database migrations and insert static records
     database::initialize::apply_migrations(&db_pool)
         .await
         .unwrap();
@@ -136,69 +103,30 @@ async fn main() {
         panic!("Kaspad RPC host network does not match network supplied via CLI")
     }
 
-    // Get NetworkId of PG DB instance
+    // Get NetworkId from PG database
     let db_network_id = database::initialize::get_meta_network_id(&db_pool)
         .await
         .unwrap();
     if db_network_id.is_none() {
-        // First time running with this database
-        // TODO run on tokio loop and start at same time as other services?
-        // Store network
+        // First time running with this PG database, save network
         database::initialize::insert_network_meta(&db_pool, server_info.network_id)
             .await
             .unwrap();
-
-        // Insert pruning point utxo set to Postgres
-        // So we can resolve all outpoints for transactions from PP up and do analysis on this data
-        // kaspad::db::pp_utxo_set_to_pg(&db_pool, network_id, consensus_db_dir).await; TODO
     } else {
-        // Database has been used in the past
-        // Validate database meta network/suffix matches network supplied via CLI
+        // PG database has been used in the past
+        // Validate network/suffix saved in db matches network supplied via CLI
         if network_id != db_network_id.unwrap() {
-            panic!("Database network does not match network supplied via CLI")
+            panic!("PG database network does not match network supplied via CLI")
         }
     }
 
-    // TODO get last block hash checkpoint from DB. Temporarily hardcoded to pruning point hash
-    let GetBlockDagInfoResponse {
-        pruning_point_hash, ..
-    } = rpc_client.get_block_dag_info().await.unwrap();
+    // Init Rusty Kaspa dir and rocksdb Consensus Storage object
+    let kaspad_dirs =
+        crate::kaspad::dirs::Dirs::new(args.kaspad_app_dir.map(PathBuf::from), network_id);
+    let storage =
+        crate::kaspad::db::init_consensus_storage(network_id, kaspad_dirs.active_consensus_db_dir);
 
-    let cache = Arc::new(Mutex::new(service::cache::DAGCache::new(db_pool)));
-    kaspad::db::load_pp_utxo_set(network_id, kaspad_dirs.active_consensus_db_dir, cache).await;
-
-    let mut system = sysinfo::System::new_all();
-    system.refresh_all();
-    let pid = std::process::id() as usize;
-    let memory_usage = system.process(pid.into()).unwrap().memory();
-    println!("Memory usage of the process: {} KB", memory_usage);
-
-    return;
-
-    let rpc_client = Arc::new(rpc_client);
-
-    let (tx, rx) = mpsc::channel::<service::Event>(32);
-
-    let mut vspc_processor =
-        service::vspc::VirtualChainProcess::new(rpc_client.clone(), cache.clone(), rx);
-    let blocks_processor =
-        service::blocks::BlocksProcess::new(rpc_client.clone(), cache.clone(), tx);
-
-    // Get virtual selected parent chain first as this is prerequisite for data anlysis
-    vspc_processor.get_vspc(pruning_point_hash).await;
-
-    // Run processors
-    let vspc_handle = task::spawn(async move {
-        vspc_processor.run(pruning_point_hash).await;
-    });
-    let blocks_handle = task::spawn(async move {
-        blocks_processor.run(pruning_point_hash).await;
-    });
-
-    let _ = tokio::join!(blocks_handle, vspc_handle);
-
-    // TODO need to store UTXOStateOf <block hash> in Meta? And check if node has block hash?
-    // If node has block hash, utxo set should be in sync with that.
-    // If node has not have block hash, I think it'll have issues since UTXO set is for older data
-    // I can probably just use checkpoint as last indexed thing?
+    // Analysis process
+    let analysis_process = service::analysis::Analysis::new(storage);
+    analysis_process.run();
 }

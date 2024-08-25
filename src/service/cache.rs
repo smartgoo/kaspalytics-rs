@@ -1,6 +1,6 @@
 use super::models::*;
 use kaspa_consensus_core::Hash;
-use kaspa_rpc_core::{RpcBlock, RpcHash, RpcScriptPublicKey, RpcTransaction, RpcTransactionId, RpcTransactionOutput};
+use kaspa_rpc_core::{RpcBlock, RpcHash, RpcTransaction, RpcTransactionId, RpcTransactionOutput};
 use log::info;
 use sqlx::PgPool;
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ pub struct DAGCache {
 
     pub chain_blocks: BTreeMap<RpcHash, Vec<RpcTransactionId>>,
     pub transaction_accepting_block: BTreeMap<RpcTransactionId, RpcHash>,
-    
+
     db_output_buffer: BTreeMap<Hash, Vec<DbTransactionOutput>>,
 }
 
@@ -60,10 +60,7 @@ impl DAGCache {
             "transaction_accepting_block size: {}",
             self.transaction_accepting_block.len()
         );
-        info!(
-            "db_output_buffer: {}",
-            self.db_output_buffer.len()
-        );
+        info!("db_output_buffer: {}", self.db_output_buffer.len());
     }
 }
 
@@ -77,15 +74,15 @@ impl DAGCache {
                 VALUES ($1, $2, $3, $4)
                 ON CONFLICT (transaction_id, transaction_index) DO NOTHING
             "#;
-    
+
             let start = std::time::Instant::now();
-    
+
             let mut tx = db_pool.begin().await.unwrap();
             let mut count = 0;
-    
+
             for output in outputs {
                 sqlx::query(query)
-                    .bind(output.transaction_id.as_bytes()) 
+                    .bind(output.transaction_id.as_bytes())
                     .bind(output.index as i32)
                     .bind(output.value as i64)
                     .bind(output.script_public_key.script())
@@ -94,11 +91,11 @@ impl DAGCache {
                     .unwrap();
                 count += 1;
             }
-    
+
             tx.commit().await.unwrap();
-    
+
             let duration = start.elapsed();
-    
+
             info!("Inserted {} records in {:?}", count, duration);
         });
     }
@@ -151,7 +148,12 @@ impl DAGCache {
                 for transaction in &block.transactions {
                     for (idx, output) in transaction.outputs.iter().enumerate() {
                         let db_output = DbTransactionOutput {
-                            transaction_id: transaction.verbose_data.as_ref().unwrap().transaction_id.clone(),
+                            transaction_id: transaction
+                                .verbose_data
+                                .as_ref()
+                                .unwrap()
+                                .transaction_id
+                                .clone(),
                             index: idx as u32,
                             value: output.value,
                             script_public_key: output.script_public_key.clone(),
@@ -174,12 +176,12 @@ impl DAGCache {
                     // DAA does not have a chain block
                     // All blocks for this DAA should be moved to db_outputs_buffer how????
                     println!("daa {} has no chain blocks", daa)
-                },
+                }
                 1 => {
                     println!("daa {} has 1 chain blocks", daa);
                     self.db_output_buffer.insert(chain_blocks[0], outputs);
                     ()
-                },
+                }
                 _ => println!("daa {} has multiple chain blocks", daa),
             }
 
