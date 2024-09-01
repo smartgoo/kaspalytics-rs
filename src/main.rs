@@ -127,6 +127,6 @@ async fn main() {
         crate::kaspad::db::init_consensus_storage(network_id, kaspad_dirs.active_consensus_db_dir);
 
     // Analysis process
-    let analysis_process = service::analysis::Analysis::new(storage);
+    let mut analysis_process = service::analysis::Analysis::new(storage, network_id);
     analysis_process.run();
 }

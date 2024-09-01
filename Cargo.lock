@@ -2370,15 +2370,18 @@ dependencies = [
  "dirs",
  "env_logger",
  "indexmap 2.4.0",
+ "kaspa-addresses",
  "kaspa-consensus",
  "kaspa-consensus-core",
  "kaspa-database",
  "kaspa-grpc-client",
  "kaspa-rpc-core",
+ "kaspa-txscript",
  "kaspa-utils",
  "kaspa-wrpc-client",
  "log",
  "moka",
+ "num-format",
  "rocksdb",
  "serde",
  "sqlx",
@@ -2810,6 +2813,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 
 [[package]]
+name = "num-format"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
+dependencies = [
+ "arrayvec",
+ "itoa",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3213,7 +3226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",

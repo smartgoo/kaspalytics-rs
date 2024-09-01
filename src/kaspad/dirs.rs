@@ -15,6 +15,7 @@ pub fn get_app_dir(dir: String) -> PathBuf {
     return get_home_dir().join(dir);
 }
 
+#[allow(dead_code)]
 pub struct Dirs {
     pub app_dir: PathBuf,
     pub network_dir: PathBuf,
