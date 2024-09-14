@@ -7,8 +7,11 @@ edition = "2021"
 bincode = "1.3.3"
 chrono = "0.4.38"
 clap = { version = "4.5.8", features = ["derive"] }
+ctrlc = "3.4.5"
 dirs = "5.0.1"
+dotenvy = "0.15.7"
 env_logger = "0.11.3"
+futures = "0.3.30"
 indexmap = "2.2.6"
 kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
@@ -19,12 +22,13 @@ kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch =
 kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+lettre = "0.11.8"
 log = "0.4"
-moka = {version = "0.12.7", features = ["future"] }
+# moka = {version = "0.12.7", features = ["future"] }
 num-format = "0.4.4"
-rocksdb = "0.21.0"
+# rocksdb = "0.21.0"
 serde = "1.0.204"
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }
+sqlx = { version = "0.7.4", features = ["chrono", "runtime-tokio", "postgres"] }
 strum = "0.26.3"
 strum_macros = "0.26.3"
 sysinfo = "0.31.2"

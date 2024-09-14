@@ -2,6 +2,7 @@ mod args;
 mod database;
 mod kaspad;
 mod service;
+mod utils;
 
 use args::Args;
 use clap::Parser;
@@ -21,6 +22,9 @@ fn prompt_confirmation(prompt: &str) -> bool {
 
 #[tokio::main]
 async fn main() {
+    // Load .env
+    dotenvy::dotenv().unwrap();
+
     // Parse CLI args
     let args = Args::parse();
 
@@ -93,14 +97,16 @@ async fn main() {
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
     // Ensure RPC node is synced, is same network/suffix as supplied CLI args, is utxoindexed
-    // TODO is utxo indexed
     let server_info = rpc_client.get_server_info().await.unwrap();
     assert!(server_info.is_synced, "Kaspad node is not synced");
     if !server_info.is_synced {
-        panic!("Kaspad node is not synced")
+        panic!("RPC node is not synced")
+    }
+    if !server_info.has_utxo_index {
+        panic!("RPC node does is not utxo-indexed")
     }
     if server_info.network_id.network_type != *network_id {
-        panic!("Kaspad RPC host network does not match network supplied via CLI")
+        panic!("RPC host network does not match network supplied via CLI")
     }
 
     // Get NetworkId from PG database
@@ -109,7 +115,7 @@ async fn main() {
         .unwrap();
     if db_network_id.is_none() {
         // First time running with this PG database, save network
-        database::initialize::insert_network_meta(&db_pool, server_info.network_id)
+        database::initialize::insert_network_meta(&db_pool, network_id)
             .await
             .unwrap();
     } else {
@@ -126,7 +132,9 @@ async fn main() {
     let storage =
         crate::kaspad::db::init_consensus_storage(network_id, kaspad_dirs.active_consensus_db_dir);
 
-    // Analysis process
-    let mut analysis_process = service::analysis::Analysis::new(storage, network_id);
-    analysis_process.run();
+    // Run Analysis process
+    let mut daily_analysis_process =
+        service::analysis::Analysis::new_from_time_window(storage, network_id);
+
+    daily_analysis_process.run(&db_pool).await;
 }

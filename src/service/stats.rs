@@ -1,22 +1,33 @@
+use chrono::DateTime;
 use kaspa_addresses::Address;
 use log::info;
 use num_format::{Locale, ToFormattedString};
+use sqlx::PgPool;
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
+
+use super::Granularity;
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Stats {
-    // Timestamps (in ms) of analysis window
-    pub window_start_time: u64,
-    pub window_end_time: u64,
+    // Second, Minute, Hour, Day
+    granularity: Granularity,
 
+    // Timestamps (in ms) of analysis window
+    pub epoch_second: u64,
+    // pub window_end_time: u64,
+
+    // -----------------------------------
+    // Block Summary
     pub spc_block_count: u64,
-    // non_spc_block_count: u64 TODO
-    // blue_block_count: u64 TODO
-    // red_block_count: u64 TODO
-    // daa_count: u64 TODO
-    // blocks_per_daa - mean, median, min, max TODO
-    // blue_block_interval - mean, median, min, max TODO
-    // blue_blocks_per_second - mean, median, min, max TODO
+    // non_spc_block_count: u64 TODO-FUTURE
+    // blue_block_count: u64 TODO-FUTURE
+    // red_block_count: u64 TODO-FUTURE
+    // daa_count: u64 TODO-FUTURE
+    // blocks_per_daa - mean, median, min, max TODO-FUTURE
+    // blue_block_interval - mean, median, min, max TODO-FUTURE
+    // blue_blocks_per_second - mean, median, min, max TODO-FUTURE
 
     // Accepted transactions per accepting (SPC) block
     pub transaction_count_per_spc_block: Vec<u64>,
@@ -24,6 +35,8 @@ pub struct Stats {
     // Accepted transactions per block
     pub transaction_count_per_block: Vec<u64>,
 
+    // -----------------------------------
+    // Transaction Summary
     // Transactions related stats all include only accepted transactions
     pub coinbase_tx_count: u64,
     pub regular_tx_count: u64,
@@ -39,42 +52,29 @@ pub struct Stats {
     pub skipped_tx_count_cannot_resolve_inputs: u64,
 
     pub unique_senders: HashSet<Address>,
-    pub unique_sender_count: u64,
     pub unique_recipients: HashSet<Address>,
-    pub unique_receipient_count: u64,
-    pub unique_address_count: HashSet<Address>,
-
-    pub transactions_per_second: BTreeMap<u64, u64>,
+    pub unique_addresses: HashSet<Address>,
 }
 
 impl Stats {
-    pub fn new(window_start_time: u64, window_end_time: u64) -> Self {
+    pub fn new(epoch_second: u64, granularity: Granularity) -> Self {
         Self {
-            window_start_time,
-            window_end_time,
-
+            granularity,
+            epoch_second,
             spc_block_count: 0,
-
             transaction_count_per_spc_block: Vec::<u64>::new(),
             transaction_count_per_block: Vec::<u64>::new(),
-
             coinbase_tx_count: 0,
             regular_tx_count: 0,
             input_count: 0,
             output_count_coinbase_tx: 0,
             output_count_regular_tx: 0,
             fees: Vec::<u64>::new(),
-
             input_count_missing_previous_outpoints: 0,
             skipped_tx_count_cannot_resolve_inputs: 0,
-
             unique_senders: HashSet::<Address>::new(),
-            unique_sender_count: 0,
             unique_recipients: HashSet::<Address>::new(),
-            unique_receipient_count: 0,
-            unique_address_count: HashSet::<Address>::new(),
-
-            transactions_per_second: BTreeMap::<u64, u64>::new(),
+            unique_addresses: HashSet::<Address>::new(),
         }
     }
 }
@@ -82,17 +82,20 @@ impl Stats {
 impl Stats {
     fn vec_stats(&self, values: &[u64]) -> (u64, f64, f64, u64, u64) {
         let sum: u64 = values.iter().sum();
-        let mean = sum as f64 / values.len() as f64;
+        let mean = (sum as f64) / (values.len() as f64);
+        if values.is_empty() {
+            return (0, 0.0, 0.0, 0, 0);
+        }
 
-        let min = *values.iter().min().unwrap();
-        let max = *values.iter().max().unwrap();
+        let min = *values.iter().min().unwrap_or(&0);
+        let max = *values.iter().max().unwrap_or(&0);
 
         let median = {
             let mut sorted = values.to_owned();
             sorted.sort_unstable();
             let mid = sorted.len() / 2;
             if sorted.len() % 2 == 0 {
-                (sorted[mid - 1] + sorted[mid]) as f64 / 2.0
+                ((sorted[mid - 1] + sorted[mid]) as f64) / 2.0
             } else {
                 sorted[mid] as f64
             }
@@ -101,46 +104,27 @@ impl Stats {
         (sum, mean, median, min, max)
     }
 
-    fn per_second_stats(&self, map: &BTreeMap<u64, u64>) -> (f64, f64, u64, u64) {
-        // Find the range of timestamps
-        let min_time = *map.keys().next().unwrap();
-        let max_time = *map.keys().last().unwrap();
-
-        // Calculate the total number of seconds
-        let total_seconds = (max_time - min_time + 1) as usize;
-
-        // Generate a list of record counts per second
-        let mut records_per_second = Vec::with_capacity(total_seconds);
-        for timestamp in min_time..=max_time {
-            records_per_second.push(*map.get(&timestamp).unwrap_or(&0));
+    fn tps_mean(&self) -> f64 {
+        match self.granularity {
+            Granularity::Second => (self.coinbase_tx_count + self.regular_tx_count) as f64,
+            Granularity::Minute => (self.coinbase_tx_count + self.regular_tx_count) as f64 / 60f64,
+            Granularity::Hour => (self.coinbase_tx_count + self.regular_tx_count) as f64 / 3600f64,
+            Granularity::Day => (self.coinbase_tx_count + self.regular_tx_count) as f64 / 86400f64,
         }
+    }
+    // fn tps_median - TODO, requires storing more data I think
+    // fn tps_min - TODO, requires storing more data I think
+    // fn tps_max - TODO, should be doable if self.sgranularity is Second??
 
-        // Sort the record counts to calculate median
-        records_per_second.sort_unstable();
-
-        // Calculate the total number of records
-        let total_records: u64 = records_per_second.iter().sum();
-
-        // Calculate mean (average)
-        let mean = total_records as f64 / total_seconds as f64;
-
-        // Calculate median
-        let median = if total_seconds % 2 == 0 {
-            let mid1 = total_seconds / 2;
-            let mid2 = mid1 - 1;
-            (records_per_second[mid1] + records_per_second[mid2]) as f64 / 2.0
-        } else {
-            records_per_second[total_seconds / 2] as f64
-        };
-
-        // Calculate min and max
-        let min = *records_per_second.first().unwrap();
-        let max = *records_per_second.last().unwrap();
-
-        (mean, median, min, max)
+    fn unique_sender_count(&self) -> u64 {
+        self.unique_senders.len() as u64
     }
 
-    pub fn unique_address_count(&self) -> u64 {
+    fn unique_recipient_count(&self) -> u64 {
+        self.unique_recipients.len() as u64
+    }
+
+    fn unique_address_count(&self) -> u64 {
         self.unique_senders
             .union(&self.unique_recipients)
             .collect::<HashSet<_>>()
@@ -149,40 +133,192 @@ impl Stats {
 }
 
 impl Stats {
-    #[rustfmt::skip]
-    pub fn log(&self) {
-        info!("window_start_time: {}", self.window_start_time);
-        info!("window_end_time: {}", self.window_end_time);
+    fn calculate_granularity_epoch(epoch_second: u64, granularity: &Granularity) -> u64 {
+        match granularity {
+            Granularity::Second => epoch_second,
+            Granularity::Minute => (epoch_second / 60) * 60,
+            Granularity::Hour => (epoch_second / 3600) * 3600,
+            Granularity::Day => (epoch_second / 86400) * 86400,
+        }
+    }
 
-        // info!("spc_block_count: {}", self.spc_block_count.to_formatted_string(&Locale::en));
+    pub fn rollup(
+        per_second_stats: &BTreeMap<u64, Stats>,
+        target_granularity: Granularity,
+    ) -> BTreeMap<u64, Stats> {
+        let mut rolled_up: BTreeMap<u64, Stats> = BTreeMap::new();
 
-        // info!("transaction_count_per_spc_block - mean: {}", self.transaction_count_per_spc_block.iter().sum::<u64>() / self.transaction_count_per_spc_block.len() as u64);
-        // info!("transaction_count_per_block - mean: {:?}", self.transaction_count_per_block.iter().sum::<u64>() / self.transaction_count_per_block.len() as u64);
+        for (epoch_second, per_second_stats) in per_second_stats {
+            let key = Self::calculate_granularity_epoch(*epoch_second, &target_granularity);
 
-        info!("coinbase_tx_count: {}", self.coinbase_tx_count.to_formatted_string(&Locale::en));
-        info!("regular_tx_count: {}", self.regular_tx_count.to_formatted_string(&Locale::en));
-        info!("input_count: {}", self.input_count.to_formatted_string(&Locale::en));
-        info!("output_count_coinbase_tx: {}", self.output_count_coinbase_tx.to_formatted_string(&Locale::en));
-        info!("output_count_regular_tx: {}", self.output_count_regular_tx.to_formatted_string(&Locale::en));
+            rolled_up
+                .entry(key)
+                .and_modify(|new_stats| {
+                    new_stats.spc_block_count += per_second_stats.spc_block_count;
 
+                    new_stats
+                        .transaction_count_per_spc_block
+                        .extend(per_second_stats.transaction_count_per_spc_block.clone());
+                    new_stats
+                        .transaction_count_per_block
+                        .extend(per_second_stats.transaction_count_per_block.clone());
+
+                    new_stats.coinbase_tx_count += per_second_stats.coinbase_tx_count;
+                    new_stats.regular_tx_count += per_second_stats.regular_tx_count;
+                    new_stats.input_count += per_second_stats.input_count;
+                    new_stats.output_count_coinbase_tx += per_second_stats.output_count_coinbase_tx;
+                    new_stats.output_count_regular_tx += per_second_stats.output_count_regular_tx;
+                    new_stats.fees.extend(per_second_stats.fees.clone());
+
+                    new_stats.input_count_missing_previous_outpoints +=
+                        per_second_stats.input_count_missing_previous_outpoints;
+                    new_stats.skipped_tx_count_cannot_resolve_inputs +=
+                        per_second_stats.skipped_tx_count_cannot_resolve_inputs;
+
+                    new_stats
+                        .unique_senders
+                        .extend(per_second_stats.unique_senders.clone());
+                    new_stats
+                        .unique_recipients
+                        .extend(per_second_stats.unique_recipients.clone());
+                    new_stats
+                        .unique_addresses
+                        .extend(per_second_stats.unique_addresses.clone());
+                })
+                .or_insert_with(|| {
+                    let mut new_stats = per_second_stats.clone();
+                    new_stats.granularity = target_granularity;
+                    new_stats.epoch_second = key;
+                    new_stats
+                });
+        }
+
+        rolled_up
+    }
+}
+
+impl Stats {
+    async fn save_block_summary(&self, pool: &PgPool) {
+        // TODO make sure date record isn't already in table
+        let sql = r#"
+            INSERT INTO block_summary
+            (
+                date, 
+                spc_blocks_total, 
+                txs_per_accepting_block_mean, txs_per_accepting_block_median, txs_per_accepting_block_min, txs_per_accepting_block_max,
+                txs_per_block_mean, txs_per_block_median, txs_per_block_min, txs_per_block_max
+            )
+            VALUES
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        "#;
+
+        let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
+            .unwrap()
+            .date_naive();
+
+        let tpspc = self.vec_stats(&self.transaction_count_per_spc_block);
+        let tpb = self.vec_stats(&self.transaction_count_per_block);
+
+        sqlx::query(sql)
+            .bind(date)
+            .bind(self.spc_block_count as i64)
+            .bind(tpspc.1)
+            .bind(tpspc.2)
+            .bind(tpspc.3 as i64)
+            .bind(tpspc.4 as i64)
+            .bind(tpb.1)
+            .bind(tpb.2)
+            .bind(tpb.3 as i64)
+            .bind(tpb.4 as i64)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    async fn save_transaction_summary(&self, pool: &PgPool) {
+        // TODO make sure date record isn't already in table
+        let sql = r#"
+            INSERT INTO transaction_summary
+            (   
+                date, 
+                coinbase_tx_qty, tx_qty, input_qty_total, output_qty_total_coinbase, output_qty_total, 
+                fees_total, fees_mean, fees_median, fees_min, fees_max,
+                skipped_tx_missing_inputs, inputs_missing_previous_outpoint,
+                unique_senders, unique_recipients, unique_addresses, 
+                tx_per_second_mean
+            )
+            VALUES
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        "#;
+
+        let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
+            .unwrap()
+            .date_naive();
         let fees = self.vec_stats(&self.fees);
-        info!("fees - total: {}", (fees.0 / 100_000_000).to_formatted_string(&Locale::en));
-        info!("fees - mean: {}", (fees.1 / 100_000_000.0));
-        info!("fees - median: {}", (fees.2 / 100_000_000.0));
-        info!("fees - min: {}", (fees.3 as f64 / 100_000_000.0));
-        info!("fees - max: {}", (fees.4 as f64 / 100_000_000.0));
+        let tps = self.tps_mean();
 
-        info!("input_count_missing_previous_outpoints: {}", self.input_count_missing_previous_outpoints.to_formatted_string(&Locale::en));
-        info!("skipped_tx_count_cannot_resolve_inputs: {}", self.skipped_tx_count_cannot_resolve_inputs.to_formatted_string(&Locale::en));
+        sqlx::query(sql)
+            .bind(date)
+            .bind(self.coinbase_tx_count as i64)
+            .bind(self.regular_tx_count as i64)
+            .bind(self.input_count as i64)
+            .bind(self.output_count_coinbase_tx as i64)
+            .bind(self.output_count_regular_tx as i64)
+            .bind(fees.0 as i64)
+            .bind(fees.1)
+            .bind(fees.2)
+            .bind(fees.3 as i64)
+            .bind(fees.4 as i64)
+            .bind(self.skipped_tx_count_cannot_resolve_inputs as i64)
+            .bind(self.input_count_missing_previous_outpoints as i64)
+            .bind(self.unique_senders.len() as i64)
+            .bind(self.unique_recipients.len() as i64)
+            .bind(self.unique_address_count() as i64)
+            .bind(tps)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
 
-        info!("unique_sender_count: {}", self.unique_senders.len().to_formatted_string(&Locale::en));
-        info!("unique_receipient_count: {}", self.unique_recipients.len().to_formatted_string(&Locale::en));
-        info!("unique_address_count: {}", self.unique_address_count().to_formatted_string(&Locale::en));
+    pub async fn save(&self, pool: &PgPool) {
+        self.save_block_summary(pool).await;
+        self.save_transaction_summary(pool).await;
+    }
+}
 
-        let tps_stats = self.per_second_stats(&self.transactions_per_second);
-        info!("TPS mean: {}", (tps_stats.0));
-        info!("TPS median: {}", (tps_stats.1));
-        info!("TPS min: {}", tps_stats.2.to_formatted_string(&Locale::en));
-        info!("TPS max: {}", tps_stats.3.to_formatted_string(&Locale::en));
+impl fmt::Debug for Stats {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tpspc = self.vec_stats(&self.transaction_count_per_spc_block);
+        let tpb = self.vec_stats(&self.transaction_count_per_block);
+        let fees = self.vec_stats(&self.fees);
+
+        f.debug_struct("Stats")
+            .field("epoch_second", &self.epoch_second)
+            .field("granularity", &self.granularity)
+            .field("spc_block_count", &self.spc_block_count)
+            .field("transaction_count_per_spc_block - mean", &tpspc.1)
+            .field("transaction_count_per_spc_block - median", &tpspc.2)
+            .field("transaction_count_per_spc_block - min", &tpspc.3)
+            .field("transaction_count_per_spc_block - max", &tpspc.4)
+            .field("transaction_count_per_block - mean", &tpb.1)
+            .field("transaction_count_per_block - median", &tpb.2)
+            .field("transaction_count_per_block - min", &tpb.3)
+            .field("transaction_count_per_block - max", &tpb.4)
+            .field("coinbase_tx_count", &self.coinbase_tx_count)
+            .field("regular_tx_count", &self.regular_tx_count)
+            .field("input_count", &self.input_count)
+            .field("output_count_coinbase_tx", &self.output_count_coinbase_tx)
+            .field("output_count_regular_tx", &self.output_count_regular_tx)
+            .field("fees - total", &(fees.0 / 100_000_000))
+            .field("fees - mean", &(fees.1 / 100_000_000.0))
+            .field("fees - median", &(fees.2 / 100_000_000.0))
+            .field("fees - min", &(fees.3 as f64 / 100_000_000.0))
+            .field("fees - max", &(fees.4 as f64 / 100_000_000.0))
+            .field("input_count_missing_previous_outpoints", &self.input_count_missing_previous_outpoints)
+            .field("skipped_tx_count_cannot_resolve_inputs", &self.skipped_tx_count_cannot_resolve_inputs)
+            .field("unique_senders", &self.unique_sender_count())
+            .field("unique_recipients", &self.unique_recipient_count())
+            .field("unique_addresses", &self.unique_address_count())
+            .finish()
     }
 }
