@@ -8,7 +8,7 @@ use args::Args;
 use clap::Parser;
 use env_logger::{Builder, Env};
 use kaspa_consensus_core::network::NetworkId;
-use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_rpc_core::{api::rpc::RpcApi, GetServerInfoRequest};
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use log::{info, LevelFilter};
 use std::{io, path::PathBuf, sync::Arc};
@@ -97,17 +97,17 @@ async fn main() {
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
     // Ensure RPC node is synced, is same network/suffix as supplied CLI args, is utxoindexed
-    let server_info = rpc_client.get_server_info().await.unwrap();
-    assert!(server_info.is_synced, "Kaspad node is not synced");
-    if !server_info.is_synced {
-        panic!("RPC node is not synced")
-    }
-    if !server_info.has_utxo_index {
-        panic!("RPC node does is not utxo-indexed")
-    }
-    if server_info.network_id.network_type != *network_id {
-        panic!("RPC host network does not match network supplied via CLI")
-    }
+    // let server_info = rpc_client.get_server_info_call( GetServerInfoRequest {} ).await.unwrap();
+    // assert!(server_info.is_synced, "Kaspad node is not synced");
+    // if !server_info.is_synced {
+    //     panic!("RPC node is not synced")
+    // }
+    // if !server_info.has_utxo_index {
+    //     panic!("RPC node does is not utxo-indexed")
+    // }
+    // if server_info.network_id.network_type != *network_id {
+    //     panic!("RPC host network does not match network supplied via CLI")
+    // }
 
     // Get NetworkId from PG database
     let db_network_id = database::initialize::get_meta_network_id(&db_pool)
