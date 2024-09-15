@@ -1,6 +1,5 @@
 use crate::service::stats::Stats;
-use chrono::{Duration, Utc};
-use clap::Args;
+use crate::utils::config::Config;
 use kaspa_consensus::consensus::storage::ConsensusStorage;
 use kaspa_consensus::model::stores::acceptance_data::AcceptanceDataStoreReader;
 use kaspa_consensus::model::stores::block_transactions::BlockTransactionsStoreReader;
@@ -8,7 +7,6 @@ use kaspa_consensus::model::stores::headers::HeaderStoreReader;
 use kaspa_consensus::model::stores::selected_chain::SelectedChainStoreReader;
 use kaspa_consensus::model::stores::utxo_diffs::UtxoDiffsStoreReader;
 use kaspa_consensus_core::header::Header;
-use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::tx::{Transaction, TransactionId, TransactionOutpoint, UtxoEntry};
 use kaspa_consensus_core::utxo::utxo_diff::ImmutableUtxoDiff;
 use kaspa_consensus_core::Hash;
@@ -17,14 +15,13 @@ use kaspa_txscript::standard::extract_script_pub_key_address;
 use log::info;
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
-use std::env;
 use std::sync::Arc;
 
 use super::Granularity;
 
 pub struct Analysis {
+    config: Config,
     storage: Arc<ConsensusStorage>,
-    network_id: NetworkId,
     window_start_time: u64,
     window_end_time: u64,
     chain_blocks: BTreeMap<u64, Hash>,
@@ -32,19 +29,17 @@ pub struct Analysis {
 }
 
 impl Analysis {
-    pub fn new_from_time_window(storage: Arc<ConsensusStorage>, network_id: NetworkId) -> Self {
-        // Temporarily hardcoded to always run for yesterday
-        let start_of_today = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let start_of_yesterday = start_of_today - Duration::days(1);
-        let end_of_yesterday = start_of_today - Duration::milliseconds(1);
-        let window_start_time = start_of_yesterday.and_utc().timestamp_millis() as u64;
-        let window_end_time = end_of_yesterday.and_utc().timestamp_millis() as u64;
-
+    pub fn new_from_time_window(
+        config: Config,
+        storage: Arc<ConsensusStorage>,
+        start_time: u64,
+        end_time: u64,
+    ) -> Self {
         Self {
+            config,
             storage,
-            network_id,
-            window_start_time,
-            window_end_time,
+            window_start_time: start_time,
+            window_end_time: end_time,
             chain_blocks: BTreeMap::<u64, Hash>::new(),
             stats: BTreeMap::<u64, Stats>::new(),
         }
@@ -227,7 +222,7 @@ impl Analysis {
 
                                 let address = extract_script_pub_key_address(
                                     &previous_outpoint.script_public_key,
-                                    self.network_id.into(),
+                                    self.config.network_id.into(),
                                 )
                                 .unwrap();
 
@@ -256,7 +251,7 @@ impl Analysis {
                         tx_fee -= output.value;
                         let address = extract_script_pub_key_address(
                             &output.script_public_key,
-                            self.network_id.into(),
+                            self.config.network_id.into(),
                         )
                         .unwrap();
                         self.stats.entry(block_time_s).and_modify(|stats| {
@@ -300,13 +295,19 @@ impl Analysis {
         info!("{}", self.stats.len());
 
         let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);
-        for (_, stats) in per_day {
+        for (time, stats) in per_day {
+            // Skip results outside of time window
+            if time * 1000 < self.window_start_time || self.window_end_time < time * 1000 {
+                continue;
+            }
+
             info!("{:?}", stats);
             stats.save(pool).await;
 
             crate::utils::email::send_email(
-                format!("{} | kaspalytics-rs stats results", env::var("ENV").unwrap()),
-                format!("{:?}", stats)
+                self.config.clone(),
+                format!("{} | kaspalytics-rs stats results", &self.config.env),
+                format!("{:?}", stats),
             );
         }
     }

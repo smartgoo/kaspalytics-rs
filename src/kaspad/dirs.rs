@@ -27,12 +27,7 @@ pub struct Dirs {
 }
 
 impl Dirs {
-    pub fn new(app_dir: Option<PathBuf>, network_id: NetworkId) -> Self {
-        let app_dir = match app_dir {
-            Some(dir) => dir,
-            None => get_app_dir(String::from(".rusty-kaspa")),
-        };
-
+    pub fn new(app_dir: PathBuf, network_id: NetworkId) -> Self {
         let network_dir = app_dir.join(network_id.to_prefixed());
         let db_dir = network_dir.join("datadir");
         let utxo_index_db_dir = if db_dir.join("utxoindex").exists() {

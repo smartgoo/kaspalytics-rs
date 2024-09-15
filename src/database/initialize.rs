@@ -5,32 +5,12 @@ use std::str::FromStr;
 use strum::IntoEnumIterator;
 
 pub async fn apply_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
-    // Run sqlx migrations
     sqlx::migrate!().run(pool).await?;
 
     Ok(())
 }
 
 pub async fn insert_enums(pool: &PgPool) -> Result<(), sqlx::Error> {
-    // // Insert all Granularity keys to granularity table
-    // for variant in database::Granularity::iter() {
-    //     let name = format!("{:?}", variant);
-    //     sqlx::query("INSERT INTO granularity (name) VALUES ($1) ON CONFLICT (name) DO NOTHING")
-    //         .bind(name)
-    //         .execute(pool)
-    //         .await?;
-    // }
-
-    // // Insert all DataPoint keys to data_point table
-    // for variant in database::DataPoint::iter() {
-    //     let name = format!("{:?}", variant);
-    //     sqlx::query("INSERT INTO data_point (name) VALUES ($1) ON CONFLICT (name) DO NOTHING")
-    //         .bind(name)
-    //         .execute(pool)
-    //         .await?;
-    // }
-
-    // Insert all Meta keys to meta table
     for variant in database::Meta::iter() {
         let name = format!("{:?}", variant);
         sqlx::query("INSERT INTO meta (key) VALUES ($1) ON CONFLICT (key) DO NOTHING")

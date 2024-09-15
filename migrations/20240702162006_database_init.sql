@@ -7,40 +7,9 @@ CREATE TABLE IF NOT EXISTS meta (
     updated TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS granularity (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(30) UNIQUE -- 'second', 'minute', 'hour', 'day', 'week', 'month'
-);
-
-CREATE TABLE IF NOT EXISTS data_point (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) UNIQUE -- e.g., 'total_transactions', 'total_dollars_transacted'
-);
-
-CREATE TABLE IF NOT EXISTS analysis (
-    id BIGSERIAL PRIMARY KEY,
-    timestamp TIMESTAMPTZ,
-    granularity_id INT,
-    data_point_id INT,
-    data DECIMAL(18, 2),
-    created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (granularity_id) REFERENCES granularity(id),
-    FOREIGN KEY (data_point_id) REFERENCES data_point(id)
-);
-
-CREATE TABLE IF NOT EXISTS outpoints (
-    transaction_id BYTEA,
-    transaction_index INTEGER,
-    value BIGINT,
-    script_public_key BYTEA,
-    created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    spent TIMESTAMPTZ,
-    CONSTRAINT outpoints_primary_key UNIQUE (transaction_id, transaction_index)
-);
-
 CREATE TABLE IF NOT EXISTS transaction_summary (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    date date UNIQUE,
     coinbase_tx_qty integer,
     tx_qty integer,
     unaccepted_tx_qty integer,
@@ -76,12 +45,12 @@ CREATE TABLE IF NOT EXISTS transaction_summary (
     output_amt_per_tx_mean_change_adjusted numeric,
     output_amt_per_tx_median_change_adjusted numeric,
     output_amt_per_tx_min_change_adjusted numeric,
-    output_amt_per_tx_max_change_adjusted numeric,
-    date date
+    output_amt_per_tx_max_change_adjusted numeric
 );
 
 CREATE TABLE IF NOT EXISTS block_summary (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    date date UNIQUE,
     spc_blocks_total integer,
     non_spc_blocks_total integer,
     accepting_blocks_total integer,
@@ -124,6 +93,5 @@ CREATE TABLE IF NOT EXISTS block_summary (
     output_amt_per_accepting_block_median double precision,
     output_amt_per_accepting_block_min bigint,
     output_amt_per_accepting_block_max bigint,
-    unique_miners integer,
-    date date
+    unique_miners integer
 );

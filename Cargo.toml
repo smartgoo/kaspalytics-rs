@@ -25,7 +25,7 @@ kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branc
 lettre = "0.11.8"
 log = "0.4"
 # moka = {version = "0.12.7", features = ["future"] }
-num-format = "0.4.4"
+# num-format = "0.4.4"
 # rocksdb = "0.21.0"
 serde = "1.0.204"
 sqlx = { version = "0.7.4", features = ["chrono", "runtime-tokio", "postgres"] }

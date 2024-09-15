@@ -1,7 +1,5 @@
 use chrono::DateTime;
 use kaspa_addresses::Address;
-use log::info;
-use num_format::{Locale, ToFormattedString};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -14,9 +12,8 @@ pub struct Stats {
     // Second, Minute, Hour, Day
     granularity: Granularity,
 
-    // Timestamps (in ms) of analysis window
+    // Timestamp of analysis window
     pub epoch_second: u64,
-    // pub window_end_time: u64,
 
     // -----------------------------------
     // Block Summary
@@ -45,6 +42,10 @@ pub struct Stats {
     pub output_count_regular_tx: u64,
     pub fees: Vec<u64>,
 
+    // tps_max is not currently populated on per second records
+    // only calculater on higher granularities. stores max tps inside the granularity
+    pub tps_max: u64,
+
     // Count of inputs that didn't resolve to previous output
     pub input_count_missing_previous_outpoints: u64,
 
@@ -70,6 +71,7 @@ impl Stats {
             output_count_coinbase_tx: 0,
             output_count_regular_tx: 0,
             fees: Vec::<u64>::new(),
+            tps_max: 0,
             input_count_missing_previous_outpoints: 0,
             skipped_tx_count_cannot_resolve_inputs: 0,
             unique_senders: HashSet::<Address>::new(),
@@ -112,9 +114,9 @@ impl Stats {
             Granularity::Day => (self.coinbase_tx_count + self.regular_tx_count) as f64 / 86400f64,
         }
     }
+
     // fn tps_median - TODO, requires storing more data I think
     // fn tps_min - TODO, requires storing more data I think
-    // fn tps_max - TODO, should be doable if self.sgranularity is Second??
 
     fn unique_sender_count(&self) -> u64 {
         self.unique_senders.len() as u64
@@ -142,6 +144,9 @@ impl Stats {
         }
     }
 
+    // "Rolls up" per second stats into target granularity
+    // At this time, `per_second_stats` must be per second.
+    // No other source granularity is supported.
     pub fn rollup(
         per_second_stats: &BTreeMap<u64, Stats>,
         target_granularity: Granularity,
@@ -170,6 +175,13 @@ impl Stats {
                     new_stats.output_count_regular_tx += per_second_stats.output_count_regular_tx;
                     new_stats.fees.extend(per_second_stats.fees.clone());
 
+                    if per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count
+                        > new_stats.tps_max
+                    {
+                        new_stats.tps_max =
+                            per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count;
+                    }
+
                     new_stats.input_count_missing_previous_outpoints +=
                         per_second_stats.input_count_missing_previous_outpoints;
                     new_stats.skipped_tx_count_cannot_resolve_inputs +=
@@ -189,6 +201,8 @@ impl Stats {
                     let mut new_stats = per_second_stats.clone();
                     new_stats.granularity = target_granularity;
                     new_stats.epoch_second = key;
+                    new_stats.tps_max =
+                        per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count;
                     new_stats
                 });
         }
@@ -245,17 +259,17 @@ impl Stats {
                 fees_total, fees_mean, fees_median, fees_min, fees_max,
                 skipped_tx_missing_inputs, inputs_missing_previous_outpoint,
                 unique_senders, unique_recipients, unique_addresses, 
-                tx_per_second_mean
+                tx_per_second_mean, tx_per_second_max
             )
             VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         "#;
 
         let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
             .unwrap()
             .date_naive();
         let fees = self.vec_stats(&self.fees);
-        let tps = self.tps_mean();
+        let tps_mean = self.tps_mean();
 
         sqlx::query(sql)
             .bind(date)
@@ -274,7 +288,8 @@ impl Stats {
             .bind(self.unique_senders.len() as i64)
             .bind(self.unique_recipients.len() as i64)
             .bind(self.unique_address_count() as i64)
-            .bind(tps)
+            .bind(tps_mean)
+            .bind(self.tps_max as i64)
             .execute(pool)
             .await
             .unwrap();
@@ -304,6 +319,8 @@ impl fmt::Debug for Stats {
             .field("transaction_count_per_block - median", &tpb.2)
             .field("transaction_count_per_block - min", &tpb.3)
             .field("transaction_count_per_block - max", &tpb.4)
+            .field("tps - mean", &self.tps_mean())
+            .field("tps - max", &self.tps_max)
             .field("coinbase_tx_count", &self.coinbase_tx_count)
             .field("regular_tx_count", &self.regular_tx_count)
             .field("input_count", &self.input_count)
@@ -314,8 +331,14 @@ impl fmt::Debug for Stats {
             .field("fees - median", &(fees.2 / 100_000_000.0))
             .field("fees - min", &(fees.3 as f64 / 100_000_000.0))
             .field("fees - max", &(fees.4 as f64 / 100_000_000.0))
-            .field("input_count_missing_previous_outpoints", &self.input_count_missing_previous_outpoints)
-            .field("skipped_tx_count_cannot_resolve_inputs", &self.skipped_tx_count_cannot_resolve_inputs)
+            .field(
+                "input_count_missing_previous_outpoints",
+                &self.input_count_missing_previous_outpoints,
+            )
+            .field(
+                "skipped_tx_count_cannot_resolve_inputs",
+                &self.skipped_tx_count_cannot_resolve_inputs,
+            )
             .field("unique_senders", &self.unique_sender_count())
             .field("unique_recipients", &self.unique_recipient_count())
             .field("unique_addresses", &self.unique_address_count())

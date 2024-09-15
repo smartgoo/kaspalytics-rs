@@ -1,6 +1,7 @@
 pub mod analysis;
 mod stats;
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub enum Granularity {
     Second,
