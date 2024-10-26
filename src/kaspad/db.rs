@@ -27,8 +27,8 @@ pub fn init_consensus_storage(
 
     let db = kaspa_database::prelude::ConnBuilder::default()
         .with_db_path(consensus_db_dir)
-        .with_files_limit(128)
-        .build_secondary_read_only(PathBuf::from_str("/tmp/kaspalytics").unwrap())
+        .with_files_limit(64)
+        .build_readonly()
         .unwrap();
 
     ConsensusStorage::new(db, config)

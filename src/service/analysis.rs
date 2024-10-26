@@ -12,10 +12,11 @@ use kaspa_consensus_core::utxo::utxo_diff::ImmutableUtxoDiff;
 use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
-use log::info;
+use log::{error, info};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use tokio::time::{Duration, sleep};
 
 use super::Granularity;
 
@@ -98,8 +99,8 @@ impl Analysis {
     fn get_utxos_from_utxo_diffs_store(
         &self,
         hash: Hash,
-    ) -> HashMap<TransactionOutpoint, UtxoEntry> {
-        let utxo_diffs = self.storage.utxo_diffs_store.get(hash).unwrap();
+    ) -> Result<HashMap<TransactionOutpoint, UtxoEntry>, StoreError> {
+        let utxo_diffs = self.storage.utxo_diffs_store.get(hash)?;
         let mut utxos = HashMap::<TransactionOutpoint, UtxoEntry>::new();
 
         utxo_diffs.removed().iter().for_each(|(outpoint, utxo)| {
@@ -110,26 +111,24 @@ impl Analysis {
             utxos.insert(*outpoint, utxo.clone());
         });
 
-        utxos
+        Ok(utxos)
     }
 
-    fn get_block_data(&self, hash: Hash) -> (Arc<Header>, Arc<Vec<Transaction>>, bool) {
-        let header = self.storage.headers_store.get_header(hash).unwrap();
-
-        let transactions = self.storage.block_transactions_store.get(hash).unwrap();
-
+    fn get_block_data(&self, hash: Hash) -> Result<(Arc<Header>, Arc<Vec<Transaction>>, bool), StoreError> {
+        let header = self.storage.headers_store.get_header(hash)?;
+        let transactions = self.storage.block_transactions_store.get(hash)?;
         let is_chain_block = match self.storage.selected_chain_store.read().get_by_hash(hash) {
             Ok(_) => true,
             Err(StoreError::KeyNotFound(_)) => false,
             Err(_) => panic!(),
         };
 
-        (header, transactions, is_chain_block)
+        Ok((header, transactions, is_chain_block))
     }
 }
 
 impl Analysis {
-    fn tx_analysis(&mut self) {
+    fn tx_analysis(&mut self) -> Result<(), StoreError> {
         let mut transaction_cache = std::collections::HashSet::<TransactionId>::new();
         let mut tx_iter_order = std::collections::VecDeque::<Vec<TransactionId>>::new();
 
@@ -138,16 +137,16 @@ impl Analysis {
             let mut this_chain_blocks_merged_transactions = Vec::<TransactionId>::new();
 
             // Get acceptance data
-            let acceptances = self.storage.acceptance_data_store.get(*hash).unwrap();
+            let acceptances = self.storage.acceptance_data_store.get(*hash)?;
 
             // Load UTXOs from utxo diffs store
-            let utxos = self.get_utxos_from_utxo_diffs_store(*hash);
+            let utxos = self.get_utxos_from_utxo_diffs_store(*hash)?;
 
             // Iterate blocks in current chain block's mergeset
             for mergeset_data in acceptances.iter() {
                 // Get block header, transactions, if chain block
-                let (header, transactions, is_chain_block) =
-                    self.get_block_data(mergeset_data.block_hash);
+                let (header, transactions, is_chain_block) = self.get_block_data(mergeset_data.block_hash)?;
+
                 let block_time_s = header.timestamp / 1000;
 
                 // Ensure stats entry for this second exists
@@ -284,6 +283,8 @@ impl Analysis {
                 }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -291,12 +292,52 @@ impl Analysis {
     pub async fn run(&mut self, pool: &PgPool) {
         self.load_chain_blocks();
 
-        self.tx_analysis();
+        let mut retries = 0;
+        let max_retries = 12;
+        let retry_delay = Duration::from_secs(5 * 60);
+
+        // Sporadically (every few days) a RocksDB error will be raised:
+        // "Error rocksdb error IO error: No such file or directory: While open a file for random read: /data/rusty-kaspa/kaspa-mainnet/datadir/consensus/consensus-002/1504776.sst: No such file or directory while getting block cb0c56da0c4c7948c5bf29c0f8eddbde11fc02df7641a2f27053c702bb96aef5 from database"
+        // I have a hunch that is because this program is running while node pruning is in progress
+        // And that during/after pruning, RocksDB is performing compaction
+        // The below loop is an attempt to catch this error and retry every 5 minutes for up to an hour
+        // Let's see how this goes...
+        loop {
+            match self.tx_analysis() {
+                Ok(_) => break,
+                Err(StoreError::DbError(_)) if retries < max_retries => {
+                    retries += 1;
+                    error!("Database error on tx_analysis attempt {}/{}. Retrying in 5 minutes...", retries, max_retries);
+                    sleep(retry_delay).await;
+                }
+                Err(StoreError::DbError(_)) => {
+                    // After max retries, send alert email and exit
+                    error!("Analysis::tx_analysis failed after {} attempts. Exiting...", retries);
+                    crate::utils::email::send_email(
+                        self.config.clone(),
+                        format!("{} | kaspalytics-rs alert", &self.config.env),
+                        "Analysis::tx_analysis reached max retries due to database error.".to_string(),
+                    );
+                    return;
+                }
+                Err(e) => {
+                    // Handle other errors and exit
+                    error!("Analysis::tx_analysis failed with error: {:?}", e);
+                    crate::utils::email::send_email(
+                        self.config.clone(),
+                        format!("{} | kaspalytics-rs alert", &self.config.env),
+                        format!("Analysis::tx_analysis failed with error: {:?}", e),
+                    );
+                    return;
+                }
+            }
+        }
         info!("{}", self.stats.len());
 
         let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);
         for (time, stats) in per_day {
-            // Skip results outside of time window
+            // Skip stat entries outside of time window
+            // Sometimes, due to block relations, there are entries for the day prior 
             if time * 1000 < self.window_start_time || self.window_end_time < time * 1000 {
                 continue;
             }
