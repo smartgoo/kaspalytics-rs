@@ -27,7 +27,7 @@ pub fn init_consensus_storage(
 
     let db = kaspa_database::prelude::ConnBuilder::default()
         .with_db_path(consensus_db_dir)
-        .with_files_limit(64)
+        .with_files_limit(64) // TODO files limit?
         .build_readonly()
         .unwrap();
 
