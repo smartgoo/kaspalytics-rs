@@ -1,7 +1,7 @@
 use crate::utils::config::Config;
 use lettre::{Message, SmtpTransport, Transport};
 
-pub fn send_email(config: Config, subject: String, body: String) {
+pub fn send_email(config: &Config, subject: String, body: String) {
     let message = Message::builder()
         .from(config.smtp_from.parse().unwrap())
         .to(config.smtp_to.parse().unwrap())

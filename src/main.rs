@@ -5,13 +5,15 @@ mod service;
 mod utils;
 
 use args::Args;
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use clap::Parser;
 use env_logger::{Builder, Env};
+use kaspa_database::prelude::StoreError;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use log::{info, LevelFilter};
+use log::{error, info, LevelFilter};
 use std::io;
+use tokio::time::{sleep, Duration};
 
 fn prompt_confirmation(prompt: &str) -> bool {
     println!("{}", prompt);
@@ -100,7 +102,7 @@ async fn main() {
         .unwrap();
     database::initialize::insert_enums(&db_pool).await.unwrap();
 
-    // Ensure DB NetworkId matches CLI
+    // Ensure DB NetworkId matches NetworkId from CLI args
     let db_network_id = database::initialize::get_meta_network_id(&db_pool)
         .await
         .unwrap();
@@ -111,7 +113,7 @@ async fn main() {
             .unwrap();
     } else {
         // PG database has been used in the past
-        // Validate network/suffix saved in db matches network supplied via CLI
+        // Validate network/suffix saved in db matches NetworkId supplied via CLI
         if config.network_id != db_network_id.unwrap() {
             panic!("PG database network does not match network supplied via CLI")
         }
@@ -119,18 +121,14 @@ async fn main() {
 
     // Init Rusty Kaspa dir and rocksdb Consensus Storage object
     let kaspad_dirs = crate::kaspad::dirs::Dirs::new(config.app_dir.clone(), config.network_id);
-    let storage = crate::kaspad::db::init_consensus_storage(
-        config.network_id,
-        kaspad_dirs.active_consensus_db_dir,
-    );
 
     // Create Analysis process
     // Default analysis window to yesterday if no args are passed
     let (start_time, end_time) = match (args.start_time, args.end_time) {
         (None, None) => {
             let start_of_today = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap();
-            let start_of_yesterday = start_of_today - Duration::days(1);
-            let end_of_yesterday = start_of_today - Duration::milliseconds(1);
+            let start_of_yesterday = start_of_today - chrono::Duration::days(1);
+            let end_of_yesterday = start_of_today - chrono::Duration::milliseconds(1);
             (
                 start_of_yesterday.and_utc().timestamp_millis() as u64,
                 end_of_yesterday.and_utc().timestamp_millis() as u64,
@@ -141,8 +139,67 @@ async fn main() {
         (Some(start), Some(end)) => (start, end),
     };
 
-    let mut daily_analysis_process =
-        service::analysis::Analysis::new_from_time_window(config, storage, start_time, end_time);
+    // Sporadically (once a week-ish) a RocksDB error will be raised:
+    // "Error rocksdb error IO error: No such file or directory: While open a file for random read: rusty-kaspa/kaspa-mainnet/datadir/consensus/consensus-002/1504776.sst: No such file or directory while getting block cb0c56da0c4c7948c5bf29c0f8eddbde11fc02df7641a2f27053c702bb96aef5 from database"
+    // I have a hunch that is because this program is running while node pruning is in progress
+    // And that during/after pruning, RocksDB is performing compaction
+    // The read_only connection is supposed to create a snapshot (I think?) and prevent this (again, or so I think)...
+    // The below loop is an attempt to catch this error and retry every X minutes for up to X retry attempts
+    // Let's see how this goes...
+    let mut retries = 0;
+    let max_retries = 24; // Retry up to this many times
+    let retry_delay = Duration::from_secs(5 * 60); // Retry every X time period
+    loop {
+        let storage = crate::kaspad::db::init_consensus_storage(
+            config.network_id,
+            kaspad_dirs.active_consensus_db_dir.clone(),
+        );
 
-    daily_analysis_process.run(&db_pool).await;
+        let mut daily_analysis_process = service::analysis::Analysis::new_from_time_window(
+            config.clone(),
+            storage.clone(),
+            start_time,
+            end_time,
+        );
+
+        match daily_analysis_process.run(&db_pool).await {
+            Ok(_) => break,
+            Err(StoreError::DbError(_)) if retries < max_retries => {
+                // Close database connection before sleeping
+                // Inside retries window. Sleep and try again
+                drop(daily_analysis_process);
+                drop(storage);
+
+                retries += 1;
+                error!(
+                    "Database error on tx_analysis attempt {}/{}. Retrying in 5 minutes...",
+                    retries, max_retries
+                );
+                sleep(retry_delay).await;
+            }
+            Err(StoreError::DbError(_)) => {
+                // After max retries, send alert email and exit
+                error!(
+                    "Analysis::tx_analysis failed after {} attempts. Exiting...",
+                    retries
+                );
+                crate::utils::email::send_email(
+                    &config,
+                    format!("{} | kaspalytics-rs alert", config.env),
+                    "Analysis::tx_analysis reached max retries due to database error.".to_string(),
+                );
+                break;
+            }
+            Err(e) => {
+                // Handle other errors and exit
+                error!("Analysis::tx_analysis failed with error: {:?}", e);
+                crate::utils::email::send_email(
+                    &config,
+                    format!("{} | kaspalytics-rs alert", config.env),
+                    format!("Analysis::tx_analysis failed with error: {:?}", e),
+                );
+                break;
+            }
+        }
+    }
 }

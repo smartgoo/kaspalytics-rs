@@ -6,17 +6,15 @@ use kaspa_consensus::model::stores::block_transactions::BlockTransactionsStoreRe
 use kaspa_consensus::model::stores::headers::HeaderStoreReader;
 use kaspa_consensus::model::stores::selected_chain::SelectedChainStoreReader;
 use kaspa_consensus::model::stores::utxo_diffs::UtxoDiffsStoreReader;
-use kaspa_consensus_core::header::Header;
-use kaspa_consensus_core::tx::{Transaction, TransactionId, TransactionOutpoint, UtxoEntry};
+use kaspa_consensus_core::tx::{TransactionId, TransactionOutpoint, UtxoEntry};
 use kaspa_consensus_core::utxo::utxo_diff::ImmutableUtxoDiff;
 use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
-use log::{error, info};
+use log::info;
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use tokio::time::{Duration, sleep};
 
 use super::Granularity;
 
@@ -93,9 +91,7 @@ impl Analysis {
             self.chain_blocks.len()
         );
     }
-}
 
-impl Analysis {
     fn get_utxos_from_utxo_diffs_store(
         &self,
         hash: Hash,
@@ -112,18 +108,6 @@ impl Analysis {
         });
 
         Ok(utxos)
-    }
-
-    fn get_block_data(&self, hash: Hash) -> Result<(Arc<Header>, Arc<Vec<Transaction>>, bool), StoreError> {
-        let header = self.storage.headers_store.get_header(hash)?;
-        let transactions = self.storage.block_transactions_store.get(hash)?;
-        let is_chain_block = match self.storage.selected_chain_store.read().get_by_hash(hash) {
-            Ok(_) => true,
-            Err(StoreError::KeyNotFound(_)) => false,
-            Err(_) => panic!(),
-        };
-
-        Ok((header, transactions, is_chain_block))
     }
 }
 
@@ -144,8 +128,13 @@ impl Analysis {
 
             // Iterate blocks in current chain block's mergeset
             for mergeset_data in acceptances.iter() {
-                // Get block header, transactions, if chain block
-                let (header, transactions, is_chain_block) = self.get_block_data(mergeset_data.block_hash)?;
+                let header = self.storage.headers_store.get_header(mergeset_data.block_hash)?;
+                let transactions = self.storage.block_transactions_store.get(mergeset_data.block_hash)?;
+                let is_chain_block = match self.storage.selected_chain_store.read().get_by_hash(mergeset_data.block_hash) {
+                    Ok(_) => true,
+                    Err(StoreError::KeyNotFound(_)) => false,
+                    Err(_) => panic!(),
+                };
 
                 let block_time_s = header.timestamp / 1000;
 
@@ -289,55 +278,17 @@ impl Analysis {
 }
 
 impl Analysis {
-    pub async fn run(&mut self, pool: &PgPool) {
+    pub async fn run(&mut self, pool: &PgPool) -> Result<(), StoreError> {
+        // TODO custom error that wraps StoreError, other error types...
+
         self.load_chain_blocks();
 
-        let mut retries = 0;
-        let max_retries = 12;
-        let retry_delay = Duration::from_secs(5 * 60);
-
-        // Sporadically (every few days) a RocksDB error will be raised:
-        // "Error rocksdb error IO error: No such file or directory: While open a file for random read: /data/rusty-kaspa/kaspa-mainnet/datadir/consensus/consensus-002/1504776.sst: No such file or directory while getting block cb0c56da0c4c7948c5bf29c0f8eddbde11fc02df7641a2f27053c702bb96aef5 from database"
-        // I have a hunch that is because this program is running while node pruning is in progress
-        // And that during/after pruning, RocksDB is performing compaction
-        // The below loop is an attempt to catch this error and retry every 5 minutes for up to an hour
-        // Let's see how this goes...
-        loop {
-            match self.tx_analysis() {
-                Ok(_) => break,
-                Err(StoreError::DbError(_)) if retries < max_retries => {
-                    retries += 1;
-                    error!("Database error on tx_analysis attempt {}/{}. Retrying in 5 minutes...", retries, max_retries);
-                    sleep(retry_delay).await;
-                }
-                Err(StoreError::DbError(_)) => {
-                    // After max retries, send alert email and exit
-                    error!("Analysis::tx_analysis failed after {} attempts. Exiting...", retries);
-                    crate::utils::email::send_email(
-                        self.config.clone(),
-                        format!("{} | kaspalytics-rs alert", &self.config.env),
-                        "Analysis::tx_analysis reached max retries due to database error.".to_string(),
-                    );
-                    return;
-                }
-                Err(e) => {
-                    // Handle other errors and exit
-                    error!("Analysis::tx_analysis failed with error: {:?}", e);
-                    crate::utils::email::send_email(
-                        self.config.clone(),
-                        format!("{} | kaspalytics-rs alert", &self.config.env),
-                        format!("Analysis::tx_analysis failed with error: {:?}", e),
-                    );
-                    return;
-                }
-            }
-        }
-        info!("{}", self.stats.len());
+        self.tx_analysis()?;
 
         let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);
         for (time, stats) in per_day {
             // Skip stat entries outside of time window
-            // Sometimes, due to block relations, there are entries for the day prior 
+            // Sometimes, due to block relations, there are entries for the day prior
             if time * 1000 < self.window_start_time || self.window_end_time < time * 1000 {
                 continue;
             }
@@ -346,10 +297,12 @@ impl Analysis {
             stats.save(pool).await;
 
             crate::utils::email::send_email(
-                self.config.clone(),
+                &self.config,
                 format!("{} | kaspalytics-rs stats results", &self.config.env),
                 format!("{:?}", stats),
             );
         }
+
+        Ok(())
     }
 }
