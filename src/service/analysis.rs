@@ -92,7 +92,9 @@ impl Analysis {
         );
     }
 
-    fn get_utxos_from_utxo_diffs_store(
+    // Reads utxo_diffs_store for given chain block
+    // Returns a single map of all UTXOs affected (created or removed) for chain block
+    fn get_utxos_for_chain_block(
         &self,
         hash: Hash,
     ) -> Result<HashMap<TransactionOutpoint, UtxoEntry>, StoreError> {
@@ -124,13 +126,24 @@ impl Analysis {
             let acceptances = self.storage.acceptance_data_store.get(*hash)?;
 
             // Load UTXOs from utxo diffs store
-            let utxos = self.get_utxos_from_utxo_diffs_store(*hash)?;
+            let utxos = self.get_utxos_for_chain_block(*hash)?;
 
             // Iterate blocks in current chain block's mergeset
             for mergeset_data in acceptances.iter() {
-                let header = self.storage.headers_store.get_header(mergeset_data.block_hash)?;
-                let transactions = self.storage.block_transactions_store.get(mergeset_data.block_hash)?;
-                let is_chain_block = match self.storage.selected_chain_store.read().get_by_hash(mergeset_data.block_hash) {
+                let header = self
+                    .storage
+                    .headers_store
+                    .get_header(mergeset_data.block_hash)?;
+                let transactions = self
+                    .storage
+                    .block_transactions_store
+                    .get(mergeset_data.block_hash)?;
+                let is_chain_block = match self
+                    .storage
+                    .selected_chain_store
+                    .read()
+                    .get_by_hash(mergeset_data.block_hash)
+                {
                     Ok(_) => true,
                     Err(StoreError::KeyNotFound(_)) => false,
                     Err(_) => panic!(),

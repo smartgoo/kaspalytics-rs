@@ -34,7 +34,7 @@ async fn main() {
         .filter(None, LevelFilter::Info)
         .init();
 
-    info!("Initializing application");
+    info!("Initializing application...");
 
     // Init and connect RPC Client
     let rpc_client = KaspaRpcClient::new(
@@ -48,6 +48,8 @@ async fn main() {
     rpc_client.connect(None).await.unwrap();
 
     // Ensure RPC node is synced, is same network/suffix as supplied CLI args, is utxoindexed
+    // WARNING: This app reads direct from RocksDB, so we are making the assumption
+    // that the RPC node is same node as node we are reading DB from
     let server_info = rpc_client.get_server_info().await.unwrap();
     if !server_info.is_synced {
         panic!("RPC node is not synced")
@@ -59,42 +61,26 @@ async fn main() {
         panic!("RPC host network does not match network supplied via CLI")
     }
 
+    let db = database::Database::new(config.db_uri.clone());
+
     // Optionally drop & recreate PG database based on CLI args
     if args.reset_db {
         if config.env == utils::config::Env::Prod {
             panic!("Cannot use --reset-db in production.")
         }
 
-        let db_name = config
-            .db_uri
-            .split('/')
-            .last()
-            .expect("Invalid connection string");
-
         let prompt = format!(
             "DANGER!!! Are you sure you want to drop and recreate the PG database {}? (y/N)?",
-            db_name
+            db.database_name
         );
-        let reset_db = prompt_confirmation(prompt.as_str());
-        if reset_db {
-            // Connect without specifying PG database in order to drop and recreate
-            let base_url = database::conn::parse_base_url(&config.db_uri);
-            let mut conn = database::conn::open_connection(&base_url).await.unwrap();
 
-            info!("Dropping PG database {}", db_name);
-            database::conn::drop_db(&mut conn, db_name).await.unwrap();
-
-            info!("Creating PG database {}", db_name);
-            database::conn::create_db(&mut conn, db_name).await.unwrap();
-
-            database::conn::close_connection(conn).await.unwrap();
+        if prompt_confirmation(prompt.as_str()) {
+            db.drop_and_create_database().await.unwrap();
         }
     }
 
     // Init PG database connection pool
-    let db_pool = database::conn::open_connection_pool(&config.db_uri)
-        .await
-        .unwrap();
+    let db_pool = db.open_connection_pool(5u32).await.unwrap();
 
     // Apply PG database migrations and insert static records
     database::initialize::apply_migrations(&db_pool)

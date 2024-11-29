@@ -1,5 +1,7 @@
-pub mod conn;
+mod database;
 pub mod initialize;
+
+pub use database::Database;
 
 use strum_macros::{Display, EnumIter};
 
