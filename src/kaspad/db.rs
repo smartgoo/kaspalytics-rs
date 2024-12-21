@@ -2,7 +2,7 @@ use kaspa_consensus::consensus::{
     factory::MultiConsensusManagementStore, storage::ConsensusStorage,
 };
 use kaspa_consensus_core::{config::ConfigBuilder, network::NetworkId};
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
 
 pub fn get_active_consensus_dir(meta_db_dir: PathBuf) -> PathBuf {
     let db = kaspa_database::prelude::ConnBuilder::default()
@@ -17,7 +17,7 @@ pub fn get_active_consensus_dir(meta_db_dir: PathBuf) -> PathBuf {
 
 pub fn init_consensus_storage(
     network: NetworkId,
-    consensus_db_dir: PathBuf,
+    active_consensus_db_dir: &Path,
 ) -> Arc<ConsensusStorage> {
     let config: Arc<kaspa_consensus::config::Config> = Arc::new(
         ConfigBuilder::new(network.into())
@@ -26,7 +26,7 @@ pub fn init_consensus_storage(
     );
 
     let db = kaspa_database::prelude::ConnBuilder::default()
-        .with_db_path(consensus_db_dir)
+        .with_db_path(active_consensus_db_dir.to_path_buf())
         .with_files_limit(64) // TODO files limit?
         .build_readonly()
         .unwrap();

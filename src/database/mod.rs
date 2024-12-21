@@ -1,7 +1,7 @@
-mod database;
+mod pg;
 pub mod initialize;
 
-pub use database::Database;
+pub use pg::Database;
 
 use strum_macros::{Display, EnumIter};
 

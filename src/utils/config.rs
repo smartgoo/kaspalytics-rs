@@ -1,10 +1,12 @@
 use crate::kaspad::dirs::get_app_dir;
+use crate::kaspad::dirs::Dirs;
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::network::NetworkType;
+use log::info;
 use std::{env, path::PathBuf, str::FromStr};
 use strum_macros::{Display, EnumString};
 
-#[derive(Clone, Display, EnumString, PartialEq)]
+#[derive(Clone, Copy, Display, EnumString, PartialEq)]
 pub enum Env {
     #[strum(serialize = "dev")]
     Dev,
@@ -22,8 +24,7 @@ pub struct Config {
 
     pub network_id: NetworkId,
 
-    pub app_dir: PathBuf,
-    pub rpc_url: Option<String>,
+    pub rpc_url: String,
 
     pub db_uri: String,
 
@@ -31,6 +32,8 @@ pub struct Config {
     pub smtp_port: u16,
     pub smtp_from: String,
     pub smtp_to: String,
+
+    pub kaspad_dirs: Dirs,
 }
 
 impl Config {
@@ -52,8 +55,8 @@ impl Config {
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| get_app_dir(String::from(".rusty-kaspa")));
-        let rpc_url = env::var("RPC_URL").ok();
-        println!("{:?}", app_dir);
+
+        let rpc_url = env::var("RPC_URL").unwrap();
 
         let db_uri = env::var("DB_URI").unwrap();
 
@@ -62,16 +65,19 @@ impl Config {
         let smtp_from = env::var("SMTP_FROM").unwrap();
         let smtp_to = env::var("SMTP_TO").unwrap();
 
+        let kaspad_dirs = Dirs::new(app_dir.clone(), network_id);
+        info!("{:?}", kaspad_dirs.active_consensus_db_dir);
+
         Config {
             env,
             network_id,
-            app_dir,
             rpc_url,
             db_uri,
             smtp_host,
             smtp_port,
             smtp_from,
             smtp_to,
+            kaspad_dirs,
         }
     }
 }

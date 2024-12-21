@@ -11,10 +11,11 @@ use kaspa_consensus_core::utxo::utxo_diff::ImmutableUtxoDiff;
 use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
-use log::info;
+use log::{error, info};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use tokio::time::sleep;
 
 use super::Granularity;
 
@@ -28,6 +29,25 @@ pub struct Analysis {
 }
 
 impl Analysis {
+    pub fn new_for_yesterday(config: Config, storage: Arc<ConsensusStorage>) -> Self {
+        let start_of_today = chrono::Utc::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let start_of_yesterday = start_of_today - chrono::Duration::days(1);
+        let end_of_yesterday = start_of_today - chrono::Duration::milliseconds(1);
+
+        Self {
+            config,
+            storage,
+            window_start_time: start_of_yesterday.and_utc().timestamp_millis() as u64,
+            window_end_time: end_of_yesterday.and_utc().timestamp_millis() as u64,
+            chain_blocks: BTreeMap::<u64, Hash>::new(),
+            stats: BTreeMap::<u64, Stats>::new(),
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn new_from_time_window(
         config: Config,
         storage: Arc<ConsensusStorage>,
@@ -317,5 +337,68 @@ impl Analysis {
         }
 
         Ok(())
+    }
+
+    pub async fn main(config: Config, pool: &PgPool) {
+        // Sporadically (once a week-ish) a RocksDB error will be raised:
+        // "Error rocksdb error IO error: No such file or directory: While open a file for random read: rusty-kaspa/kaspa-mainnet/datadir/consensus/consensus-002/1504776.sst: No such file or directory while getting block cb0c56da0c4c7948c5bf29c0f8eddbde11fc02df7641a2f27053c702bb96aef5 from database"
+        // I have a hunch that is because this program is running while node pruning is in progress
+        // And that during/after pruning, RocksDB is performing compaction
+        // The read_only connection is supposed to create a snapshot (I think?) and prevent this (again, or so I think)...
+        // The below loop is an attempt to catch this error and retry every X minutes for up to X retry attempts
+        // Let's see how this goes...
+        let mut retries = 0;
+        let max_retries = 24;
+        let retry_delay = std::time::Duration::from_secs(5 * 60);
+
+        loop {
+            let storage = crate::kaspad::db::init_consensus_storage(
+                config.network_id,
+                &config.kaspad_dirs.active_consensus_db_dir,
+            );
+
+            let mut process = Analysis::new_for_yesterday(config.clone(), storage.clone());
+
+            match process.run(pool).await {
+                Ok(_) => break,
+                Err(StoreError::DbError(_)) if retries < max_retries => {
+                    // Close database connection before sleeping
+                    // Inside retries window. Sleep and try again
+                    drop(process);
+                    drop(storage);
+
+                    retries += 1;
+                    error!(
+                        "Database error on tx_analysis attempt {}/{}. Retrying in 5 minutes...",
+                        retries, max_retries
+                    );
+                    sleep(retry_delay).await;
+                }
+                Err(StoreError::DbError(_)) => {
+                    // After max retries, send alert email and exit
+                    error!(
+                        "Analysis::tx_analysis failed after {} attempts. Exiting...",
+                        retries
+                    );
+                    crate::utils::email::send_email(
+                        &config,
+                        format!("{} | kaspalytics-rs alert", config.env),
+                        "Analysis::tx_analysis reached max retries due to database error."
+                            .to_string(),
+                    );
+                    break;
+                }
+                Err(e) => {
+                    // Handle other errors and exit
+                    error!("Analysis::tx_analysis failed with error: {:?}", e);
+                    crate::utils::email::send_email(
+                        &config,
+                        format!("{} | kaspalytics-rs alert", config.env),
+                        format!("Analysis::tx_analysis failed with error: {:?}", e),
+                    );
+                    break;
+                }
+            }
+        }
     }
 }

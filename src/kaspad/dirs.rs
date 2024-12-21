@@ -16,6 +16,7 @@ pub fn get_app_dir(dir: String) -> PathBuf {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Dirs {
     pub app_dir: PathBuf,
     pub network_dir: PathBuf,
