@@ -19,7 +19,7 @@ use tokio::time::sleep;
 
 use super::Granularity;
 
-pub struct Analysis {
+pub struct BlockAnalysis {
     config: Config,
     storage: Arc<ConsensusStorage>,
     window_start_time: u64,
@@ -28,7 +28,7 @@ pub struct Analysis {
     stats: BTreeMap<u64, Stats>,
 }
 
-impl Analysis {
+impl BlockAnalysis {
     pub fn new_for_yesterday(config: Config, storage: Arc<ConsensusStorage>) -> Self {
         let start_of_today = chrono::Utc::now()
             .date_naive()
@@ -86,7 +86,7 @@ impl Analysis {
     // }
 }
 
-impl Analysis {
+impl BlockAnalysis {
     fn load_chain_blocks(&mut self) {
         for (key, hash) in self
             .storage
@@ -133,7 +133,7 @@ impl Analysis {
     }
 }
 
-impl Analysis {
+impl BlockAnalysis {
     fn tx_analysis(&mut self) -> Result<(), StoreError> {
         let mut transaction_cache = std::collections::HashSet::<TransactionId>::new();
         let mut tx_iter_order = std::collections::VecDeque::<Vec<TransactionId>>::new();
@@ -310,7 +310,7 @@ impl Analysis {
     }
 }
 
-impl Analysis {
+impl BlockAnalysis {
     pub async fn run(&mut self, pool: &PgPool) -> Result<(), StoreError> {
         // TODO custom error that wraps StoreError, other error types...
 
@@ -357,7 +357,7 @@ impl Analysis {
                 &config.kaspad_dirs.active_consensus_db_dir,
             );
 
-            let mut process = Analysis::new_for_yesterday(config.clone(), storage.clone());
+            let mut process = BlockAnalysis::new_for_yesterday(config.clone(), storage.clone());
 
             match process.run(pool).await {
                 Ok(_) => break,
