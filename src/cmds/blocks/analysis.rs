@@ -1,4 +1,4 @@
-use crate::service::stats::Stats;
+use crate::cmds::blocks::stats::Stats;
 use crate::utils::config::Config;
 use kaspa_consensus::consensus::storage::ConsensusStorage;
 use kaspa_consensus::model::stores::acceptance_data::AcceptanceDataStoreReader;

@@ -8,7 +8,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    Analysis {
+    BlockAnalysis {
         /// Analysis window start time, in unix milliseconds
         start_time: Option<u64>,
 

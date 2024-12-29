@@ -2,7 +2,7 @@ mod args;
 mod cli;
 mod database;
 mod kaspad;
-mod service;
+mod cmds;
 mod utils;
 
 use clap::Parser;
@@ -11,7 +11,7 @@ use env_logger::{Builder, Env};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use log::{info, LevelFilter};
-use service::analysis::Analysis;
+use cmds::blocks::analysis::Analysis;
 use std::io;
 use utils::config::Config;
 
@@ -100,7 +100,7 @@ async fn main() {
 
     // Run submitted CLI command
     match cli.command {
-        Commands::Analysis {
+        Commands::BlockAnalysis {
             start_time: _,
             end_time: _,
         } => Analysis::main(config, &db_pool).await, // TODO support start_time and end_time
