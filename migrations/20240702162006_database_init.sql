@@ -95,3 +95,31 @@ CREATE TABLE IF NOT EXISTS block_summary (
     output_amt_per_accepting_block_max bigint,
     unique_miners integer
 );
+
+CREATE TABLE IF NOT EXISTS public.utxo_snapshot_header (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    snapshot_complete boolean NOT NULL,
+    block character varying COLLATE pg_catalog."default" NOT NULL,
+    block_timestamp timestamp with time zone,
+    daa_score bigint NOT NULL,
+    utxo_count integer,
+    unique_address_count integer,
+    kas_price_usd double precision,
+    percentile_analysis_completed boolean,
+    circulating_supply double precision,
+    kas_last_moved_by_age_bucket_complete boolean,
+    unique_address_count_meaningful integer,
+    unique_address_count_non_meaningful integer,
+    sompi_held_by_non_meaningful_addresses bigint,
+    distribution_by_kas_bucket_complete boolean,
+    distribution_by_usd_bucket_complete boolean
+);
+
+CREATE TABLE IF NOT EXISTS public.utxo_snapshot (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    snapshot_id integer NOT NULL REFERENCES public.utxo_snapshot_header (id),
+    amount_sompi bigint NOT NULL,
+    pubkey_script bytea NOT NULL,
+    block_daa_score integer NOT NULL,
+    is_coinbase boolean NOT NULL
+);
