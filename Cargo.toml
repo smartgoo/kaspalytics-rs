@@ -17,9 +17,11 @@ kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch =
 kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 lettre = "0.11.8"
 log = "0.4"
+reqwest = "0.12.12"
 serde = "1.0.204"
 sqlx = { version = "0.7.4", features = ["chrono", "runtime-tokio", "postgres"] }
 strum = "0.26.3"
