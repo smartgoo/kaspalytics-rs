@@ -1,7 +1,8 @@
 use kaspa_consensus::consensus::{
     factory::MultiConsensusManagementStore, storage::ConsensusStorage,
 };
-use kaspa_consensus_core::{config::ConfigBuilder, network::NetworkId};
+use kaspa_consensus_core::{coinbase::CoinbaseTransactionTemplate, config::ConfigBuilder, network::NetworkId};
+use kaspa_database::db::DB;
 use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
 
 pub fn get_active_consensus_dir(meta_db_dir: PathBuf) -> PathBuf {
@@ -27,7 +28,7 @@ pub fn init_consensus_storage(
 
     let db = kaspa_database::prelude::ConnBuilder::default()
         .with_db_path(active_consensus_db_dir.to_path_buf())
-        .with_files_limit(64) // TODO files limit?
+        .with_files_limit(128) // TODO files limit?
         .build_readonly()
         .unwrap();
 

@@ -11,7 +11,10 @@ use env_logger::{Builder, Env};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use log::{info, LevelFilter};
-use cmds::blocks::analysis::BlockAnalysis;
+use cmds::{
+    blocks::analysis::BlockAnalysis,
+    utxo::analysis::UtxoAnalysis,
+};
 use std::io;
 use utils::config::Config;
 
@@ -69,7 +72,7 @@ async fn main() {
     //  - This app reads direct from RocksDB.
     //  - So this is an assumption that the RPC node is same node we are reading DB of
     //  - TODO find better way to validate these via db as opposed to RPC
-    check_rpc_node_status(&config).await;
+    // check_rpc_node_status(&config).await;
 
     // Get PG connection pool
     let db = database::Database::new(config.db_uri.clone());
@@ -118,5 +121,6 @@ async fn main() {
                 db.drop_and_create_database().await.unwrap();
             }
         }
+        Commands::UtxoAnalysis => UtxoAnalysis::main(config)
     }
 }

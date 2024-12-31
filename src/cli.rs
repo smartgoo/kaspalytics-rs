@@ -8,6 +8,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Block based analysis (block data, transaction data, etc.)
     BlockAnalysis {
         /// Analysis window start time, in unix milliseconds
         start_time: Option<u64>,
@@ -18,4 +19,7 @@ pub enum Commands {
 
     /// Reset database (drop entire database and recreate). Can only be used in dev env.
     ResetDb,
+
+    /// UTXO based analysis
+    UtxoAnalysis,
 }
