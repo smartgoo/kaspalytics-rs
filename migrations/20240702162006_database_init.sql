@@ -128,3 +128,12 @@ CREATE TABLE IF NOT EXISTS address_balance_snapshot (
     amount_sompi BIGINT NOT NULL,
     address VARCHAR(100)
 )
+
+CREATE TABLE IF NOT EXISTS coin_market_history (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "timestamp" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    symbol VARCHAR(25)
+    price DOUBLE PRECISION NOT NULL,
+    market_cap DOUBLE PRECISION NOT NULL,
+    volume DOUBLE PRECISION NOT NULL,
+)

@@ -188,7 +188,7 @@ impl UtxoAnalysis {
 impl UtxoAnalysis {
     pub async fn run(&mut self) {
         // Get KAS/USD price
-        self.kas_price_usd = Some(crate::utils::price::get_kas_usd_price().await.unwrap());
+        self.kas_price_usd = Some(crate::cmds::price::get_kas_usd_price().await.unwrap());
 
         // Get UTXO tips from utxoindex db
         let db = kaspa_database::prelude::ConnBuilder::default()

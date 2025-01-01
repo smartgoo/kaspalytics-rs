@@ -21,3 +21,12 @@ pub async fn get_kas_usd_price() -> Result<f64, Error> {
     let data: Response = response.json().await?;
     Ok(data.kaspa.usd)
 }
+
+// TODO commit to just one CoinGecko price service - /v3/simple/price or /v3/coins/kaspa/market_chart
+// /v3/simple/price would be:
+// pub async fn insert_price() TODO need db table though, apparently only have a coinmarket_history_table atm
+// pub async fn snapshot_price()
+
+// /v3/coins/kaspa/market_chart would be:
+// pub async fn insert_coin_market_history()
+// pub async fn snapshot_coin_market_history()
