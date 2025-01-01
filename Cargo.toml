@@ -21,8 +21,9 @@ kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch 
 kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
 lettre = "0.11.8"
 log = "0.4"
-reqwest = "0.12.12"
+reqwest =  { version = "0.12.12", features = ["json"] }
 serde = "1.0.204"
+serde_json = "1.0.134"
 sqlx = { version = "0.7.4", features = ["chrono", "runtime-tokio", "postgres"] }
 strum = "0.26.3"
 strum_macros = "0.26.3"

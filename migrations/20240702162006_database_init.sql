@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS block_summary (
     unique_miners INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS public.utxo_snapshot_header (
+CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     snapshot_complete BOOLEAN NOT NULL,
     block VARCHAR(64) NOT NULL,
@@ -115,18 +115,16 @@ CREATE TABLE IF NOT EXISTS public.utxo_snapshot_header (
     distribution_by_usd_bucket_complete BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS public.utxo_snapshot (
+CREATE TABLE IF NOT EXISTS daa_snapshot (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    snapshot_id INTEGER NOT NULL REFERENCES public.utxo_snapshot_header (id),
-    amount_sompi BIGINT NOT NULL,
-    pubkey_script BYTEA NOT NULL,
-    block_daa_score INTEGER NOT NULL,
-    is_coinbase BOOLEAN NOT NULL
+    daa_score BIGINT NOT NULL,
+    block_timestamp_milliseconds BIGINT NOT NULL,
+    block_timestamp TIMESTAMP WITH TIME ZONE
 );
 
--- CREATE TABLE IF NOT EXISTS public.daa_TIMESTAMPs (
---     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
---     daa_score BIGINT NOT NULL,
---     block_TIMESTAMP_milliseconds BIGINT NOT NULL,
---     block_TIMESTAMP TIMESTAMP WITH TIME ZONE,
--- )
+CREATE TABLE IF NOT EXISTS address_balance_snapshot (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    utxo_snapshot_id INTEGER NOT NULL,
+    amount_sompi BIGINT NOT NULL,
+    address VARCHAR(100)
+)

@@ -1,21 +1,19 @@
 mod args;
 mod cli;
+mod cmds;
 mod database;
 mod kaspad;
-mod cmds;
 mod utils;
 
 use clap::Parser;
 use cli::{Cli, Commands};
+use cmds::{blocks::analysis::BlockAnalysis, utxo::analysis::UtxoAnalysis};
 use env_logger::{Builder, Env};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use log::{info, LevelFilter};
-use cmds::{
-    blocks::analysis::BlockAnalysis,
-    utxo::analysis::UtxoAnalysis,
-};
 use std::io;
+use std::sync::Arc;
 use utils::config::Config;
 
 fn prompt_confirmation(prompt: &str) -> bool {
@@ -25,16 +23,7 @@ fn prompt_confirmation(prompt: &str) -> bool {
     matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
-async fn check_rpc_node_status(config: &Config) {
-    let rpc_client = KaspaRpcClient::new(
-        WrpcEncoding::Borsh,
-        Some(&config.rpc_url),
-        None,
-        Some(config.network_id),
-        None,
-    )
-    .unwrap();
-
+async fn check_rpc_node_status(config: &Config, rpc_client: Arc<KaspaRpcClient>) {
     rpc_client.connect(None).await.unwrap();
 
     let server_info = rpc_client.get_server_info().await.unwrap();
@@ -72,25 +61,35 @@ async fn main() {
     //  - This app reads direct from RocksDB.
     //  - So this is an assumption that the RPC node is same node we are reading DB of
     //  - TODO find better way to validate these via db as opposed to RPC
-    // check_rpc_node_status(&config).await;
+    let rpc_client = Arc::new(
+        KaspaRpcClient::new(
+            WrpcEncoding::Borsh,
+            Some(&config.rpc_url),
+            None,
+            Some(config.network_id),
+            None,
+        )
+        .unwrap(),
+    );
+    check_rpc_node_status(&config, rpc_client.clone()).await;
 
     // Get PG connection pool
     let db = database::Database::new(config.db_uri.clone());
-    let db_pool = db.open_connection_pool(5u32).await.unwrap();
+    let pg_pool = db.open_connection_pool(5u32).await.unwrap();
 
     // Apply PG migrations and insert static records
-    database::initialize::apply_migrations(&db_pool)
+    database::initialize::apply_migrations(&pg_pool)
         .await
         .unwrap();
-    database::initialize::insert_enums(&db_pool).await.unwrap();
+    database::initialize::insert_enums(&pg_pool).await.unwrap();
 
     // Ensure DB NetworkId matches NetworkId from .env file
-    let db_network_id = database::initialize::get_meta_network_id(&db_pool)
+    let db_network_id = database::initialize::get_meta_network_id(&pg_pool)
         .await
         .unwrap();
     if db_network_id.is_none() {
         // First time running with this PG database, save network
-        database::initialize::insert_network_meta(&db_pool, config.network_id)
+        database::initialize::insert_network_meta(&pg_pool, config.network_id)
             .await
             .unwrap();
     } else {
@@ -106,7 +105,7 @@ async fn main() {
         Commands::BlockAnalysis {
             start_time: _,
             end_time: _,
-        } => BlockAnalysis::main(config, &db_pool).await, // TODO support start_time and end_time
+        } => BlockAnalysis::main(config, &pg_pool).await, // TODO support start_time and end_time
         Commands::ResetDb => {
             if config.env == utils::config::Env::Prod {
                 panic!("Cannot use --reset-db in production.")
@@ -121,6 +120,13 @@ async fn main() {
                 db.drop_and_create_database().await.unwrap();
             }
         }
-        Commands::UtxoAnalysis => UtxoAnalysis::main(config)
+        Commands::SnapshotDaa => {
+            crate::cmds::daa::snapshot_daa_timestamp(rpc_client.clone(), &pg_pool).await
+        }
+        Commands::UtxoAnalysis => {
+            UtxoAnalysis::new(config.clone(), rpc_client.clone(), pg_pool.clone())
+                .run()
+                .await
+        }
     }
 }

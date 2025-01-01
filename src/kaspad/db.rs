@@ -1,9 +1,12 @@
 use kaspa_consensus::consensus::{
     factory::MultiConsensusManagementStore, storage::ConsensusStorage,
 };
-use kaspa_consensus_core::{coinbase::CoinbaseTransactionTemplate, config::ConfigBuilder, network::NetworkId};
-use kaspa_database::db::DB;
-use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
+use kaspa_consensus_core::{config::ConfigBuilder, network::NetworkId};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 
 pub fn get_active_consensus_dir(meta_db_dir: PathBuf) -> PathBuf {
     let db = kaspa_database::prelude::ConnBuilder::default()

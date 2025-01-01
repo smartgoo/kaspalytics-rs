@@ -2377,6 +2377,7 @@ dependencies = [
  "log",
  "reqwest",
  "serde",
+ "serde_json",
  "sqlx",
  "strum",
  "strum_macros",

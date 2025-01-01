@@ -17,6 +17,8 @@ pub enum Commands {
         end_time: Option<u64>,
     },
 
+    SnapshotDaa,
+
     /// Reset database (drop entire database and recreate). Can only be used in dev env.
     ResetDb,
 
