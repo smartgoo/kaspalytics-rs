@@ -76,10 +76,9 @@ impl AddressPercentileAnalysis {
         address_balances: Rc<HashMap<Address, u64>>,
         circulating_supply: u64,
     ) -> Self {
-        let mut percentiles = Vec::new();
-        for percentile in Percentile::iter() {
-            percentiles.push(PercentileData::new(percentile.clone()));
-        }
+        let percentiles = Percentile::iter()
+            .map(|percentile| PercentileData::new(percentile.clone()))
+            .collect();
 
         Self {
             pg_pool,
