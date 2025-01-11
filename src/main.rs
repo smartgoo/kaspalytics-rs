@@ -7,7 +7,7 @@ mod utils;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use cmds::{blocks::analysis::BlockAnalysis, utxo::analysis::UtxoAnalysis};
+use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use env_logger::{Builder, Env};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
@@ -102,7 +102,7 @@ async fn main() {
 
     // Run submitted CLI command
     match cli.command {
-        Commands::BlockAnalysis {
+        Commands::BlockPipeline {
             start_time: _,
             end_time: _,
         } => BlockAnalysis::main(config, &pg_pool).await, // TODO support start_time and end_time
@@ -123,8 +123,8 @@ async fn main() {
         Commands::SnapshotDaa => {
             crate::cmds::daa::snapshot_daa_timestamp(rpc_client.clone(), &pg_pool).await
         }
-        Commands::UtxoAnalysis => {
-            UtxoAnalysis::new(config.clone(), rpc_client.clone(), pg_pool.clone())
+        Commands::UtxoPipeline => {
+            UtxoBasedPipeline::new(config.clone(), rpc_client.clone(), pg_pool.clone())
                 .run()
                 .await
         }

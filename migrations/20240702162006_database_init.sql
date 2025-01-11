@@ -127,13 +127,58 @@ CREATE TABLE IF NOT EXISTS address_balance_snapshot (
     utxo_snapshot_id INTEGER NOT NULL,
     amount_sompi BIGINT NOT NULL,
     address VARCHAR(100)
-)
+);
 
 CREATE TABLE IF NOT EXISTS coin_market_history (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "timestamp" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    symbol VARCHAR(25)
+    symbol VARCHAR(25),
     price DOUBLE PRECISION NOT NULL,
     market_cap DOUBLE PRECISION NOT NULL,
-    volume DOUBLE PRECISION NOT NULL,
-)
+    volume DOUBLE PRECISION NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS percentile_analysis (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    utxo_snapshot_id INTEGER NOT NULL,
+    min_kas_top_point01_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_point10_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_1_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_5_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_10_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_25_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_50_percent DOUBLE PRECISION NOT NULL,
+    min_kas_top_75_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_point01_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_point10_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_1_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_5_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_10_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_25_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_50_percent DOUBLE PRECISION NOT NULL,
+    avg_kas_top_75_percent DOUBLE PRECISION NOT NULL,
+    addr_count_top_point01_percent INTEGER NOT NULL,
+    addr_count_top_point10_percent INTEGER NOT NULL,
+    addr_count_top_1_percent INTEGER NOT NULL,
+    addr_count_top_5_percent INTEGER NOT NULL,
+    addr_count_top_10_percent INTEGER NOT NULL,
+    addr_count_top_25_percent INTEGER NOT NULL,
+    addr_count_top_50_percent INTEGER NOT NULL,
+    addr_count_top_75_percent INTEGER NOT NULL,
+    total_kas_top_point01_percent DOUBLE PRECISION,
+    total_kas_top_point10_percent DOUBLE PRECISION,
+    total_kas_top_1_percent DOUBLE PRECISION,
+    total_kas_top_5_percent DOUBLE PRECISION,
+    total_kas_top_10_percent DOUBLE PRECISION,
+    total_kas_top_25_percent DOUBLE PRECISION,
+    total_kas_top_50_percent DOUBLE PRECISION,
+    total_kas_top_75_percent DOUBLE PRECISION,
+    cs_percent_top_point01_percent DOUBLE PRECISION,
+    cs_percent_top_point10_percent DOUBLE PRECISION,
+    cs_percent_top_1_percent DOUBLE PRECISION,
+    cs_percent_top_5_percent DOUBLE PRECISION,
+    cs_percent_top_10_percent DOUBLE PRECISION,
+    cs_percent_top_25_percent DOUBLE PRECISION,
+    cs_percent_top_50_percent DOUBLE PRECISION,
+    cs_percent_top_75_percent DOUBLE PRECISION
+);

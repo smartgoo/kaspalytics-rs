@@ -1,3 +1,4 @@
+use super::address::percentile::AddressPercentileAnalysis;
 use crate::utils::config::Config;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
@@ -12,9 +13,10 @@ use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
-struct AddressData {
+struct AddressBalances {
     balances: HashMap<Address, u64>,
 
     // Total sompi held by addresses with a dust balance
@@ -24,13 +26,7 @@ struct AddressData {
     dust_address_count: u64,
 }
 
-struct AddressPercentileData {}
-
-pub struct UtxoAnalysis {
-    config: Config,
-    rpc_client: Arc<KaspaRpcClient>,
-    pg_pool: PgPool,
-
+struct UtxoSnapshotHeader {
     id: Option<u64>,
     block: Option<Hash>,
     block_timestamp: Option<u64>,
@@ -49,13 +45,9 @@ pub struct UtxoAnalysis {
     distribution_by_usd_bucket_complete: Option<bool>,
 }
 
-impl UtxoAnalysis {
-    pub fn new(config: Config, rpc_client: Arc<KaspaRpcClient>, pg_pool: PgPool) -> Self {
-        return UtxoAnalysis {
-            config,
-            rpc_client,
-            pg_pool,
-
+impl UtxoSnapshotHeader {
+    fn new() -> Self {
+        UtxoSnapshotHeader {
             id: None,
             block: None,
             block_timestamp: None,
@@ -72,12 +64,61 @@ impl UtxoAnalysis {
             kas_last_moved_by_age_bucket_complete: Some(false),
             distribution_by_kas_bucket_complete: Some(false),
             distribution_by_usd_bucket_complete: Some(false),
-        };
+        }
+    }
+
+    async fn insert_to_db(&mut self, pg_pool: PgPool) -> i32 {
+        let dt = chrono::DateTime::from_timestamp((self.block_timestamp.unwrap() / 1000) as i64, 0)
+            .unwrap();
+
+        let r = sqlx::query(
+            r#"
+                INSERT INTO utxo_snapshot_header
+                (snapshot_complete, block, block_timestamp, daa_score, kas_price_usd)
+                VALUES
+                (false, $1, $2, $3, $4)
+                RETURNING id
+            "#,
+        )
+        .bind(self.block.unwrap().to_string())
+        .bind(dt)
+        .bind(self.daa_score.unwrap() as i64)
+        .bind(self.kas_price_usd.unwrap())
+        .fetch_one(&pg_pool)
+        .await
+        .unwrap();
+
+        let id = r.try_get("id").unwrap();
+        self.id = Some(id as u64);
+        id
+    }
+
+    fn set_percentile_analysis_complete(&self, pg_pool: PgPool) {
+        
+
     }
 }
 
-impl UtxoAnalysis {
-    fn get_address_balances(&self, db: Arc<DB>) -> AddressData {
+pub struct UtxoBasedPipeline {
+    config: Config,
+    rpc_client: Arc<KaspaRpcClient>,
+    pg_pool: PgPool,
+    utxo_snapshot_header: UtxoSnapshotHeader,
+}
+
+impl UtxoBasedPipeline {
+    pub fn new(config: Config, rpc_client: Arc<KaspaRpcClient>, pg_pool: PgPool) -> Self {
+        UtxoBasedPipeline {
+            config,
+            rpc_client,
+            pg_pool,
+            utxo_snapshot_header: UtxoSnapshotHeader::new(),
+        }
+    }
+}
+
+impl UtxoBasedPipeline {
+    fn get_address_balances(&self, db: Arc<DB>) -> AddressBalances {
         let store = Store::new(db);
 
         let mut balances = HashMap::<Address, u64>::new();
@@ -96,9 +137,10 @@ impl UtxoAnalysis {
                 ScriptPublicKeyBucket(key[..key.len() - TRANSACTION_OUTPOINT_KEY_SIZE].to_vec());
             let script_public_key = ScriptPublicKey::from(script_public_key_bucket);
 
-            let addr = extract_script_pub_key_address(&script_public_key, Prefix::Mainnet).unwrap();
+            let address =
+                extract_script_pub_key_address(&script_public_key, Prefix::Mainnet).unwrap();
 
-            *balances.entry(addr).or_insert(0) += utxo.amount;
+            *balances.entry(address).or_insert(0) += utxo.amount;
         }
 
         println!(
@@ -107,7 +149,7 @@ impl UtxoAnalysis {
         );
         println!("dust_address_count: {}", dust_address_count);
 
-        AddressData {
+        AddressBalances {
             balances,
             dust_address_sompi_total,
             dust_address_count,
@@ -118,55 +160,26 @@ impl UtxoAnalysis {
         let store = Store::new(db);
 
         // Return a single utxo tip (order doens't really matter)
-        store.get_tips().unwrap().iter().next().unwrap().clone()
+        *store.get_tips().unwrap().iter().next().unwrap()
+    }
+
+    fn get_circulating_supply(&self, db: Arc<DB>) -> u64 {
+        let store = Store::new(db);
+        store.get_circulating_supply().unwrap()
     }
 }
 
-impl UtxoAnalysis {
-    async fn insert_utxo_snapshot_header_record(&self) -> i32 {
-        let dt = chrono::DateTime::from_timestamp((self.block_timestamp.unwrap() / 1000) as i64, 0)
-            .unwrap();
-
-        let r = sqlx::query(
-            r#"
-                INSERT INTO utxo_snapshot_header
-                (snapshot_complete, block, block_timestamp, daa_score, kas_price_usd)
-                VALUES
-                (false, $1, $2, $3, $4)
-                RETURNING id
-            "#,
-        )
-        .bind(self.block.unwrap().to_string())
-        .bind(dt)
-        .bind(self.daa_score.unwrap() as i64)
-        .bind(self.kas_price_usd.unwrap())
-        .fetch_one(&self.pg_pool)
-        .await
-        .unwrap();
-
-        r.try_get("id").unwrap()
-    }
-}
-
-impl UtxoAnalysis {
-    async fn insert_address_balances(&self, utxo_snapshot_id: i32, address_data: &AddressData) {
-        // let mut db_addresses = Vec::new();
-
+impl UtxoBasedPipeline {
+    async fn insert_address_balances(
+        &self,
+        utxo_snapshot_id: i32,
+        address_data: Rc<HashMap<Address, u64>>,
+    ) -> Result<(), sqlx::Error> {
         let db_addresses: Vec<(String, i32, u64)> = address_data
-            .balances
             .iter()
-            .map(|(address, sompi)| (address.to_string(), utxo_snapshot_id, sompi.clone()))
+            .map(|(address, sompi)| (address.to_string(), utxo_snapshot_id, *sompi))
             .collect();
 
-        self.insert_to_db_with_pgcopyin(&db_addresses)
-            .await
-            .unwrap();
-    }
-
-    async fn insert_to_db_with_pgcopyin(
-        &self,
-        db_addresses: &Vec<(String, i32, u64)>,
-    ) -> Result<(), sqlx::Error> {
         let mut conn = self.pg_pool.acquire().await?;
 
         let mut copy_in = conn
@@ -185,10 +198,11 @@ impl UtxoAnalysis {
     }
 }
 
-impl UtxoAnalysis {
+impl UtxoBasedPipeline {
     pub async fn run(&mut self) {
         // Get KAS/USD price
-        self.kas_price_usd = Some(crate::cmds::price::get_kas_usd_price().await.unwrap());
+        self.utxo_snapshot_header.kas_price_usd =
+            Some(crate::cmds::price::get_kas_usd_price().await.unwrap());
 
         // Get UTXO tips from utxoindex db
         let db = kaspa_database::prelude::ConnBuilder::default()
@@ -203,19 +217,24 @@ impl UtxoAnalysis {
             .with_files_limit(128) // TODO files limit?
             .build_readonly()
             .unwrap();
-        self.block = Some(self.get_utxo_tip(db.clone()));
+        self.utxo_snapshot_header.block = Some(self.get_utxo_tip(db.clone()));
+        self.utxo_snapshot_header.circulating_supply =
+            Some(self.get_circulating_supply(db.clone()));
 
         // Get block timestamp
         let block_data = self
             .rpc_client
-            .get_block(self.block.unwrap(), false)
+            .get_block(self.utxo_snapshot_header.block.unwrap(), false)
             .await
             .unwrap();
-        self.block_timestamp = Some(block_data.header.timestamp);
-        self.daa_score = Some(block_data.header.daa_score);
+        self.utxo_snapshot_header.block_timestamp = Some(block_data.header.timestamp);
+        self.utxo_snapshot_header.daa_score = Some(block_data.header.daa_score);
 
         // Create initial record in utxo_snapshot_header
-        let utxo_snapshot_id = self.insert_utxo_snapshot_header_record().await;
+        let utxo_snapshot_id = self
+            .utxo_snapshot_header
+            .insert_to_db(self.pg_pool.clone())
+            .await;
 
         // Snapshot DAA score and timestamp
         crate::cmds::daa::insert_daa_timestamp(
@@ -227,15 +246,31 @@ impl UtxoAnalysis {
         .unwrap();
 
         // Iterate over UTXOs in utxoindex db, loading address balance data into memory
-        let address_data = self.get_address_balances(db.clone());
+        let AddressBalances {
+            balances,
+            dust_address_sompi_total,
+            dust_address_count,
+        } = self.get_address_balances(db.clone());
+
+        let address_balances = Rc::new(balances);
 
         // Stash address balances in DB
-        self.insert_address_balances(utxo_snapshot_id, &address_data)
-            .await;
+        self.insert_address_balances(utxo_snapshot_id, address_balances.clone())
+            .await
+            .unwrap();
 
-        analyze_cohorts(&address_data.balances);
+        // Address percentile analysis
+        AddressPercentileAnalysis::new(
+            self.pg_pool.clone(),
+            utxo_snapshot_id,
+            address_balances.clone(),
+            self.utxo_snapshot_header.circulating_supply.unwrap(),
+        )
+        .run()
+        .await;
 
-        analyze_top_percentiles(&address_data.balances);
+        analyze_cohorts(address_balances.clone());
+
         // ------
         // I think flow should look like this:
             // [x] Init DB and Store
@@ -251,14 +286,12 @@ impl UtxoAnalysis {
             // [x] Address Balance Snapshot using `addr_map`
                 // [x] insert into db in chunks
                 // [x] make sure I collect info to populate utxo_snapshot_header record per lines 118 - 124
-            // Address Percentile Analysis using `addr_map`
+            // [x] Address Percentile Analysis
             // Distribution By KAS Bucket
                 // looks like Python scripts loads Dust addresses here though
                 // So either `addr_map` needs to load dust addrs, or I need to ensure I track enough info upstream to calc properly here
                 // wait I actually think that total_sompi_held_by_dust_addresses and dust_address_count are good enough!
             // Distribution By USD Bucket
-                // Do I really really need this... ? YEs bc of home page lol
-                // TODO
             // KAS Last Moved By Age Bucket
                 // Can I use UTXO RPC to do this?
             // Update utxo_snapshot_header
@@ -268,37 +301,11 @@ impl UtxoAnalysis {
     }
 }
 
-/// Assume this is your map of address -> sompi
-/// (Replace `Address` with whatever your address type is)
-fn analyze_cohorts(map: &HashMap<Address, u64>) {
-    // The cohorts in KAS (as written):
-    //  1) [0           - 0.01)        KAS
-    //  2) [0.01        - 1)           KAS
-    //  3) [1           - 100)         KAS
-    //  4) [100         - 1_000)       KAS
-    //  5) [1_000       - 10_000)      KAS
-    //  6) [10_000      - 100_000)     KAS
-    //  7) [100_000     - 1_000_000)   KAS
-    //  8) [1_000_000   - 10_000_000)  KAS
-    //  9) [10_000_000  - 100_000_000) KAS
-    // 10) [100_000_000 - 1_000_000_000) KAS
-    //
-    // We translate those boundaries into sompi:
-    //  1) [0           - 0.01  ) KAS => [0                - 1_000_000    ) sompi
-    //  2) [0.01        - 1     ) KAS => [1_000_000        - 100_000_000  ) sompi
-    //  3) [1           - 100   ) KAS => [100_000_000      - 10_000_000_000 ) sompi
-    //  4) [100         - 1_000 ) KAS => [10_000_000_000   - 100_000_000_000 )
-    //  5) [1_000       - 10_000) KAS => [100_000_000_000  - 1_000_000_000_000 )
-    //  6) [10_000      - 100_000) KAS => [1_000_000_000_000 - 10_000_000_000_000 )
-    //  7) [100_000     - 1_000_000) KAS => [10_000_000_000_000 - 100_000_000_000_000 )
-    //  8) [1_000_000   - 10_000_000) KAS => [100_000_000_000_000 - 1_000_000_000_000_000 )
-    //  9) [10_000_000  - 100_000_000) KAS => [1_000_000_000_000_000 - 10_000_000_000_000_000 )
-    // 10) [100_000_000 - 1_000_000_000) KAS => [10_000_000_000_000_000 - 100_000_000_000_000_000 )
-
-    // We'll store the counts in a simple array, where each index corresponds to one of the above buckets:
+fn analyze_cohorts(map: Rc<HashMap<Address, u64>>) {
+    // Counts stored in array, each index corresponds to a bucket
     let mut cohorts = [0u64; 10];
 
-    for (address, &sompi_balance) in map.iter() {
+    for (_, &sompi_balance) in map.iter() {
         match sompi_balance {
             0..=999_999 => {
                 // 0 <= balance < 1,000,000  (i.e. [0 - 0.01) KAS)
@@ -344,12 +351,7 @@ fn analyze_cohorts(map: &HashMap<Address, u64>) {
         }
     }
 
-    // Print or return the cohort counts
     println!("Cohort counts: {:?}", cohorts);
-
-    // Optionally, you can print them in a more human-friendly manner:
-    // e.g. cohorts[0]: number of addresses holding [0 - 0.01) KAS, etc.
-
     println!("Addresses with [0 - 0.01) KAS: {}", cohorts[0]);
     println!("Addresses with [0.01 - 1) KAS: {}", cohorts[1]);
     println!("Addresses with [1 - 100) KAS: {}", cohorts[2]);
@@ -369,97 +371,4 @@ fn analyze_cohorts(map: &HashMap<Address, u64>) {
         "Addresses with [100,000,000 - 1,000,000,000) KAS: {}",
         cohorts[9]
     );
-}
-
-const SOMPI_PER_KAS: u64 = 100_000_000;
-
-/// A helper struct for holding aggregated stats.
-#[derive(Debug)]
-struct Stats {
-    address_count: usize,
-    total_kas: f64,
-    min_kas: f64,
-    max_kas: f64,
-    avg_kas: f64,
-}
-
-/// Compute stats (count, total, min, max, average) over a slice of balances in sompi.
-fn compute_stats(balances: &[u64]) -> Stats {
-    if balances.is_empty() {
-        return Stats {
-            address_count: 0,
-            total_kas: 0.0,
-            min_kas: 0.0,
-            max_kas: 0.0,
-            avg_kas: 0.0,
-        };
-    }
-
-    let address_count = balances.len();
-    let total_sompi: u64 = balances.iter().sum();
-
-    let min_sompi = *balances.iter().min().unwrap();
-    let max_sompi = *balances.iter().max().unwrap();
-
-    let total_kas = total_sompi as f64 / SOMPI_PER_KAS as f64;
-    let min_kas = min_sompi as f64 / SOMPI_PER_KAS as f64;
-    let max_kas = max_sompi as f64 / SOMPI_PER_KAS as f64;
-    let avg_kas = total_kas / address_count as f64;
-
-    Stats {
-        address_count,
-        total_kas,
-        min_kas,
-        max_kas,
-        avg_kas,
-    }
-}
-
-/// Analyzes the top X% addresses by balance and prints statistics.
-fn analyze_top_percentiles(map: &HashMap<Address, u64>) {
-    // 1) Collect and sort balances (descending)
-    let mut balances: Vec<u64> = map.values().cloned().collect();
-    balances.sort_unstable_by(|a, b| b.cmp(a)); // descending order
-
-    let total_addresses = balances.len();
-    if total_addresses == 0 {
-        println!("No addresses found.");
-        return;
-    }
-
-    // Define the desired top percentages
-    //  (0.0001 => 0.01%, 0.001 => 0.1%, 0.01 => 1%, etc.)
-    let top_fractions = &[
-        (0.0001, "Top 0.01%"),
-        (0.001, "Top 0.1%"),
-        (0.01, "Top 1%"),
-        (0.05, "Top 5%"),
-        (0.10, "Top 10%"),
-    ];
-
-    for (fraction, label) in top_fractions {
-        // 2) Calculate how many addresses fit in the "top fraction"
-        let top_count = ((total_addresses as f64) * fraction).ceil() as usize;
-
-        // Safeguard: if top_count is 0 but fraction > 0, just skip or handle accordingly
-        if top_count == 0 {
-            println!("{} => no addresses in this fraction", label);
-            continue;
-        }
-
-        // 3) Slice the top portion of balances
-        let top_slice = &balances[0..top_count.min(total_addresses)];
-
-        // 4) Compute statistics
-        let stats = compute_stats(top_slice);
-
-        // 5) Print or return them as you need
-        println!("{} stats:", label);
-        println!("  Address count: {}", stats.address_count);
-        println!("  Total KAS held: {:.4}", stats.total_kas);
-        println!("  Min KAS held: {:.8}", stats.min_kas);
-        println!("  Max KAS held: {:.8}", stats.max_kas);
-        println!("  Average KAS held: {:.8}", stats.avg_kas);
-        println!();
-    }
 }

@@ -1,4 +1,4 @@
-pub mod analysis;
+pub mod pipeline;
 mod stats;
 
 #[allow(dead_code)]

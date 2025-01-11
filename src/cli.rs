@@ -9,7 +9,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Block based analysis (block data, transaction data, etc.)
-    BlockAnalysis {
+    BlockPipeline {
         /// Analysis window start time, in unix milliseconds
         start_time: Option<u64>,
 
@@ -23,5 +23,5 @@ pub enum Commands {
     ResetDb,
 
     /// UTXO based analysis
-    UtxoAnalysis,
+    UtxoPipeline,
 }
