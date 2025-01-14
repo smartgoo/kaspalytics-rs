@@ -1,4 +1,6 @@
-use super::address::percentile::AddressPercentileAnalysis;
+use super::kas_bucket::DistributionByKASBucketAnalysis;
+use super::percentile::AddressPercentileAnalysis;
+use crate::cmds::price::get_kas_usd_price;
 use crate::utils::config::Config;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
@@ -11,6 +13,7 @@ use kaspa_utxoindex::stores::indexed_utxos::{
 };
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
+use log::info;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -93,9 +96,36 @@ impl UtxoSnapshotHeader {
         id
     }
 
-    fn set_percentile_analysis_complete(&self, pg_pool: PgPool) {
-        
+    async fn mark_percentile_analysis_complete(&mut self, pg_pool: PgPool) {
+        self.percentile_analysis_completed = Some(true);
 
+        let sql = r#"
+            UPDATE utxo_snapshot_header
+            SET percentile_analysis_completed = true
+            WHERE id = $1
+        "#;
+
+        sqlx::query(sql)
+            .bind(self.id.unwrap() as i32)
+            .execute(&pg_pool)
+            .await
+            .unwrap();
+    }
+
+    async fn mark_distribution_by_kas_bucket_complete(&mut self, pg_pool: PgPool) {
+        self.distribution_by_kas_bucket_complete = Some(true);
+
+        let sql = r#"
+            UPDATE utxo_snapshot_header
+            SET distribution_by_kas_bucket_complete = true
+            WHERE id = $1
+        "#;
+
+        sqlx::query(sql)
+            .bind(self.id.unwrap() as i32)
+            .execute(&pg_pool)
+            .await
+            .unwrap();
     }
 }
 
@@ -143,11 +173,11 @@ impl UtxoBasedPipeline {
             *balances.entry(address).or_insert(0) += utxo.amount;
         }
 
-        println!(
+        info!(
             "dust_address_sompi_total: {}",
             dust_address_sompi_total / 100_000_000
         );
-        println!("dust_address_count: {}", dust_address_count);
+        info!("dust_address_count: {}", dust_address_count);
 
         AddressBalances {
             balances,
@@ -254,7 +284,7 @@ impl UtxoBasedPipeline {
 
         let address_balances = Rc::new(balances);
 
-        // Stash address balances in DB
+        // Store address balances in DB
         self.insert_address_balances(utxo_snapshot_id, address_balances.clone())
             .await
             .unwrap();
@@ -269,106 +299,50 @@ impl UtxoBasedPipeline {
         .run()
         .await;
 
-        analyze_cohorts(address_balances.clone());
+        self.utxo_snapshot_header
+            .mark_percentile_analysis_complete(self.pg_pool.clone())
+            .await;
+
+        // Distribution by KAS Bucket
+        DistributionByKASBucketAnalysis::new(
+            self.pg_pool.clone(),
+            utxo_snapshot_id,
+            address_balances.clone(),
+            dust_address_sompi_total,
+            dust_address_count,
+            self.utxo_snapshot_header.circulating_supply.unwrap(),
+            self.utxo_snapshot_header.kas_price_usd.unwrap(),
+        )
+        .run()
+        .await;
+
+        self.utxo_snapshot_header
+            .mark_distribution_by_kas_bucket_complete(self.pg_pool.clone())
+            .await;
 
         // ------
         // I think flow should look like this:
-            // [x] Init DB and Store
-            // [x] Get KAS price
-            // [x] Get UTXO Tips
-            // [x] Create utxo snapshot header record
-            // [x] Load all addresses into HashMap `addr_map`
-                // [x] with exception of dust
-                // [x] but need to track:
-                    // [x] dust_address_sompi_total 
-                    // [x] dust_address_count
-            // [x] Create daa snapshot record
-            // [x] Address Balance Snapshot using `addr_map`
-                // [x] insert into db in chunks
-                // [x] make sure I collect info to populate utxo_snapshot_header record per lines 118 - 124
-            // [x] Address Percentile Analysis
-            // Distribution By KAS Bucket
-                // looks like Python scripts loads Dust addresses here though
-                // So either `addr_map` needs to load dust addrs, or I need to ensure I track enough info upstream to calc properly here
-                // wait I actually think that total_sompi_held_by_dust_addresses and dust_address_count are good enough!
-            // Distribution By USD Bucket
-            // KAS Last Moved By Age Bucket
-                // Can I use UTXO RPC to do this?
-            // Update utxo_snapshot_header
-                // self.unique_address_count_non_meaningful = Some(address_data.dust_address_count);
-                // self.sompi_held_by_non_meaningful_addresses = Some(address_data.dust_address_sompi_total);
-
+        // [x] Init DB and Store
+        // [x] Get KAS price
+        // [x] Get UTXO Tips
+        // [x] Create utxo snapshot header record
+        // [x] Load all addresses into HashMap `addr_map`
+        //      [x] with exception of dust
+        //      [x] but need to track:
+        //          [x] dust_address_sompi_total
+        //          [x] dust_address_count
+        // [x] Create daa snapshot record
+        // [x] Address Balance Snapshot using `addr_map`
+        //      [x] insert into db in chunks
+        //      [x] make sure I collect info to populate utxo_snapshot_header record per lines 118 - 124
+        // [x] Address Percentile Analysis
+        // [ ] Distribution By KAS Bucket
+        // [-] Distribution By USD Bucket - cancelling this one?
+        //      [x] Update front end to just show by KAS and remove routs, etc.
+        // KAS Last Moved By Age Bucket
+        //      Can I use UTXO RPC to do this?
+        // Update utxo_snapshot_header
+        //      self.unique_address_count_non_meaningful = Some(address_data.dust_address_count);
+        //      self.sompi_held_by_non_meaningful_addresses = Some(address_data.dust_address_sompi_total);
     }
-}
-
-fn analyze_cohorts(map: Rc<HashMap<Address, u64>>) {
-    // Counts stored in array, each index corresponds to a bucket
-    let mut cohorts = [0u64; 10];
-
-    for (_, &sompi_balance) in map.iter() {
-        match sompi_balance {
-            0..=999_999 => {
-                // 0 <= balance < 1,000,000  (i.e. [0 - 0.01) KAS)
-                cohorts[0] += 1;
-            }
-            1_000_000..=99_999_999 => {
-                // [0.01 - 1) KAS
-                cohorts[1] += 1;
-            }
-            100_000_000..=9_999_999_999 => {
-                // [1 - 100) KAS
-                cohorts[2] += 1;
-            }
-            10_000_000_000..=99_999_999_999 => {
-                // [100 - 1,000) KAS
-                cohorts[3] += 1;
-            }
-            100_000_000_000..=999_999_999_999 => {
-                // [1,000 - 10,000) KAS
-                cohorts[4] += 1;
-            }
-            1_000_000_000_000..=9_999_999_999_999 => {
-                // [10,000 - 100,000) KAS
-                cohorts[5] += 1;
-            }
-            10_000_000_000_000..=99_999_999_999_999 => {
-                // [100,000 - 1,000,000) KAS
-                cohorts[6] += 1;
-            }
-            100_000_000_000_000..=999_999_999_999_999 => {
-                // [1,000,000 - 10,000,000) KAS
-                cohorts[7] += 1;
-            }
-            1_000_000_000_000_000..=9_999_999_999_999_999 => {
-                // [10,000,000 - 100,000,000) KAS
-                cohorts[8] += 1;
-            }
-            10_000_000_000_000_000..=99_999_999_999_999_999 => {
-                // [100,000,000 - 1,000,000,000) KAS
-                cohorts[9] += 1;
-            }
-            100000000000000000_u64..=u64::MAX => unimplemented!(),
-        }
-    }
-
-    println!("Cohort counts: {:?}", cohorts);
-    println!("Addresses with [0 - 0.01) KAS: {}", cohorts[0]);
-    println!("Addresses with [0.01 - 1) KAS: {}", cohorts[1]);
-    println!("Addresses with [1 - 100) KAS: {}", cohorts[2]);
-    println!("Addresses with [100 - 1,000) KAS: {}", cohorts[3]);
-    println!("Addresses with [1,000 - 10,000) KAS: {}", cohorts[4]);
-    println!("Addresses with [10,000 - 100,000) KAS: {}", cohorts[5]);
-    println!("Addresses with [100,000 - 1,000,000) KAS: {}", cohorts[6]);
-    println!(
-        "Addresses with [1,000,000 - 10,000,000) KAS: {}",
-        cohorts[7]
-    );
-    println!(
-        "Addresses with [10,000,000 - 100,000,000) KAS: {}",
-        cohorts[8]
-    );
-    println!(
-        "Addresses with [100,000,000 - 1,000,000,000) KAS: {}",
-        cohorts[9]
-    );
 }

@@ -1,7 +1,11 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+use log::LevelFilter;
 
 #[derive(Parser)]
 pub struct Cli {
+    #[clap(flatten)]
+    pub global_args: GlobalArgs,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -24,4 +28,11 @@ pub enum Commands {
 
     /// UTXO based analysis
     UtxoPipeline,
+}
+
+#[derive(Args)]
+pub struct GlobalArgs {
+    /// Log level
+    #[clap(long, global = true, default_value_t = LevelFilter::Info)]
+    pub log_level: LevelFilter,
 }

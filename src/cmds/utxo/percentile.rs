@@ -1,5 +1,6 @@
 use crate::kaspad::SOMPI_PER_KAS;
 use kaspa_addresses::Address;
+use log::info;
 use rust_decimal::{prelude::FromPrimitive, prelude::ToPrimitive, Decimal};
 use rust_decimal_macros::dec;
 use sqlx::Arguments;
@@ -124,15 +125,15 @@ impl AddressPercentileAnalysis {
                     .round_dp(2);
             percentile.address_count = address_count;
 
-            println!("{:?}", percentile);
+            info!("{:?}", percentile);
         }
 
-        self.insert_percentile_data().await.unwrap();
+        self.insert_to_db().await.unwrap();
     }
 
-    async fn insert_percentile_data(&self) -> Result<(), sqlx::Error> {
+    async fn insert_to_db(&self) -> Result<(), sqlx::Error> {
         let sql = "
-            INSERT INTO public.percentile_analysis (
+            INSERT INTO percentile_analysis (
                 utxo_snapshot_id,
 
                 min_kas_top_point01_percent,

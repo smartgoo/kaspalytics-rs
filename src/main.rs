@@ -1,4 +1,3 @@
-mod args;
 mod cli;
 mod cmds;
 mod database;
@@ -46,14 +45,15 @@ async fn main() {
     // Load config from .env file
     let config = crate::utils::config::Config::from_env();
 
-    // Init Logger
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .filter(None, LevelFilter::Info)
-        .init();
-    info!("Initializing application...");
-
     // Parse CLI command and args
     let cli = Cli::parse();
+
+    // Init Logger
+    Builder::from_env(Env::default().default_filter_or("info"))
+        .filter(None, cli.global_args.log_level)
+        .init();
+
+    info!("Initializing application...");
 
     // Ensure node is synced, is same network/suffix as supplied CLI args, is utxoindexed
     // This check is done via RPC
