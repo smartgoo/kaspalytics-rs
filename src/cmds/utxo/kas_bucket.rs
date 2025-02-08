@@ -281,15 +281,7 @@ impl DistributionByKASBucketAnalysis {
         self.insert_to_db().await;
 
         for bucket_data in &self.buckets {
-            let (low_sompi, high_sompi) = bucket_data.bucket.clone().range_in_sompi();
-            info!(
-                "Bucket {:?} ({} - {}) => addresses: {}, total KAS: {}",
-                bucket_data.bucket,
-                low_sompi,
-                high_sompi,
-                bucket_data.address_count,
-                bucket_data.sompi_total
-            );
+            info!("{:?}", bucket_data);
         }
     }
 }

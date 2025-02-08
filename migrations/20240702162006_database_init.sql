@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS block_summary (
 
 CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    snapshot_complete BOOLEAN NOT NULL,
+    snapshot_complete BOOLEAN,
     block VARCHAR(64) NOT NULL,
     block_TIMESTAMP TIMESTAMP WITH TIME ZONE,
     daa_score BIGINT NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS daa_snapshot (
 
 CREATE TABLE IF NOT EXISTS address_balance_snapshot (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    utxo_snapshot_id INTEGER NOT NULL,
+    utxo_snapshot_id INTEGER REFERENCES utxo_snapshot_header (id),
     amount_sompi BIGINT NOT NULL,
     address VARCHAR(100)
 );
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS coin_market_history (
 
 CREATE TABLE IF NOT EXISTS percentile_analysis (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    utxo_snapshot_id INTEGER NOT NULL,
+    utxo_snapshot_id INTEGER REFERENCES utxo_snapshot_header (id),
     min_kas_top_point01_percent DOUBLE PRECISION NOT NULL,
     min_kas_top_point10_percent DOUBLE PRECISION NOT NULL,
     min_kas_top_1_percent DOUBLE PRECISION NOT NULL,
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS percentile_analysis (
 
 CREATE TABLE IF NOT EXISTS distribution_by_kas_bucket (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    utxo_snapshot_id INTEGER NOT NULL,
+    utxo_snapshot_id INTEGER REFERENCES utxo_snapshot_header (id),
     addr_qty_0_to_p01 INTEGER,
     addr_qty_p01_to_1 INTEGER,
     addr_qty_1_to_100 INTEGER,
@@ -241,4 +241,33 @@ CREATE TABLE IF NOT EXISTS distribution_by_kas_bucket (
     tot_usd_10m_to_100m DOUBLE PRECISION,
     tot_usd_100m_to_1b DOUBLE PRECISION,
     tot_usd_1b_to_10b DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS kas_last_moved_by_age_bucket (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    utxo_snapshot_id INTEGER REFERENCES utxo_snapshot_header (id),
+    qty_kas_lt_1d DOUBLE PRECISION,
+    qty_kas_1d_to_1w DOUBLE PRECISION,
+    qty_kas_1w_to_1m DOUBLE PRECISION,
+    qty_kas_1m_to_3m DOUBLE PRECISION,
+    qty_kas_3m_to_6m DOUBLE PRECISION,
+    qty_kas_6m_to_1y DOUBLE PRECISION,
+    qty_kas_1y_to_2y DOUBLE PRECISION,
+    qty_kas_2y_to_3y DOUBLE PRECISION,
+    qty_kas_3y_to_5y DOUBLE PRECISION,
+    qty_kas_5y_to_7y DOUBLE PRECISION,
+    qty_kas_7y_to_10y DOUBLE PRECISION,
+    qty_kas_gt_to_10y DOUBLE PRECISION,
+    cs_percent_lt_1d DOUBLE PRECISION,
+    cs_percent_1d_to_1w DOUBLE PRECISION,
+    cs_percent_1w_to_1m DOUBLE PRECISION,
+    cs_percent_1m_to_3m DOUBLE PRECISION,
+    cs_percent_3m_to_6m DOUBLE PRECISION,
+    cs_percent_6m_to_1y DOUBLE PRECISION,
+    cs_percent_1y_to_2y DOUBLE PRECISION,
+    cs_percent_2y_to_3y DOUBLE PRECISION,
+    cs_percent_3y_to_5y DOUBLE PRECISION,
+    cs_percent_5y_to_7y DOUBLE PRECISION,
+    cs_percent_7y_to_10y DOUBLE PRECISION,
+    cs_percent_gt_10y DOUBLE PRECISION
 );

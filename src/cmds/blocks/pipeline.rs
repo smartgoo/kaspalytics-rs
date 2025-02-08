@@ -87,7 +87,7 @@ impl BlockAnalysis {
 }
 
 impl BlockAnalysis {
-    fn load_chain_blocks(&mut self) {
+    fn load_chain_blocks(&mut self) -> Result<(), StoreError> {
         for (key, hash) in self
             .storage
             .selected_chain_store
@@ -97,7 +97,7 @@ impl BlockAnalysis {
             .map(|p| p.unwrap())
         {
             let key = u64::from_le_bytes((*key).try_into().unwrap());
-            let header = self.storage.headers_store.get_header(hash).unwrap();
+            let header = self.storage.headers_store.get_header(hash)?;
 
             if self.window_start_time <= header.timestamp
                 && header.timestamp <= self.window_end_time
@@ -110,6 +110,8 @@ impl BlockAnalysis {
             "{} chain blocks loaded from DbSelectedChainStore for target window",
             self.chain_blocks.len()
         );
+
+        Ok(())
     }
 
     // Reads utxo_diffs_store for given chain block
@@ -314,7 +316,7 @@ impl BlockAnalysis {
     pub async fn run(&mut self, pool: &PgPool) -> Result<(), StoreError> {
         // TODO custom error that wraps StoreError, other error types...
 
-        self.load_chain_blocks();
+        self.load_chain_blocks()?;
 
         self.tx_analysis()?;
 
@@ -348,8 +350,8 @@ impl BlockAnalysis {
         // The below loop is an attempt to catch this error and retry every X minutes for up to X retry attempts
         // Let's see how this goes...
         let mut retries = 0;
-        let max_retries = 24;
-        let retry_delay = std::time::Duration::from_secs(5 * 60);
+        let max_retries = 120;
+        let retry_delay = std::time::Duration::from_secs(60);
 
         loop {
             let storage = crate::kaspad::db::init_consensus_storage(
@@ -369,8 +371,8 @@ impl BlockAnalysis {
 
                     retries += 1;
                     error!(
-                        "Database error on tx_analysis attempt {}/{}. Retrying in 5 minutes...",
-                        retries, max_retries
+                        "Database error on tx_analysis attempt {}/{}. Retrying in {:?}...",
+                        retries, max_retries, retry_delay
                     );
                     sleep(retry_delay).await;
                 }

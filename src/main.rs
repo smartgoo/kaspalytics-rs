@@ -72,6 +72,7 @@ async fn main() {
         .unwrap(),
     );
     check_rpc_node_status(&config, rpc_client.clone()).await;
+    info!("wRPC connected");
 
     // Get PG connection pool
     let db = database::Database::new(config.db_uri.clone());
@@ -101,6 +102,7 @@ async fn main() {
     }
 
     // Run submitted CLI command
+    info!("Running command...");
     match cli.command {
         Commands::BlockPipeline {
             start_time: _,
