@@ -17,7 +17,9 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -328,7 +330,7 @@ impl UtxoBasedPipeline {
                     .to_path_buf(),
             )
             .with_files_limit(128) // TODO files limit?
-            .build_readonly()
+            .build_secondary(PathBuf::from_str("/tmp/kaspalytics-rs/rdb-secondary").unwrap())
             .unwrap();
         let utxo_tip_block = self.get_utxo_tip(db.clone());
         let utxo_tip_circulating_supply = self.get_circulating_supply(db.clone());

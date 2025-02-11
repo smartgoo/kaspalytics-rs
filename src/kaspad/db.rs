@@ -32,7 +32,7 @@ pub fn init_consensus_storage(
     let db = kaspa_database::prelude::ConnBuilder::default()
         .with_db_path(active_consensus_db_dir.to_path_buf())
         .with_files_limit(128) // TODO files limit?
-        .build_readonly()
+        .build_secondary(PathBuf::from_str("/tmp/kaspalytics-rs/rdb-secondar").unwrap())
         .unwrap();
 
     ConsensusStorage::new(db, config)

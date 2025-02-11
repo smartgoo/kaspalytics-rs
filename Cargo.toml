@@ -1,5 +1,5 @@
 [package]
-name = "kaspalytics-rs"
+name = "kaspalytics-dev-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,15 +10,15 @@ ctrlc = "3.4.5"
 dirs = "5.0.1"
 dotenvy = "0.15.7"
 env_logger = "0.11.3"
-kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
-kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics" }
+kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
 lettre = "0.11.8"
 log = "0.4"
 reqwest =  { version = "0.12.12", features = ["json"] }
