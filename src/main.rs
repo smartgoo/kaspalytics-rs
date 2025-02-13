@@ -10,7 +10,7 @@ use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use env_logger::{Builder, Env};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use log::{info, LevelFilter};
+use log::info;
 use std::io;
 use std::sync::Arc;
 use utils::config::Config;

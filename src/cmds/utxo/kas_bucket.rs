@@ -84,7 +84,7 @@ impl BucketData {
     // TODO convert this to default impl, same for PercentileData in `percentile.rs`
     fn new(bucket: Bucket) -> Self {
         Self {
-            bucket: bucket,
+            bucket,
             address_count: 0,
             percent_of_addresses: 0.0,
             sompi_total: 0,
@@ -232,13 +232,13 @@ impl DistributionByKASBucketAnalysis {
             args.add(bucket.address_count as i64);
 
             // Address percent of bucket
-            args.add((bucket.percent_of_addresses as f64) * 100f64);
+            args.add(bucket.percent_of_addresses * 100f64);
 
             // Total KAS hled by bucket
             args.add(bucket.sompi_total as f64 / SOMPI_PER_KAS as f64);
 
             // CS Percent held by bucket
-            args.add((bucket.percent_of_sompi as f64) * 100f64);
+            args.add(bucket.percent_of_sompi * 100f64);
 
             // Total USD held by bucket
             args.add(bucket.usd_value);
@@ -252,20 +252,16 @@ impl DistributionByKASBucketAnalysis {
 
     pub async fn run(&mut self) {
         for (_addr, &sompi_balance) in self.address_balances.iter() {
-            let mut found_bucket = false;
-
             for bucket_data in self.buckets.iter_mut() {
                 let (low_sompi, high_sompi) = bucket_data.bucket.clone().range_in_sompi();
                 if sompi_balance >= low_sompi && sompi_balance < high_sompi {
                     bucket_data.address_count += 1;
                     bucket_data.sompi_total += sompi_balance;
-                    found_bucket = true;
                     break;
                 }
             }
 
-            // TODO handle below better should ALWAYS have a bucket, but just in case...
-            // if !found_bucket {} ...
+            // TODO catch when no bucket
         }
 
         self.buckets[0].address_count += self.dust_address_count;

@@ -2,6 +2,7 @@ use super::aging::UtxoAgeAnalysis;
 use super::kas_bucket::DistributionByKASBucketAnalysis;
 use super::percentile::AddressPercentileAnalysis;
 use crate::cmds::price::get_kas_usd_price;
+use crate::kaspad::SOMPI_PER_KAS;
 use crate::utils::config::Config;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
@@ -17,9 +18,7 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -35,6 +34,7 @@ struct UtxoSetLoadResults {
     dust_address_count: u64,
 }
 
+#[allow(dead_code)]
 struct UtxoSnapshotHeader {
     pg_pool: PgPool,
     id: i32,
@@ -79,7 +79,7 @@ impl UtxoSnapshotHeader {
         .bind(dt)
         .bind(daa_score as i64)
         .bind(kas_price_usd)
-        .bind(circulating_supply as i64)
+        .bind((circulating_supply / SOMPI_PER_KAS) as f64)
         .fetch_one(&pg_pool)
         .await
         .unwrap();
@@ -89,7 +89,7 @@ impl UtxoSnapshotHeader {
         UtxoSnapshotHeader {
             pg_pool,
             id,
-            block: block,
+            block,
             block_timestamp,
             daa_score,
             kas_price_usd,
@@ -316,7 +316,7 @@ impl UtxoBasedPipeline {
     pub async fn run(&mut self) {
         // Get KAS/USD price
         info!("Retrieving KAS/USD price...");
-        let kas_price_usd = crate::cmds::price::get_kas_usd_price().await.unwrap();
+        let kas_price_usd = get_kas_usd_price().await.unwrap();
 
         // Get UTXO tips from utxoindex db
         info!("Loading UTXO tips from RocksDB...");
@@ -330,7 +330,7 @@ impl UtxoBasedPipeline {
                     .to_path_buf(),
             )
             .with_files_limit(128) // TODO files limit?
-            .build_secondary(PathBuf::from_str("/tmp/kaspalytics-rs/rdb-secondary").unwrap())
+            .build_readonly()
             .unwrap();
         let utxo_tip_block = self.get_utxo_tip(db.clone());
         let utxo_tip_circulating_supply = self.get_circulating_supply(db.clone());
@@ -441,28 +441,10 @@ impl UtxoBasedPipeline {
             .set_kas_last_moved_by_age_bucket_complete(self.pg_pool.clone())
             .await;
 
-        // ------
-        // [x] Init DB and Store
-        // [x] Get KAS price
-        // [x] Get UTXO Tips
-        // [x] Create utxo snapshot header record
-        // [x] Load all addresses into HashMap `addr_map`
-        //      [x] with exception of dust
-        //      [x] but need to track:
-        //          [x] dust_address_sompi_total
-        //          [x] dust_address_count
-        // [x] Create daa snapshot record
-        // [x] Address Balance Snapshot using `addr_map`
-        //      [x] insert into db in chunks
-        //      [x] make sure I collect info to populate utxo_snapshot_header record per lines 118 - 124
-        // [x] Address Percentile Analysis
-        // [x] Distribution By KAS Bucket
-        // [-] Distribution By USD Bucket - not doing this anymore
-        //      [x] Update front end to show by KAS, remove routes for USD, etc.
-        // [x] KAS Last Moved By Age Bucket
-        // [ ] Update utxo_snapshot_header
-        //      [ ] self.unique_address_count_non_meaningful = Some(address_data.dust_address_count);
-        //      [ ] self.sompi_held_by_non_meaningful_addresses = Some(address_data.dust_address_sompi_total);
-        // [ ] Cleanup and data analysis/comparison, run on node in test mode
+        crate::utils::email::send_email(
+            &self.config,
+            format!("{} | utxo-pipeline completed", &self.config.env),
+            "".to_string(),
+        );
     }
 }

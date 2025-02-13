@@ -333,7 +333,7 @@ impl BlockAnalysis {
 
             crate::utils::email::send_email(
                 &self.config,
-                format!("{} | kaspalytics-rs stats results", &self.config.env),
+                format!("{} | block-pipeline completed", &self.config.env),
                 format!("{:?}", stats),
             );
         }

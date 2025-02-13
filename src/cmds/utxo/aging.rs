@@ -34,29 +34,7 @@ fn diff_in_full_months(start: DateTime<Utc>, end: DateTime<Utc>) -> i32 {
     months_diff
 }
 
-/// Returns the number of fully elapsed years between `start` and `end`,
-/// correctly accounting for leap years (e.g., birthdays on Feb 29).
-///
-/// - If `end` is before `start`, this could return a negative number.
-/// - For "age" calculations, typically one ensures `end >= start`.
-fn diff_in_full_years(start: DateTime<Utc>, end: DateTime<Utc>) -> i32 {
-    // Extract year, month, day
-    let (start_year, start_month, start_day) = (start.year(), start.month(), start.day());
-    let (end_year, end_month, end_day) = (end.year(), end.month(), end.day());
-
-    // Preliminary difference in calendar years
-    let mut years_diff = end_year - start_year;
-
-    // If the (month, day) of `end` is before the (month, day) of `start`,
-    // we haven't hit the "anniversary" yet in the end year, so subtract 1.
-    if (end_month, end_day) < (start_month, start_day) {
-        years_diff -= 1;
-    }
-
-    years_diff
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Data {
     kas_lt_1d: u64,
     kas_1d_to_1w: u64,
@@ -81,36 +59,6 @@ struct Data {
     cs_percent_3y_to_5y: Decimal,
     cs_percent_5y_to_7y: Decimal,
     cs_percent_7y_to_10y: Decimal,
-}
-
-impl Default for Data {
-    fn default() -> Self {
-        Self {
-            kas_lt_1d: 0,
-            kas_1d_to_1w: 0,
-            kas_1w_to_1m: 0,
-            kas_1m_to_3m: 0,
-            kas_3m_to_6m: 0,
-            kas_6m_to_1y: 0,
-            kas_1y_to_2y: 0,
-            kas_2y_to_3y: 0,
-            kas_3y_to_5y: 0,
-            kas_5y_to_7y: 0,
-            kas_7y_to_10y: 0,
-
-            cs_percent_lt_1d: Decimal::default(),
-            cs_percent_1d_to_1w: Decimal::default(),
-            cs_percent_1w_to_1m: Decimal::default(),
-            cs_percent_1m_to_3m: Decimal::default(),
-            cs_percent_3m_to_6m: Decimal::default(),
-            cs_percent_6m_to_1y: Decimal::default(),
-            cs_percent_1y_to_2y: Decimal::default(),
-            cs_percent_2y_to_3y: Decimal::default(),
-            cs_percent_3y_to_5y: Decimal::default(),
-            cs_percent_5y_to_7y: Decimal::default(),
-            cs_percent_7y_to_10y: Decimal::default(),
-        }
-    }
 }
 
 impl Data {
@@ -163,7 +111,7 @@ impl UtxoAgeAnalysis {
 }
 
 impl UtxoAgeAnalysis {
-    async fn process_batch(&mut self, utxos: Vec<CompactUtxoEntry>) {
+    async fn process_batch(&mut self, now: u128, utxos: Vec<CompactUtxoEntry>) {
         let mut daas: Vec<u64> = utxos.iter().map(|utxo| utxo.block_daa_score).collect();
         daas.sort_unstable();
         daas.dedup();
@@ -179,12 +127,6 @@ impl UtxoAgeAnalysis {
         let daa_timestamps: HashMap<u64, u64> =
             daas.into_iter().zip(timestamps.into_iter()).collect();
 
-        // Get current ms since epoch
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-
         // Iterate UTXOs, calculate age, add to buckets
         for utxo in utxos.iter() {
             let timestamp = daa_timestamps.get(&utxo.block_daa_score).unwrap();
@@ -192,76 +134,54 @@ impl UtxoAgeAnalysis {
             let age = now as u64 - timestamp;
             let age_seconds = age / 1000;
 
-            // Less than 1 day
             if age_seconds < 86400 {
+                // Less than 1 day old
                 self.data.kas_lt_1d += utxo.amount;
                 continue;
-            }
-
-            // 1 day to 1 Week Ago
-            // let age_days = age_seconds / 86400;
-            // 604800 = 7 days (86400 * 7)
-            if 86400 <= age_seconds && age_seconds < 604800 {
+            } else if age_seconds < 604800 {
+                // 1 day to 1 week old
                 self.data.kas_1d_to_1w += utxo.amount;
                 continue;
             }
 
-            let start_dt = Utc.timestamp_millis_opt(timestamp.clone() as i64).unwrap();
-            let end_dt = Utc.timestamp_millis_opt(now.clone() as i64).unwrap();
+            let start_dt = Utc.timestamp_millis_opt(*timestamp as i64).unwrap();
+            let end_dt = Utc.timestamp_millis_opt(now as i64).unwrap();
             let age_months = diff_in_full_months(start_dt, end_dt);
 
-            // 1 Week to 1 Month Ago
-            if 604800 <= age_seconds && age_months == 0 {
+            if age_months == 0 {
+                // 1 Week to 1 Month Old
                 self.data.kas_1w_to_1m += utxo.amount;
                 continue;
-            }
-
-            // 1 Month to 3 Months Ago
-            if 1 <= age_months && age_months < 3 {
+            } else if age_months < 3 {
+                // 1 Month to 3 Months Old
                 self.data.kas_1m_to_3m += utxo.amount;
                 continue;
-            }
-
-            // 3 Months to 6 Months Ago
-            if 3 <= age_months && age_months < 6 {
+            } else if age_months < 6 {
+                // 3 Months to 6 Months Ago
                 self.data.kas_3m_to_6m += utxo.amount;
                 continue;
-            }
-
-            // 6 Months to 12 Months Ago
-            if 6 <= age_months && age_months < 12 {
+            } else if age_months < 12 {
+                // 6 Months to 12 Months Ago
                 self.data.kas_6m_to_1y += utxo.amount;
                 continue;
-            }
-
-            let age_years = diff_in_full_years(start_dt, end_dt);
-
-            // 1 Year to 2 Years Ago
-            if 1 <= age_years && age_years < 2 {
+            } else if age_months < 24 {
+                // 1 Year to 2 Years Ago
                 self.data.kas_1y_to_2y += utxo.amount;
                 continue;
-            }
-
-            // 2 Years to 3 Years Ago
-            if 2 <= age_years && age_years < 3 {
+            } else if age_months < 36 {
+                // 2 Years to 3 Years Ago
                 self.data.kas_2y_to_3y += utxo.amount;
                 continue;
-            }
-
-            // 3 Years to 5 Years Ago
-            if 3 <= age_years && age_years < 5 {
+            } else if age_months < 60 {
+                // 3 Years to 5 Years Ago
                 self.data.kas_3y_to_5y += utxo.amount;
                 continue;
-            }
-
-            // 5 Years to 7 Years Ago
-            if 5 <= age_years && age_years < 7 {
+            } else if age_months < 84 {
+                // 5 Years to 7 Years Ago
                 self.data.kas_5y_to_7y += utxo.amount;
                 continue;
-            }
-
-            // 7 Years to 10 Years Ago
-            if 7 <= age_years && age_years < 10 {
+            } else if age_months < 120 {
+                // 7 Years to 10 Years Ago
                 self.data.kas_7y_to_10y += utxo.amount;
                 continue;
             }
@@ -342,6 +262,12 @@ impl UtxoAgeAnalysis {
         // Init Store
         let store = Store::new(self.db.clone());
 
+        // Get current ms since epoch
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
         // Iterate over UTXOs
         let mut utxos = vec![];
 
@@ -356,13 +282,13 @@ impl UtxoAgeAnalysis {
             utxos.push(utxo);
 
             if utxos.len() >= 100_000 {
-                self.process_batch(utxos.clone()).await;
+                self.process_batch(now, utxos.clone()).await;
                 utxos.clear();
             }
         }
 
         if !utxos.is_empty() {
-            self.process_batch(utxos.clone()).await;
+            self.process_batch(now, utxos.clone()).await;
             utxos.clear();
         }
 
