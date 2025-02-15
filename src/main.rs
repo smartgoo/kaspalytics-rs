@@ -79,10 +79,10 @@ async fn main() {
     let pg_pool = db.open_connection_pool(5u32).await.unwrap();
 
     // Apply PG migrations and insert static records
-    database::initialize::apply_migrations(&pg_pool)
-        .await
-        .unwrap();
-    database::initialize::insert_enums(&pg_pool).await.unwrap();
+    // database::initialize::apply_migrations(&pg_pool)
+    //     .await
+    //     .unwrap();
+    // database::initialize::insert_enums(&pg_pool).await.unwrap();
 
     // Ensure DB NetworkId matches NetworkId from .env file
     let db_network_id = database::initialize::get_meta_network_id(&pg_pool)

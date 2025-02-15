@@ -47,6 +47,7 @@ struct Data {
     kas_3y_to_5y: u64,
     kas_5y_to_7y: u64,
     kas_7y_to_10y: u64,
+    kas_gt_10y: u64,
 
     cs_percent_lt_1d: Decimal,
     cs_percent_1d_to_1w: Decimal,
@@ -59,6 +60,7 @@ struct Data {
     cs_percent_3y_to_5y: Decimal,
     cs_percent_5y_to_7y: Decimal,
     cs_percent_7y_to_10y: Decimal,
+    cs_percent_gt_10y: Decimal,
 }
 
 impl Data {
@@ -77,6 +79,7 @@ impl Data {
         self.cs_percent_3y_to_5y = (Decimal::from_u64(self.kas_3y_to_5y).unwrap() / cs) * m;
         self.cs_percent_5y_to_7y = (Decimal::from_u64(self.kas_5y_to_7y).unwrap() / cs) * m;
         self.cs_percent_7y_to_10y = (Decimal::from_u64(self.kas_7y_to_10y).unwrap() / cs) * m;
+        self.cs_percent_gt_10y = (Decimal::from_u64(self.kas_gt_10y).unwrap() / cs) * m;
     }
 }
 
@@ -208,6 +211,7 @@ impl UtxoAgeAnalysis {
                 qty_kas_3y_to_5y,
                 qty_kas_5y_to_7y,
                 qty_kas_7y_to_10y,
+                qty_kas_gt_to_10y,
                 cs_percent_lt_1d,
                 cs_percent_1d_to_1w,
                 cs_percent_1w_to_1m,
@@ -218,11 +222,12 @@ impl UtxoAgeAnalysis {
                 cs_percent_2y_to_3y,
                 cs_percent_3y_to_5y,
                 cs_percent_5y_to_7y,
-                cs_percent_7y_to_10y
+                cs_percent_7y_to_10y,
+                cs_percent_gt_10y
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, $23
+                $21, $22, $23, $24, $25
             );
         ";
 
@@ -242,6 +247,7 @@ impl UtxoAgeAnalysis {
             .bind((self.data.kas_3y_to_5y as f64 / SOMPI_PER_KAS as f64) as i64)
             .bind((self.data.kas_5y_to_7y as f64 / SOMPI_PER_KAS as f64) as i64)
             .bind((self.data.kas_7y_to_10y as f64 / SOMPI_PER_KAS as f64) as i64)
+            .bind((self.data.kas_gt_10y as f64 / SOMPI_PER_KAS as f64) as i64)
             .bind(self.data.cs_percent_lt_1d)
             .bind(self.data.cs_percent_1d_to_1w)
             .bind(self.data.cs_percent_1w_to_1m)
@@ -253,6 +259,7 @@ impl UtxoAgeAnalysis {
             .bind(self.data.cs_percent_3y_to_5y)
             .bind(self.data.cs_percent_5y_to_7y)
             .bind(self.data.cs_percent_7y_to_10y)
+            .bind(self.data.cs_percent_gt_10y)
             .execute(&self.pg_pool)
             .await
             .unwrap();
