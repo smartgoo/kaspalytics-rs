@@ -79,7 +79,7 @@ impl UtxoSnapshotHeader {
         .bind(dt)
         .bind(daa_score as i64)
         .bind(kas_price_usd)
-        .bind((circulating_supply / SOMPI_PER_KAS) as f64)
+        .bind(circulating_supply as f64 / SOMPI_PER_KAS as f64)
         .fetch_one(&pg_pool)
         .await
         .unwrap();

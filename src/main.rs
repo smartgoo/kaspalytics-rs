@@ -107,7 +107,7 @@ async fn main() {
         Commands::BlockPipeline {
             start_time: _,
             end_time: _,
-        } => BlockAnalysis::main(config, &pg_pool).await, // TODO support start_time and end_time
+        } => BlockAnalysis::run(config, &pg_pool).await,
         Commands::ResetDb => {
             if config.env == utils::config::Env::Prod {
                 panic!("Cannot use --reset-db in production.")
