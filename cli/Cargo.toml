@@ -22,6 +22,7 @@ kaspa-txscript.workspace = true
 kaspa-utils.workspace = true
 kaspa-utxoindex.workspace = true
 kaspa-wrpc-client.workspace = true
+kaspalytics-utils.workspace = true
 lettre.workspace = true
 log.workspace = true
 reqwest.workspace = true

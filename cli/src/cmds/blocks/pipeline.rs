@@ -1,5 +1,4 @@
 use crate::cmds::blocks::stats::Stats;
-use crate::utils::config::Config;
 use kaspa_consensus::consensus::storage::ConsensusStorage;
 use kaspa_consensus::model::stores::acceptance_data::AcceptanceDataStoreReader;
 use kaspa_consensus::model::stores::block_transactions::BlockTransactionsStoreReader;
@@ -11,6 +10,7 @@ use kaspa_consensus_core::utxo::utxo_diff::ImmutableUtxoDiff;
 use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
+use kaspalytics_utils::config::Config;
 use log::{error, info};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
@@ -337,7 +337,7 @@ impl BlockAnalysis {
             info!("{:?}", stats);
             stats.save(pool).await;
 
-            crate::utils::email::send_email(
+            kaspalytics_utils::email::send_email(
                 &self.config,
                 format!("{} | block-pipeline completed", &self.config.env),
                 format!("{:?}", stats),
@@ -360,7 +360,7 @@ impl BlockAnalysis {
         let retry_delay = std::time::Duration::from_secs(60);
 
         loop {
-            let storage = crate::kaspad::db::init_consensus_storage(
+            let storage = kaspalytics_utils::kaspad::db::init_consensus_storage(
                 config.network_id,
                 &config.kaspad_dirs.active_consensus_db_dir,
             );
@@ -388,7 +388,7 @@ impl BlockAnalysis {
                         "Analysis::tx_analysis failed after {} attempts. Exiting...",
                         retries
                     );
-                    crate::utils::email::send_email(
+                    kaspalytics_utils::email::send_email(
                         &config,
                         format!("{} | kaspalytics-rs alert", config.env),
                         "Analysis::tx_analysis reached max retries due to database error."
@@ -399,7 +399,7 @@ impl BlockAnalysis {
                 Err(e) => {
                     // Handle other errors and exit
                     error!("Analysis::tx_analysis failed with error: {:?}", e);
-                    crate::utils::email::send_email(
+                    kaspalytics_utils::email::send_email(
                         &config,
                         format!("{} | kaspalytics-rs alert", config.env),
                         format!("Analysis::tx_analysis failed with error: {:?}", e),

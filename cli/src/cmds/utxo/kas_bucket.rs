@@ -1,5 +1,5 @@
-use crate::kaspad::SOMPI_PER_KAS;
 use kaspa_addresses::Address;
+use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::info;
 use sqlx::Arguments;
 use sqlx::PgPool;

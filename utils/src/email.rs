@@ -1,4 +1,4 @@
-use crate::utils::config::Config;
+use crate::config::Config;
 use lettre::{Message, SmtpTransport, Transport};
 
 pub fn send_email(config: &Config, subject: String, body: String) {

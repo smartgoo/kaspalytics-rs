@@ -1,8 +1,10 @@
 [workspace]
 resolver = "2"
 members=[
-    "cli",
-    # "daemon",
+    "cache",
+    "cli", 
+    "indexer",
+    "utils",
 ]
 
 [workspace.package]
@@ -28,8 +30,13 @@ kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch =
 kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
 kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
 kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspalytics-cache = { version = "0.1.0", path = "cache" }
+kaspalytics-cli = { version = "0.1.0", path = "cli" }
+kaspalytics-indexer = { version = "0.1.0", path = "indexer" }
+kaspalytics-utils = { version = "0.1.0", path = "utils" }
 lettre = "0.11.8"
 log = "0.4"
+moka = { version = "0.5.4" }
 reqwest =  { version = "0.12.12", features = ["json"] }
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"

@@ -1,10 +1,10 @@
-use crate::kaspad::SOMPI_PER_KAS;
 use chrono::{DateTime, Datelike, TimeZone, Utc};
 use kaspa_database::db::DB;
 use kaspa_utxoindex::model::CompactUtxoEntry;
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::prelude::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
+use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::info;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;

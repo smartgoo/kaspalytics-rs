@@ -2,8 +2,6 @@ use super::aging::UtxoAgeAnalysis;
 use super::kas_bucket::DistributionByKASBucketAnalysis;
 use super::percentile::AddressPercentileAnalysis;
 use crate::cmds::price::get_kas_usd_price;
-use crate::kaspad::SOMPI_PER_KAS;
-use crate::utils::config::Config;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_consensus_core::Hash;
@@ -15,6 +13,8 @@ use kaspa_utxoindex::stores::indexed_utxos::{
 };
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
+use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
+use kaspalytics_utils::config::Config;
 use log::info;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
@@ -441,7 +441,7 @@ impl UtxoBasedPipeline {
             .set_kas_last_moved_by_age_bucket_complete(self.pg_pool.clone())
             .await;
 
-        crate::utils::email::send_email(
+        kaspalytics_utils::email::send_email(
             &self.config,
             format!("{} | utxo-pipeline completed", &self.config.env),
             "".to_string(),

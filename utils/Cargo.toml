@@ -1,0 +1,19 @@
+[package]
+name = "kaspalytics-utils"
+rust-version.workspace = true
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+
+[dependencies]
+dirs.workspace = true
+dotenvy.workspace = true
+kaspa-consensus.workspace = true
+kaspa-consensus-core.workspace = true
+kaspa-database.workspace = true
+lettre.workspace = true
+log.workspace = true
+sqlx.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
