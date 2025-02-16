@@ -142,6 +142,10 @@ impl BlockAnalysis {
 
         // Iterate chain blocks
         for (i, (_, hash)) in self.chain_blocks.iter().skip(1).enumerate() {
+            if i % 100 == 0 {
+                info!("tx_analysis processed {} chain blocks", i);
+            }
+
             let mut this_chain_blocks_merged_transactions = Vec::<TransactionId>::new();
 
             // Get acceptance data
@@ -316,8 +320,10 @@ impl BlockAnalysis {
     async fn run_inner(&mut self, pool: &PgPool) -> Result<(), StoreError> {
         // TODO custom error that wraps StoreError, other error types...
 
+        info!("Loading chain blocks from DbSelectedChainStore for target window...");
         self.load_chain_blocks()?;
 
+        info!("Running tx_analysis...");
         self.tx_analysis()?;
 
         let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);

@@ -4,12 +4,6 @@ use sqlx::postgres::PgPool;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
-pub async fn apply_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::migrate!().run(pool).await?;
-
-    Ok(())
-}
-
 pub async fn insert_enums(pool: &PgPool) -> Result<(), sqlx::Error> {
     for variant in database::Meta::iter() {
         let name = format!("{:?}", variant);

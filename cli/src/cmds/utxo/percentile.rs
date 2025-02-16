@@ -192,14 +192,14 @@ impl AddressPercentileAnalysis {
 
         // Build arguments
         let mut args = sqlx::postgres::PgArguments::default();
-        args.add(self.utxo_snapshot_id);
+        args.add(self.utxo_snapshot_id).unwrap();
 
         for p in &self.percentiles {
-            args.add(p.min_kas.to_f64().unwrap());
-            args.add(p.average_kas.to_f64().unwrap());
-            args.add(p.total_kas.to_f64().unwrap());
-            args.add(p.address_count as i64);
-            args.add(p.circulating_supply_percent.to_f64().unwrap());
+            args.add(p.min_kas.to_f64().unwrap()).unwrap();
+            args.add(p.average_kas.to_f64().unwrap()).unwrap();
+            args.add(p.total_kas.to_f64().unwrap()).unwrap();
+            args.add(p.address_count as i64).unwrap();
+            args.add(p.circulating_supply_percent.to_f64().unwrap()).unwrap();
         }
 
         sqlx::query_with(sql, args).execute(&self.pg_pool).await?;

@@ -1,0 +1,36 @@
+[package]
+name = "cli"
+description = "Kaspalytics CLI"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono.workspace = true
+clap.workspace = true
+ctrlc.workspace = true
+dirs.workspace = true
+dotenvy.workspace = true
+env_logger.workspace = true
+kaspa-addresses.workspace = true
+kaspa-consensus.workspace = true
+kaspa-consensus-core.workspace = true
+kaspa-database.workspace = true
+kaspa-rpc-core.workspace = true
+kaspa-txscript.workspace = true
+kaspa-utils.workspace = true
+kaspa-utxoindex.workspace = true
+kaspa-wrpc-client.workspace = true
+lettre.workspace = true
+log.workspace = true
+reqwest.workspace = true
+rust_decimal.workspace = true
+rust_decimal_macros.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+sqlx-cli = "0.8.3"
+strum.workspace = true
+strum_macros.workspace = true
+tokio.workspace = true

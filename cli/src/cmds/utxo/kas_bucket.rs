@@ -224,24 +224,24 @@ impl DistributionByKASBucketAnalysis {
         ";
 
         let mut args = sqlx::postgres::PgArguments::default();
-        args.add(self.utxo_snapshot_id);
+        args.add(self.utxo_snapshot_id).unwrap();
 
         // TODO move x100 from below into bucket.set functions
         for bucket in &self.buckets {
             // Total addresses in bucket
-            args.add(bucket.address_count as i64);
+            args.add(bucket.address_count as i64).unwrap();
 
             // Address percent of bucket
-            args.add(bucket.percent_of_addresses * 100f64);
+            args.add(bucket.percent_of_addresses * 100f64).unwrap();
 
             // Total KAS hled by bucket
-            args.add(bucket.sompi_total as f64 / SOMPI_PER_KAS as f64);
+            args.add(bucket.sompi_total as f64 / SOMPI_PER_KAS as f64).unwrap();
 
             // CS Percent held by bucket
-            args.add(bucket.percent_of_sompi * 100f64);
+            args.add(bucket.percent_of_sompi * 100f64).unwrap();
 
             // Total USD held by bucket
-            args.add(bucket.usd_value);
+            args.add(bucket.usd_value).unwrap();
         }
 
         sqlx::query_with(sql, args)

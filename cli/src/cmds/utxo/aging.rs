@@ -232,7 +232,7 @@ impl UtxoAgeAnalysis {
         ";
 
         let mut args = PgArguments::default();
-        args.add(self.utxo_snapshot_id);
+        args.add(self.utxo_snapshot_id).unwrap();
 
         sqlx::query(sql)
             .bind(self.utxo_snapshot_id)
