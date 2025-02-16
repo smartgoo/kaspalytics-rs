@@ -329,7 +329,7 @@ impl UtxoBasedPipeline {
                     .unwrap()
                     .to_path_buf(),
             )
-            .with_files_limit(128) // TODO files limit?
+            .with_files_limit(1024) // TODO files limit?
             .build_readonly()
             .unwrap();
         let utxo_tip_block = self.get_utxo_tip(db.clone());

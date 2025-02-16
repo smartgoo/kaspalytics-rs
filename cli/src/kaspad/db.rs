@@ -11,7 +11,7 @@ use std::{
 pub fn get_active_consensus_dir(meta_db_dir: PathBuf) -> PathBuf {
     let db = kaspa_database::prelude::ConnBuilder::default()
         .with_db_path(meta_db_dir)
-        .with_files_limit(128)
+        .with_files_limit(1024)
         .build_readonly()
         .unwrap();
     let store = MultiConsensusManagementStore::new(db);
@@ -31,7 +31,7 @@ pub fn init_consensus_storage(
 
     let db = kaspa_database::prelude::ConnBuilder::default()
         .with_db_path(active_consensus_db_dir.to_path_buf())
-        .with_files_limit(64) // TODO files limit?
+        .with_files_limit(1024) // TODO files limit?
         .build_readonly()
         .unwrap();
 
