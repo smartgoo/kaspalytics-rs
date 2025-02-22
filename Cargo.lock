@@ -2555,19 +2555,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kaspalytics-indexer"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "kaspa-hashes",
- "kaspa-rpc-core",
- "kaspa-wrpc-client",
- "kaspalytics-utils",
- "log",
- "tokio",
-]
-
-[[package]]
 name = "kaspalytics-utils"
 version = "0.1.0"
 dependencies = [
@@ -2581,6 +2568,19 @@ dependencies = [
  "sqlx",
  "strum",
  "strum_macros",
+]
+
+[[package]]
+name = "kaspalyticsd"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "kaspa-hashes",
+ "kaspa-rpc-core",
+ "kaspa-wrpc-client",
+ "kaspalytics-utils",
+ "log",
+ "tokio",
 ]
 
 [[package]]
