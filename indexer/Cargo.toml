@@ -7,5 +7,10 @@ repository.workspace = true
 edition.workspace = true
 
 [dependencies]
+env_logger.workspace = true
+kaspa-hashes.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-wrpc-client.workspace = true
+kaspalytics-utils.workspace = true
+log.workspace = true
+tokio.workspace = true

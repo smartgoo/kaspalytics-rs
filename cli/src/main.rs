@@ -7,7 +7,7 @@ use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use env_logger::{Builder, Env};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::config::Config;
+use kaspalytics_utils::{config::Config, database};
 use log::info;
 use std::io;
 use std::sync::Arc;
@@ -72,19 +72,19 @@ async fn main() {
     info!("wRPC connected");
 
     // Get PG connection pool
-    let db = kaspalytics_utils::database::Database::new(config.db_uri.clone());
+    let db = database::Database::new(config.db_uri.clone());
     let pg_pool = db.open_connection_pool(5u32).await.unwrap();
 
     // Insert static records to PG DB
-    kaspalytics_utils::database::initialize::insert_enums(&pg_pool).await.unwrap();
+    database::initialize::insert_enums(&pg_pool).await.unwrap();
 
     // Ensure DB NetworkId matches NetworkId from .env file
-    let db_network_id = kaspalytics_utils::database::initialize::get_meta_network_id(&pg_pool)
+    let db_network_id = database::initialize::get_meta_network_id(&pg_pool)
         .await
         .unwrap();
     if db_network_id.is_none() {
         // First time running with this PG database, save network
-        kaspalytics_utils::database::initialize::insert_network_meta(&pg_pool, config.network_id)
+        database::initialize::insert_network_meta(&pg_pool, config.network_id)
             .await
             .unwrap();
     } else {

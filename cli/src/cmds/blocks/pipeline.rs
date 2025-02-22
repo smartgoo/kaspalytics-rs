@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tokio::time::sleep;
 
-use super::Granularity;
+use kaspalytics_utils::granularity::Granularity;
 
 pub struct BlockAnalysis {
     config: Config,

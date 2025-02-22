@@ -13,8 +13,8 @@ use kaspa_utxoindex::stores::indexed_utxos::{
 };
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use kaspalytics_utils::config::Config;
+use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::info;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;

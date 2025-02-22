@@ -199,7 +199,8 @@ impl AddressPercentileAnalysis {
             args.add(p.average_kas.to_f64().unwrap()).unwrap();
             args.add(p.total_kas.to_f64().unwrap()).unwrap();
             args.add(p.address_count as i64).unwrap();
-            args.add(p.circulating_supply_percent.to_f64().unwrap()).unwrap();
+            args.add(p.circulating_supply_percent.to_f64().unwrap())
+                .unwrap();
         }
 
         sqlx::query_with(sql, args).execute(&self.pg_pool).await?;

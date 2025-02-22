@@ -235,7 +235,8 @@ impl DistributionByKASBucketAnalysis {
             args.add(bucket.percent_of_addresses * 100f64).unwrap();
 
             // Total KAS hled by bucket
-            args.add(bucket.sompi_total as f64 / SOMPI_PER_KAS as f64).unwrap();
+            args.add(bucket.sompi_total as f64 / SOMPI_PER_KAS as f64)
+                .unwrap();
 
             // CS Percent held by bucket
             args.add(bucket.percent_of_sompi * 100f64).unwrap();

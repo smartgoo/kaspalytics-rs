@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
-use super::Granularity;
+use kaspalytics_utils::granularity::Granularity;
 
 #[allow(dead_code)]
 #[derive(Clone)]
