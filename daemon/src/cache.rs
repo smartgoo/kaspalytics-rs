@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-
+use dashmap::DashMap;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
     RpcBlock, RpcSubnetworkId, RpcTransaction, RpcTransactionId, RpcTransactionInput,
     RpcTransactionOutput,
 };
 use log::info;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[allow(dead_code)]
 pub struct CacheBlock {
@@ -73,18 +73,18 @@ impl From<RpcTransaction> for CacheTransaction {
 // TODO explore DashMap or Moka for caches?
 #[derive(Default)]
 pub struct Cache {
-    pub tip_timestamp: u64,
+    pub tip_timestamp: AtomicU64,
 
-    pub blocks: HashMap<Hash, CacheBlock>,
-    pub transactions: HashMap<RpcTransactionId, CacheTransaction>,
-    pub accepting_block_transactions: HashMap<Hash, Vec<RpcTransactionId>>,
+    pub blocks: DashMap<Hash, CacheBlock>,
+    pub transactions: DashMap<RpcTransactionId, CacheTransaction>,
+    pub accepting_block_transactions: DashMap<Hash, Vec<RpcTransactionId>>,
 }
 
 impl Cache {
     pub fn log_size(&self) {
         info!(
             "tip_timestamp: {} | blocks: {} | transactions {} | accepting_blocks_transactions {}",
-            self.tip_timestamp / 1000,
+            self.tip_timestamp.load(Ordering::SeqCst) / 1000,
             self.blocks.len(),
             // self.block_transactions.len(),
             self.transactions.len(),
@@ -94,29 +94,26 @@ impl Cache {
 }
 
 impl Cache {
-    pub fn prune(&mut self) {
+    pub fn prune(&self) {
         let mut candidate_blocks: Vec<Hash> = vec![];
 
-        let pruning_timestamp = self.tip_timestamp - 3600 * 1000;
+        let window = 600 * 1000;
+        let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
 
-        for (hash, block) in self.blocks.iter() {
+        for block in self.blocks.iter() {
             if block.timestamp < pruning_timestamp {
-                candidate_blocks.push(*hash);
+                candidate_blocks.push(*block.key());
             }
         }
 
-        // if !candidate_blocks.is_empty() {
-        //     info!("Pruning {} blocks", candidate_blocks.len());
-        // }
-
         for hash in candidate_blocks {
             // Remove block from blocks cache
-            let removed_block = self.blocks.remove(&hash).unwrap();
+            let (_, removed_block) = self.blocks.remove(&hash).unwrap();
 
             // Remove removed block from CachedTransaction.blocks
             // Remove transactions whose blocks are no longer in cache
             for tx in removed_block.transactions {
-                if let Some(cached_tx) = self.transactions.get_mut(&tx) {
+                if let Some(mut cached_tx) = self.transactions.get_mut(&tx) {
                     if let Some(idx) = cached_tx
                         .blocks
                         .iter()

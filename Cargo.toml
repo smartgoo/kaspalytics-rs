@@ -17,6 +17,7 @@ edition = "2021"
 chrono = "0.4.38"
 clap = { version = "4.5.8", features = ["derive"] }
 ctrlc = "3.4.5"
+dashmap = "6.1.0"
 dirs = "5.0.1"
 dotenvy = "0.15.7"
 env_logger = "0.11.3"
