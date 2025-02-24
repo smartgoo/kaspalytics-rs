@@ -359,7 +359,7 @@ impl UtxoBasedPipeline {
 
         // Snapshot DAA score and timestamp
         info!("Saving DAA score and timestamp...");
-        crate::cmds::daa::insert_daa_timestamp(
+        crate::cmds::daa::insert_to_db(
             &self.pg_pool,
             block_data.header.daa_score,
             block_data.header.timestamp,

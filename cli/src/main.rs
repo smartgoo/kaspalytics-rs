@@ -117,12 +117,17 @@ async fn main() {
             }
         }
         Commands::SnapshotDaa => {
-            crate::cmds::daa::snapshot_daa_timestamp(rpc_client.clone(), &pg_pool).await
+            crate::cmds::daa::snapshot_daa_timestamp(rpc_client, &pg_pool).await
+        }
+        Commands::SnapshotHashRate => {
+            crate::cmds::hash_rate::snapshot_hash_rate(rpc_client, &pg_pool).await;
         }
         Commands::UtxoPipeline => {
-            UtxoBasedPipeline::new(config.clone(), rpc_client.clone(), pg_pool.clone())
+            UtxoBasedPipeline::new(config.clone(), rpc_client, pg_pool)
                 .run()
                 .await
         }
     }
+
+    info!("Command completed");
 }

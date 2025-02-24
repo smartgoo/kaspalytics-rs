@@ -21,7 +21,11 @@ pub enum Commands {
         end_time: Option<u64>,
     },
 
+    /// Save current DAA score and timestamp to DB
     SnapshotDaa,
+
+    /// Save current hashrate and timestamp to DB
+    SnapshotHashRate,
 
     /// Reset database (drop entire database and recreate). Can only be used in dev env.
     ResetDb,

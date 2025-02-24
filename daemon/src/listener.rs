@@ -1,4 +1,4 @@
-use crate::cache::{Cache, CacheBlock, CacheTransaction, SecondMetrics};
+use crate::cache::{Cache, CacheBlock, CacheTransaction};
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::RpcAcceptedTransactionIds;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
@@ -16,7 +16,11 @@ pub struct DagListener {
 
 impl DagListener {
     pub fn new(cache: Arc<Cache>, rpc_client: Arc<KaspaRpcClient>) -> Self {
-        DagListener { cache, rpc_client, low_hash: None }
+        DagListener {
+            cache,
+            rpc_client,
+            low_hash: None,
+        }
     }
 }
 
@@ -41,7 +45,7 @@ impl DagListener {
                 .per_second
                 .entry(block_epoch_second)
                 .and_modify(|ps| ps.block_count += 1)
-                .or_insert(SecondMetrics::default());
+                .or_default();
 
             for tx in block.transactions.iter() {
                 let tx_id = tx.verbose_data.as_ref().unwrap().transaction_id;
@@ -89,11 +93,7 @@ impl DagListener {
                     .entry(*tx_id)
                     .and_modify(|tx| tx.accepting_block_hash = None);
 
-                let tx_timestamp = self.cache
-                    .transactions
-                    .get(tx_id)
-                    .unwrap()
-                    .block_time / 1000;
+                let tx_timestamp = self.cache.transactions.get(tx_id).unwrap().block_time / 1000;
 
                 // Decrement effective tx count for given second
                 // TODO try to move to another task
@@ -127,11 +127,7 @@ impl DagListener {
                     tx.accepting_block_hash = Some(acceptance.accepting_block_hash)
                 });
 
-                let tx_timestamp = self.cache
-                    .transactions
-                    .get(tx_id)
-                    .unwrap()
-                    .block_time / 1000;
+                let tx_timestamp = self.cache.transactions.get(tx_id).unwrap().block_time / 1000;
 
                 // Increment effective tx count for given second
                 // TODO try to move to another task
@@ -168,7 +164,8 @@ impl DagListener {
                 .await
                 .unwrap();
 
-            self.process_vspc_removed(vspc.removed_chain_block_hashes).await;
+            self.process_vspc_removed(vspc.removed_chain_block_hashes)
+                .await;
             self.process_vspc_added(vspc.accepted_transaction_ids).await;
 
             self.cache.prune();

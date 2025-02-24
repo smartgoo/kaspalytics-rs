@@ -271,3 +271,10 @@ CREATE TABLE IF NOT EXISTS kas_last_moved_by_age_bucket (
     cs_percent_7y_to_10y DOUBLE PRECISION,
     cs_percent_gt_10y DOUBLE PRECISION
 );
+
+CREATE TABLE IF NOT EXISTS hash_rate (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "timestamp" TIMESTAMP WITH TIME ZONE,
+    hash_rate NUMERIC(40,0) NOT NULL,
+    difficulty NUMERIC(40,0) NOT NULL
+);

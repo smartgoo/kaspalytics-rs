@@ -3,7 +3,7 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use sqlx::PgPool;
 use std::sync::Arc;
 
-pub async fn insert_daa_timestamp(
+pub async fn insert_to_db(
     pg_pool: &PgPool,
     daa_score: u64,
     block_timestamp: u64,
@@ -32,7 +32,7 @@ pub async fn snapshot_daa_timestamp(rpc_client: Arc<KaspaRpcClient>, pg_pool: &P
 
     let block = rpc_client.get_block(tip_hashes[0], false).await.unwrap();
 
-    insert_daa_timestamp(pg_pool, block.header.daa_score, block.header.timestamp)
+    insert_to_db(pg_pool, block.header.daa_score, block.header.timestamp)
         .await
         .unwrap();
 }

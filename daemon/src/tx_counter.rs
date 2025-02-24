@@ -1,8 +1,8 @@
 use crate::cache::Cache;
 use log::info;
-use tokio::time::sleep;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::time::sleep;
 
 pub struct TxCounter {
     cache: Arc<Cache>,
@@ -24,14 +24,16 @@ impl TxCounter {
 
             let threshold = now - 86400;
 
-            let effective_total: u64 = self.cache
+            let effective_total: u64 = self
+                .cache
                 .per_second
                 .iter()
                 .filter(|entry| *entry.key() >= threshold)
                 .map(|entry| entry.effective_transaction_count)
                 .sum();
 
-            let total: u64 = self.cache
+            let total: u64 = self
+                .cache
                 .per_second
                 .iter()
                 .filter(|entry| *entry.key() >= threshold)
