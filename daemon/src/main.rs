@@ -1,5 +1,6 @@
 mod cache;
 mod listener;
+mod tx_counter;
 
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
@@ -33,11 +34,17 @@ async fn main() {
 
     let cache = Arc::new(cache::Cache::default());
 
-    let handle = tokio::spawn(async move {
-        listener::DagListener::new(cache.clone(), rpc_client.clone())
+    let cache_listener = cache.clone();
+    let listener_handle = tokio::spawn(async move {
+        listener::DagListener::new(cache_listener, rpc_client.clone())
             .run()
             .await;
     });
 
-    handle.await.unwrap();
+    let cache_tx_counter = cache.clone();
+    let tx_counter_handle = tokio::spawn(async move {
+        tx_counter::TxCounter::new(cache_tx_counter).run().await;
+    });
+
+    let _ = tokio::join!(listener_handle, tx_counter_handle);
 }

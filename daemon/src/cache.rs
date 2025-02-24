@@ -6,6 +6,7 @@ use kaspa_rpc_core::{
 };
 use log::info;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(dead_code)]
 pub struct CacheBlock {
@@ -49,6 +50,7 @@ pub struct CacheTransaction {
     pub compute_mass: u64,
     // block_time: u64,
     pub blocks: Vec<Hash>,
+    pub block_time: u64,
     pub accepting_block_hash: Option<Hash>,
 }
 
@@ -64,13 +66,20 @@ impl From<RpcTransaction> for CacheTransaction {
             payload: value.payload,
             mass: value.mass,
             compute_mass: value.verbose_data.clone().unwrap().compute_mass,
-            blocks: vec![value.verbose_data.unwrap().block_hash],
+            blocks: vec![value.verbose_data.clone().unwrap().block_hash],
+            block_time: value.verbose_data.clone().unwrap().block_time,
             accepting_block_hash: None,
         }
     }
 }
 
-// TODO explore DashMap or Moka for caches?
+#[derive(Debug, Default)]
+pub struct SecondMetrics {
+    pub block_count: u64,
+    pub transaction_count: u64,
+    pub effective_transaction_count: u64,
+}
+
 #[derive(Default)]
 pub struct Cache {
     pub tip_timestamp: AtomicU64,
@@ -78,23 +87,28 @@ pub struct Cache {
     pub blocks: DashMap<Hash, CacheBlock>,
     pub transactions: DashMap<RpcTransactionId, CacheTransaction>,
     pub accepting_block_transactions: DashMap<Hash, Vec<RpcTransactionId>>,
+
+    pub per_second: DashMap<u64, SecondMetrics>,
 }
 
 impl Cache {
     pub fn log_size(&self) {
         info!(
-            "tip_timestamp: {} | blocks: {} | transactions {} | accepting_blocks_transactions {}",
+            "tip_timestamp: {} | blocks: {} | transactions {} | accepting_blocks_transactions {} | per_second {}",
             self.tip_timestamp.load(Ordering::SeqCst) / 1000,
             self.blocks.len(),
-            // self.block_transactions.len(),
             self.transactions.len(),
-            self.accepting_block_transactions.len()
+            self.accepting_block_transactions.len(),
+            self.per_second.len(),
         );
     }
 }
 
 impl Cache {
     pub fn prune(&self) {
+        // TODO refactor this
+
+        // Prune blocks & transactions
         let mut candidate_blocks: Vec<Hash> = vec![];
 
         let window = 600 * 1000;
@@ -131,5 +145,14 @@ impl Cache {
             // Remove block from accepting_block_transaction
             self.accepting_block_transactions.remove(&hash);
         }
+
+        // ------
+        // Prune per second stats
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+        let threshold = now - 86400 * 2;
+        self.per_second.retain(|second, _| *second > threshold);
     }
 }
