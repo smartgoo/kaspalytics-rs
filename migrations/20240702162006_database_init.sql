@@ -129,15 +129,6 @@ CREATE TABLE IF NOT EXISTS address_balance_snapshot (
     address VARCHAR(100)
 );
 
-CREATE TABLE IF NOT EXISTS coin_market_history (
-    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "timestamp" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    symbol VARCHAR(25),
-    price DOUBLE PRECISION NOT NULL,
-    market_cap DOUBLE PRECISION NOT NULL,
-    volume DOUBLE PRECISION NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS percentile_analysis (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     utxo_snapshot_id INTEGER REFERENCES utxo_snapshot_header (id),
@@ -274,7 +265,19 @@ CREATE TABLE IF NOT EXISTS kas_last_moved_by_age_bucket (
 
 CREATE TABLE IF NOT EXISTS hash_rate (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "timestamp" TIMESTAMP WITH TIME ZONE,
+    "timestamp" TIMESTAMP WITH TIME ZONE, -- TODO standardize on with/without timezone
     hash_rate NUMERIC(40,0) NOT NULL,
     difficulty NUMERIC(40,0) NOT NULL
+);
+
+-- TODO add "granularity" field to this table (day, minute, etc.)
+-- TODO add constraint on granularity and timestmap
+-- TODO standardize on with/without timezone
+CREATE TABLE IF NOT EXISTS coin_market_history (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "timestamp" TIMESTAMP WITHOUT TIME ZONE NOT NULL UNIQUE,
+    symbol CHARACTER(10) NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    market_cap DOUBLE PRECISION NOT NULL,
+    volume DOUBLE PRECISION NOT NULL
 );

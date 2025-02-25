@@ -9,15 +9,7 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::{config::Config, database};
 use log::info;
-use std::io;
 use std::sync::Arc;
-
-fn prompt_confirmation(prompt: &str) -> bool {
-    println!("{}", prompt);
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
-}
 
 async fn check_rpc_node_status(config: &Config, rpc_client: Arc<KaspaRpcClient>) {
     rpc_client.connect(None).await.unwrap();
@@ -102,25 +94,12 @@ async fn main() {
             start_time: _,
             end_time: _,
         } => BlockAnalysis::run(config, &pg_pool).await,
-        Commands::ResetDb => {
-            if config.env == kaspalytics_utils::config::Env::Prod {
-                panic!("Cannot use --reset-db in production.")
-            }
-
-            let prompt = format!(
-                "DANGER!!! Are you sure you want to drop and recreate the PG database {}? (y/N)?",
-                db.database_name
-            );
-
-            if prompt_confirmation(prompt.as_str()) {
-                db.drop_and_create_database().await.unwrap();
-            }
+        Commands::CoinMarketHistory => {
+            cmds::price::get_coin_market_history(config, &pg_pool).await;
         }
-        Commands::SnapshotDaa => {
-            crate::cmds::daa::snapshot_daa_timestamp(rpc_client, &pg_pool).await
-        }
+        Commands::SnapshotDaa => cmds::daa::snapshot_daa_timestamp(rpc_client, &pg_pool).await,
         Commands::SnapshotHashRate => {
-            crate::cmds::hash_rate::snapshot_hash_rate(rpc_client, &pg_pool).await;
+            cmds::hash_rate::snapshot_hash_rate(rpc_client, &pg_pool).await;
         }
         Commands::UtxoPipeline => {
             UtxoBasedPipeline::new(config.clone(), rpc_client, pg_pool)
