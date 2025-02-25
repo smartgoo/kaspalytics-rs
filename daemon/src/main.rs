@@ -4,18 +4,17 @@ mod tx_counter;
 
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
+use kaspalytics_utils::config;
 use log::{info, LevelFilter};
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    // Init Logger
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .filter(None, LevelFilter::Info)
-        .init();
-
-    info!("Loading config...");
     let config = kaspalytics_utils::config::Config::from_env();
+
+    Builder::from_env(Env::default().default_filter_or("info"))
+        .filter(None, config.log_level)
+        .init();
 
     info!("Initializing wRPC client...");
     let rpc_client = Arc::new(

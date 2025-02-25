@@ -2,7 +2,7 @@ use crate::kaspad::dirs::get_app_dir;
 use crate::kaspad::dirs::Dirs;
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::network::NetworkType;
-use log::info;
+use log::{LevelFilter, info};
 use std::{env, path::PathBuf, str::FromStr};
 use strum_macros::{Display, EnumString};
 
@@ -21,6 +21,8 @@ pub enum Env {
 #[derive(Clone)]
 pub struct Config {
     pub env: Env,
+
+    pub log_level: LevelFilter,
 
     pub network_id: NetworkId,
 
@@ -41,6 +43,8 @@ impl Config {
         dotenvy::dotenv().unwrap();
 
         let env = Env::from_str(&env::var("ENV").unwrap()).unwrap();
+
+        let log_level = LevelFilter::from_str(&env::var("LOG_LEVEL").unwrap()).unwrap();
 
         let network = NetworkType::from_str(&env::var("NETWORK").unwrap()).unwrap();
         let netsuffix = env::var("NETSUFFIX")
@@ -70,6 +74,7 @@ impl Config {
 
         Config {
             env,
+            log_level,
             network_id,
             rpc_url,
             db_uri,

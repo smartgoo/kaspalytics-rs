@@ -31,13 +31,10 @@ async fn check_rpc_node_status(config: &Config, rpc_client: Arc<KaspaRpcClient>)
 
 #[tokio::main]
 async fn main() {
-    // Load config from .env file
     let config = kaspalytics_utils::config::Config::from_env();
 
-    // Parse CLI command and args
     let cli = Cli::parse();
 
-    // Init Logger
     Builder::from_env(Env::default().default_filter_or("info"))
         .filter(None, cli.global_args.log_level)
         .init();
@@ -47,8 +44,8 @@ async fn main() {
     // Ensure node is synced, is same network/suffix as supplied CLI args, is utxoindexed
     // This check is done via RPC
     // WARNING:
-    //  - This app reads direct from RocksDB.
-    //  - So this is an assumption that the RPC node is same node we are reading DB of
+    //  - Some commands reads direct from RocksDB
+    //  - So this is an assumption that RPC node is same node we are reading DB of
     //  - TODO find better way to validate these via db as opposed to RPC
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
