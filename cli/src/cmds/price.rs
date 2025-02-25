@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::DateTime;
 use kaspalytics_utils::config::Config;
 use reqwest;
 use reqwest::Error;
@@ -53,8 +53,8 @@ pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
 
         // Convert the timestamp (milliseconds since epoch) to a DateTime<Utc>
         let seconds = (timestamp_ms / 1000.0) as i64;
-        let ts = NaiveDateTime::from_timestamp_opt(seconds, 0).expect("Invalid timestamp");
-        let date = DateTime::<Utc>::from_utc(ts, Utc);
+        let date = DateTime::from_timestamp(seconds, 0).expect("Invalid timestamp");
+        // let date = TimeZone::from_utc_datetime(&ts, Utc);
 
         // Insert a new record or update if a duplicate timestamp exists.
         // This uses PostgreSQL's ON CONFLICT to update the record if a duplicate timestamp (the constraint field) is found.

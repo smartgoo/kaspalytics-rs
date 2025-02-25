@@ -4,17 +4,17 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
 
-pub struct TxCounter {
+pub struct Saver {
     cache: Arc<Cache>,
 }
 
-impl TxCounter {
+impl Saver {
     pub fn new(cache: Arc<Cache>) -> Self {
-        TxCounter { cache }
+        Saver { cache }
     }
 }
 
-impl TxCounter {
+impl Saver {
     pub async fn run(&self) {
         loop {
             let now = SystemTime::now()
