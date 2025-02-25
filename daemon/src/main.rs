@@ -4,8 +4,7 @@ mod tx_counter;
 
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::config;
-use log::{info, LevelFilter};
+use log::info;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -30,6 +29,8 @@ async fn main() {
 
     info!("Connecting wRPC client...");
     rpc_client.connect(None).await.unwrap();
+
+    kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
 
     let cache = Arc::new(cache::Cache::default());
 

@@ -3,3 +3,23 @@ pub mod database;
 pub mod email;
 pub mod granularity;
 pub mod kaspad;
+
+use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_wrpc_client::KaspaRpcClient;
+use std::sync::Arc;
+
+pub async fn check_rpc_node_status(config: &config::Config, rpc_client: Arc<KaspaRpcClient>) {
+    let server_info = rpc_client.get_server_info().await.unwrap();
+
+    if !server_info.is_synced {
+        panic!("RPC node is not synced")
+    }
+
+    if !server_info.has_utxo_index {
+        panic!("RPC node does is not utxo-indexed")
+    }
+
+    if server_info.network_id.network_type != *config.network_id {
+        panic!("RPC host network does not match network supplied via CLI")
+    }
+}

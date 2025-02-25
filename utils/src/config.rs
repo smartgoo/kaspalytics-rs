@@ -2,7 +2,7 @@ use crate::kaspad::dirs::get_app_dir;
 use crate::kaspad::dirs::Dirs;
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::network::NetworkType;
-use log::{LevelFilter, info};
+use log::{info, LevelFilter};
 use std::{env, path::PathBuf, str::FromStr};
 use strum_macros::{Display, EnumString};
 

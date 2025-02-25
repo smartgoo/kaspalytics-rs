@@ -5,29 +5,10 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use env_logger::{Builder, Env};
-use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::{config::Config, database};
+use kaspalytics_utils::database;
 use log::info;
 use std::sync::Arc;
-
-async fn check_rpc_node_status(config: &Config, rpc_client: Arc<KaspaRpcClient>) {
-    rpc_client.connect(None).await.unwrap();
-
-    let server_info = rpc_client.get_server_info().await.unwrap();
-
-    if !server_info.is_synced {
-        panic!("RPC node is not synced")
-    }
-
-    if !server_info.has_utxo_index {
-        panic!("RPC node does is not utxo-indexed")
-    }
-
-    if server_info.network_id.network_type != *config.network_id {
-        panic!("RPC host network does not match network supplied via CLI")
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -39,14 +20,13 @@ async fn main() {
         .filter(None, cli.global_args.log_level)
         .init();
 
-    info!("Initializing application...");
-
     // Ensure node is synced, is same network/suffix as supplied CLI args, is utxoindexed
     // This check is done via RPC
     // WARNING:
     //  - Some commands reads direct from RocksDB
     //  - So this is an assumption that RPC node is same node we are reading DB of
     //  - TODO find better way to validate these via db as opposed to RPC
+    info!("Initializing wRPC client...");
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
             WrpcEncoding::Borsh,
@@ -57,8 +37,11 @@ async fn main() {
         )
         .unwrap(),
     );
-    check_rpc_node_status(&config, rpc_client.clone()).await;
-    info!("wRPC connected");
+
+    info!("Connecting wRPC client...");
+    rpc_client.connect(None).await.unwrap();
+
+    kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
 
     // Get PG connection pool
     let db = database::Database::new(config.db_uri.clone());
