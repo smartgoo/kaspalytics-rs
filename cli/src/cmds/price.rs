@@ -1,11 +1,11 @@
 use chrono::DateTime;
 use kaspalytics_utils::config::Config;
-use serde::Deserialize;
 use sqlx::PgPool;
 
-
 pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
-    let data = kaspalytics_utils::coingecko::get_market_chart().await.unwrap();
+    let data = kaspalytics_utils::coingecko::get_market_chart()
+        .await
+        .unwrap();
 
     for ((price_info, market_cap_info), volume_info) in data
         .prices

@@ -315,7 +315,11 @@ impl UtxoBasedPipeline {
     pub async fn run(&mut self) {
         // Get KAS/USD price
         info!("Retrieving KAS/USD price...");
-        let kas_price_usd = kaspalytics_utils::coingecko::get_simple_price().await.unwrap().kaspa.usd;
+        let kas_price_usd = kaspalytics_utils::coingecko::get_simple_price()
+            .await
+            .unwrap()
+            .kaspa
+            .usd;
 
         // Get UTXO tips from utxoindex db
         info!("Loading UTXO tips from RocksDB...");
