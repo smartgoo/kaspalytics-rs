@@ -1,18 +1,8 @@
 use chrono::DateTime;
 use kaspalytics_utils::config::Config;
-use reqwest;
-use reqwest::Error;
 use serde::Deserialize;
 use sqlx::PgPool;
 
-// TODO commit to just one CoinGecko price service - /v3/simple/price or /v3/coins/kaspa/market_chart
-
-#[derive(Deserialize)]
-struct MarketChartResponse {
-    prices: Vec<[f64; 2]>,
-    market_caps: Vec<[f64; 2]>,
-    total_volumes: Vec<[f64; 2]>,
-}
 
 pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
     let data = kaspalytics_utils::coingecko::get_market_chart().await.unwrap();
