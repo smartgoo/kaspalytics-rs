@@ -34,3 +34,39 @@ pub async fn get_market_chart() -> Result<MarketChartResponse, reqwest::Error> {
 
     Ok(data)
 }
+
+#[derive(Deserialize)]
+pub struct CurrentPrice {
+    usd: f64,
+    btc: f64,
+}
+
+#[derive(Deserialize)]
+pub struct MarketCap {
+    usd: f64,
+}
+
+#[derive(Deserialize)]
+pub struct TotalVolume {
+    pub usd: f64
+}
+
+#[derive(Deserialize)]
+pub struct MarketData {
+    pub current_price: CurrentPrice,
+    pub market_cap: MarketCap,
+    pub total_volume: TotalVolume,
+}
+
+#[derive(Deserialize)]
+pub struct CoinResponse {
+    pub market_data: MarketData,
+}
+
+pub async fn get_coin_data() -> Result<CoinResponse, reqwest::Error> {
+    let url = "https://api.coingecko.com/api/v3/coins/kaspa?community_data=false&developer_data=false";
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let data: CoinResponse = response.json().await?;
+
+    Ok(data)
+}
