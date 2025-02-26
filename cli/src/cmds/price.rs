@@ -5,26 +5,6 @@ use reqwest::Error;
 use serde::Deserialize;
 use sqlx::PgPool;
 
-#[derive(Deserialize)]
-struct Price {
-    usd: f64,
-}
-
-#[derive(Deserialize)]
-struct PriceResponse {
-    kaspa: Price,
-}
-
-pub async fn get_kas_usd_price() -> Result<f64, Error> {
-    let response =
-        reqwest::get("https://api.coingecko.com/api/v3/simple/price?ids=kaspa&vs_currencies=usd")
-            .await?
-            .error_for_status()?;
-
-    let data: PriceResponse = response.json().await?;
-    Ok(data.kaspa.usd)
-}
-
 // TODO commit to just one CoinGecko price service - /v3/simple/price or /v3/coins/kaspa/market_chart
 
 #[derive(Deserialize)]
@@ -35,10 +15,7 @@ struct MarketChartResponse {
 }
 
 pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
-    // Public API allows up to 365 day
-    let url = "https://api.coingecko.com/api/v3/coins/kaspa/market_chart?vs_currency=USD&days=365";
-    let response = reqwest::get(url).await.unwrap();
-    let data: MarketChartResponse = response.json().await.unwrap();
+    let data = kaspalytics_utils::coingecko::get_market_chart().await.unwrap();
 
     for ((price_info, market_cap_info), volume_info) in data
         .prices

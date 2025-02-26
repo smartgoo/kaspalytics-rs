@@ -1,7 +1,6 @@
 use super::aging::UtxoAgeAnalysis;
 use super::kas_bucket::DistributionByKASBucketAnalysis;
 use super::percentile::AddressPercentileAnalysis;
-use crate::cmds::price::get_kas_usd_price;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_consensus_core::Hash;
@@ -316,7 +315,7 @@ impl UtxoBasedPipeline {
     pub async fn run(&mut self) {
         // Get KAS/USD price
         info!("Retrieving KAS/USD price...");
-        let kas_price_usd = get_kas_usd_price().await.unwrap();
+        let kas_price_usd = kaspalytics_utils::coingecko::get_simple_price().await.unwrap().kaspa.usd;
 
         // Get UTXO tips from utxoindex db
         info!("Loading UTXO tips from RocksDB...");

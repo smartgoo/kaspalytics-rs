@@ -2581,6 +2581,8 @@ dependencies = [
  "kaspa-wrpc-client",
  "lettre",
  "log",
+ "reqwest",
+ "serde",
  "sqlx",
  "strum",
  "strum_macros",
