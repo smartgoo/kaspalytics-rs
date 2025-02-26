@@ -37,13 +37,13 @@ pub async fn get_market_chart() -> Result<MarketChartResponse, reqwest::Error> {
 
 #[derive(Deserialize)]
 pub struct CurrentPrice {
-    usd: f64,
-    btc: f64,
+    pub usd: f64,
+    pub btc: f64,
 }
 
 #[derive(Deserialize)]
 pub struct MarketCap {
-    usd: f64,
+    pub usd: f64,
 }
 
 #[derive(Deserialize)]

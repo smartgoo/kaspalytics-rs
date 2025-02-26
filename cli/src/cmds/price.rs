@@ -18,13 +18,9 @@ pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
         let market_cap = market_cap_info[1];
         let volume = volume_info[1];
 
-        // Convert the timestamp (milliseconds since epoch) to a DateTime<Utc>
         let seconds = (timestamp_ms / 1000.0) as i64;
         let date = DateTime::from_timestamp(seconds, 0).expect("Invalid timestamp");
-        // let date = TimeZone::from_utc_datetime(&ts, Utc);
 
-        // Insert a new record or update if a duplicate timestamp exists.
-        // This uses PostgreSQL's ON CONFLICT to update the record if a duplicate timestamp (the constraint field) is found.
         sqlx::query(
             r#"
             INSERT INTO coin_market_history (timestamp, symbol, price, market_cap, volume)

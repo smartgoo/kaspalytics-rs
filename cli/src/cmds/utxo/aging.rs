@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Returns the exact number of *fully elapsed* months between `start` and `end`,
-/// accounting for variable month lengths.
 fn diff_in_full_months(start: DateTime<Utc>, end: DateTime<Utc>) -> i32 {
     let (start_year, start_month, start_day) = (start.year(), start.month(), start.day());
     let (end_year, end_month, end_day) = (end.year(), end.month(), end.day());

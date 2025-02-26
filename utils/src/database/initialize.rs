@@ -52,7 +52,6 @@ pub async fn get_meta_network_id(pool: &PgPool) -> Result<Option<NetworkId>, sql
 }
 
 pub async fn insert_network_meta(pool: &PgPool, network_id: NetworkId) -> Result<(), sqlx::Error> {
-    // Set network in PG meta table
     sqlx::query("UPDATE meta SET value = $1 WHERE key = $2")
         .bind(format!("{:?}", network_id.network_type))
         .bind(database::Meta::Network.to_string())

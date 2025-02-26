@@ -190,7 +190,6 @@ impl AddressPercentileAnalysis {
             )
         ";
 
-        // Build arguments
         let mut args = sqlx::postgres::PgArguments::default();
         args.add(self.utxo_snapshot_id).unwrap();
 
