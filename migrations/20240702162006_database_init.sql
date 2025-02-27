@@ -270,6 +270,8 @@ CREATE TABLE IF NOT EXISTS hash_rate (
     difficulty NUMERIC(40,0) NOT NULL
 );
 
+CREATE INDEX idx_timestamp ON hash_rate ("timestamp");
+
 -- TODO add "granularity" field to this table (day, minute, etc.)
 -- TODO add constraint on granularity and timestmap
 -- TODO standardize on with/without timezone

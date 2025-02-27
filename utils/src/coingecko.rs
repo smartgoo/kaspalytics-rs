@@ -48,7 +48,7 @@ pub struct MarketCap {
 
 #[derive(Deserialize)]
 pub struct TotalVolume {
-    pub usd: f64
+    pub usd: f64,
 }
 
 #[derive(Deserialize)]
@@ -64,7 +64,8 @@ pub struct CoinResponse {
 }
 
 pub async fn get_coin_data() -> Result<CoinResponse, reqwest::Error> {
-    let url = "https://api.coingecko.com/api/v3/coins/kaspa?community_data=false&developer_data=false";
+    let url =
+        "https://api.coingecko.com/api/v3/coins/kaspa?community_data=false&developer_data=false";
     let response = reqwest::get(url).await?.error_for_status()?;
     let data: CoinResponse = response.json().await?;
 
