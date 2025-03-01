@@ -172,7 +172,11 @@ impl DagListener {
             self.cache.log_size();
 
             if tip_hashes.contains(&self.low_hash.unwrap()) {
-                info!("at tip, sleeping");
+                // TODO set synced to false if ever synced then falls out of sync
+                self.cache.synced.store(true, Ordering::SeqCst);
+
+                // TODO log how long it takes to reach tip
+                info!("Listener at tip, sleeping");
                 sleep(Duration::from_secs(10)).await;
             }
         }

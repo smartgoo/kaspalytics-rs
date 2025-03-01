@@ -5,11 +5,13 @@ use kaspa_rpc_core::{
     RpcTransactionOutput,
 };
 use log::info;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(dead_code)]
 pub struct CacheBlock {
+    pub hash: Hash,
+
     // RpcBlockHeader fields
     pub timestamp: u64,
     pub daa_score: u64,
@@ -24,6 +26,7 @@ pub struct CacheBlock {
 impl From<RpcBlock> for CacheBlock {
     fn from(value: RpcBlock) -> Self {
         CacheBlock {
+            hash: value.header.hash,
             timestamp: value.header.timestamp,
             daa_score: value.header.daa_score,
             transactions: value
@@ -82,6 +85,9 @@ pub struct SecondMetrics {
 
 #[derive(Default)]
 pub struct Cache {
+    // Synced to DAG tip
+    pub synced: AtomicBool,
+
     pub tip_timestamp: AtomicU64,
 
     pub blocks: DashMap<Hash, CacheBlock>,
@@ -111,7 +117,9 @@ impl Cache {
         // Prune blocks & transactions
         let mut candidate_blocks: Vec<Hash> = vec![];
 
-        let window = 600 * 1000;
+        // TODO better handling of window size
+        // Currently targeting 1 hour of blocks
+        let window = 3600 * 1000;
         let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
 
         for block in self.blocks.iter() {
@@ -150,7 +158,7 @@ impl Cache {
         // Prune per second stats
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
+            .unwrap()
             .as_secs();
         let threshold = now - 86400 * 2;
         self.per_second.retain(|second, _| *second > threshold);

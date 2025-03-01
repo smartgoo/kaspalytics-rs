@@ -7,8 +7,9 @@ use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::database;
-use log::info;
+use log::{debug, info};
 use std::sync::Arc;
+use std::time::Instant;
 
 #[tokio::main]
 async fn main() {
@@ -20,13 +21,6 @@ async fn main() {
         .filter(None, cli.global_args.log_level)
         .init();
 
-    // Ensure node is synced, is same network/suffix as supplied CLI args, is utxoindexed
-    // This check is done via RPC
-    // WARNING:
-    //  - Some commands reads direct from RocksDB
-    //  - So this is an assumption that RPC node is same node we are reading DB of
-    //  - TODO find better way to validate these via db as opposed to RPC
-    info!("Initializing wRPC client...");
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
             WrpcEncoding::Borsh,
@@ -38,12 +32,17 @@ async fn main() {
         .unwrap(),
     );
 
-    info!("Connecting wRPC client...");
+    debug!("Connecting wRPC client...");
     rpc_client.connect(None).await.unwrap();
 
+    // Ensure node is synced, is same network/suffix as supplied CLI args, is utxoindexed
+    // WARNING:
+    //  - Some commands reads direct from RocksDB
+    //  - So this is an assumption that RPC node is same node we are reading DB of
+    //  - TODO find better way to validate these via db as opposed to RPC
     kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
 
-    // Get PG connection pool
+    // Open PG connection pool
     let db = database::Database::new(config.db_uri.clone());
     let pg_pool = db.open_connection_pool(5u32).await.unwrap();
 
@@ -68,7 +67,8 @@ async fn main() {
     }
 
     // Run submitted CLI command
-    info!("Running command...");
+    let start = Instant::now();
+    debug!("{:?} command starting...", cli.command);
     match cli.command {
         Commands::BlockPipeline {
             start_time: _,
@@ -91,5 +91,9 @@ async fn main() {
         }
     }
 
-    info!("Command completed");
+    info!(
+        "{:?} command finished in {:?}",
+        cli.command,
+        start.elapsed()
+    );
 }

@@ -10,7 +10,7 @@ pub struct Cli {
     pub command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Block based analysis (block data, transaction data, etc.)
     BlockPipeline {

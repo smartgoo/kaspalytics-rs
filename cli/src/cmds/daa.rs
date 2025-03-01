@@ -27,7 +27,6 @@ pub async fn insert_to_db(
 }
 
 pub async fn snapshot_daa_timestamp(rpc_client: Arc<KaspaRpcClient>, pg_pool: &PgPool) {
-    // TODO return Result<T, E>
     let GetBlockDagInfoResponse { tip_hashes, .. } = rpc_client.get_block_dag_info().await.unwrap();
 
     let block = rpc_client.get_block(tip_hashes[0], false).await.unwrap();

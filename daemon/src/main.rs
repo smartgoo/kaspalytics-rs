@@ -1,6 +1,6 @@
+mod analyzer;
 mod cache;
-mod listener;
-mod saver;
+mod dag;
 
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
@@ -36,15 +36,15 @@ async fn main() {
 
     let listener_cache = cache.clone();
     let listener_handle = tokio::spawn(async move {
-        listener::DagListener::new(listener_cache, rpc_client.clone())
+        dag::DagListener::new(listener_cache, rpc_client.clone())
             .run()
             .await;
     });
 
-    let saver_cache = cache.clone();
-    let saver_handle = tokio::spawn(async move {
-        saver::Saver::new(saver_cache).run().await;
+    let analyzer_cache = cache.clone();
+    let analyzer_handle = tokio::spawn(async move {
+        analyzer::Analyzer::new(analyzer_cache).run().await;
     });
 
-    let _ = tokio::join!(listener_handle, saver_handle);
+    let _ = tokio::join!(listener_handle, analyzer_handle);
 }

@@ -27,7 +27,6 @@ pub async fn insert_to_db(
 }
 
 pub async fn snapshot_hash_rate(rpc_client: Arc<KaspaRpcClient>, pg_pool: &PgPool) {
-    // TODO return Result<T, E>
     let GetBlockDagInfoResponse {
         difficulty,
         past_median_time,
