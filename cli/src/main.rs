@@ -94,6 +94,6 @@ async fn main() {
     info!(
         "{:?} command finished in {:?}",
         cli.command,
-        start.elapsed()
+        start.elapsed().as_secs_f32()
     );
 }
