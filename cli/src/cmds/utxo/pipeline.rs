@@ -14,7 +14,7 @@ use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
 use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
-use log::info;
+use log::debug;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -260,11 +260,11 @@ impl UtxoBasedPipeline {
             *results.address_balances.entry(address).or_insert(0) += utxo.amount;
         }
 
-        info!(
+        debug!(
             "dust_address_sompi_total: {}",
             results.dust_address_sompi_total / 100_000_000
         );
-        info!("dust_address_count: {}", results.dust_address_count);
+        debug!("dust_address_count: {}", results.dust_address_count);
 
         results
     }
@@ -314,7 +314,7 @@ impl UtxoBasedPipeline {
 impl UtxoBasedPipeline {
     pub async fn run(&mut self) {
         // Get KAS/USD price
-        info!("Retrieving KAS/USD price...");
+        debug!("Retrieving KAS/USD price...");
         let kas_price_usd = kaspalytics_utils::coingecko::get_simple_price()
             .await
             .unwrap()
@@ -322,7 +322,7 @@ impl UtxoBasedPipeline {
             .usd;
 
         // Get UTXO tips from utxoindex db
-        info!("Loading UTXO tips from RocksDB...");
+        debug!("Loading UTXO tips from RocksDB...");
         let db = kaspa_database::prelude::ConnBuilder::default()
             .with_db_path(
                 self.config
@@ -339,7 +339,7 @@ impl UtxoBasedPipeline {
         let utxo_tip_circulating_supply = self.get_circulating_supply(db.clone());
 
         // Get block timestamp
-        info!("Getting UTXO tip timestamp...");
+        debug!("Getting UTXO tip timestamp...");
         let block_data = self
             .rpc_client
             .get_block(utxo_tip_block, false)
@@ -349,7 +349,7 @@ impl UtxoBasedPipeline {
         let utxo_tip_daa_score = block_data.header.daa_score;
 
         // Create initial record in utxo_snapshot_header
-        info!("Inserting UTXO snapshot header record...");
+        debug!("Inserting UTXO snapshot header record...");
         let mut utxo_snapshot_header = UtxoSnapshotHeader::new(
             self.pg_pool.clone(),
             utxo_tip_block,
@@ -361,7 +361,7 @@ impl UtxoBasedPipeline {
         .await;
 
         // Snapshot DAA score and timestamp
-        info!("Saving DAA score and timestamp...");
+        debug!("Saving DAA score and timestamp...");
         crate::cmds::daa::insert_to_db(
             &self.pg_pool,
             block_data.header.daa_score,
@@ -371,7 +371,7 @@ impl UtxoBasedPipeline {
         .unwrap();
 
         // Iterate over UTXOs in utxoindex db, loading address balance data into memory
-        info!("Loading address balances from UTXO index...");
+        debug!("Loading address balances from UTXO index...");
         let utxo_set_results = self.load_from_utxo_set(db.clone());
 
         let address_balances = Rc::new(utxo_set_results.address_balances.clone());
@@ -390,13 +390,13 @@ impl UtxoBasedPipeline {
             .await;
 
         // Store address balances in DB
-        info!("Saving address balance snapshots...");
+        debug!("Saving address balance snapshots...");
         self.insert_address_balances(utxo_snapshot_header.id, address_balances.clone())
             .await
             .unwrap();
 
         // Address percentile analysis
-        info!("Starting address percentile analysis...");
+        debug!("Starting address percentile analysis...");
         AddressPercentileAnalysis::new(
             self.pg_pool.clone(),
             utxo_snapshot_header.id,
@@ -411,7 +411,7 @@ impl UtxoBasedPipeline {
             .await;
 
         // Distribution by KAS Bucket
-        info!("Starting distribution by KAS bucket analysis...");
+        debug!("Starting distribution by KAS bucket analysis...");
         DistributionByKASBucketAnalysis::new(
             self.pg_pool.clone(),
             utxo_snapshot_header.id,
@@ -429,7 +429,7 @@ impl UtxoBasedPipeline {
             .await;
 
         // UTXO Aging
-        info!("Starting UTXO aging analysis...");
+        debug!("Starting UTXO aging analysis...");
         UtxoAgeAnalysis::new(
             self.pg_pool.clone(),
             utxo_snapshot_header.id,

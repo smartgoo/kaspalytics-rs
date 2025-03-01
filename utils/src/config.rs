@@ -2,7 +2,7 @@ use crate::kaspad::dirs::get_app_dir;
 use crate::kaspad::dirs::Dirs;
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::network::NetworkType;
-use log::{info, LevelFilter};
+use log::LevelFilter;
 use std::{env, path::PathBuf, str::FromStr};
 use strum_macros::{Display, EnumString};
 
@@ -70,7 +70,6 @@ impl Config {
         let smtp_to = env::var("SMTP_TO").unwrap();
 
         let kaspad_dirs = Dirs::new(app_dir.clone(), network_id);
-        info!("{:?}", kaspad_dirs.active_consensus_db_dir);
 
         Config {
             env,

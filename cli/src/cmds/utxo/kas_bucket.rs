@@ -1,6 +1,6 @@
 use kaspa_addresses::Address;
 use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
-use log::info;
+use log::debug;
 use sqlx::Arguments;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -278,7 +278,7 @@ impl DistributionByKASBucketAnalysis {
         self.insert_to_db().await;
 
         for bucket_data in &self.buckets {
-            info!("{:?}", bucket_data);
+            debug!("{:?}", bucket_data);
         }
     }
 }

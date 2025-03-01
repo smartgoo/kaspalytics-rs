@@ -1,6 +1,6 @@
 use kaspa_addresses::Address;
 use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
-use log::info;
+use log::debug;
 use rust_decimal::{prelude::FromPrimitive, prelude::ToPrimitive, Decimal};
 use rust_decimal_macros::dec;
 use sqlx::Arguments;
@@ -125,7 +125,7 @@ impl AddressPercentileAnalysis {
                     .round_dp(2);
             percentile.address_count = address_count;
 
-            info!("{:?}", percentile);
+            debug!("{:?}", percentile);
         }
 
         self.insert_to_db().await.unwrap();

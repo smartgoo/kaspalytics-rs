@@ -5,7 +5,7 @@ use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::prelude::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
-use log::info;
+use log::debug;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;
 use sqlx::postgres::{PgArguments, PgPool};
@@ -188,11 +188,11 @@ impl UtxoAgeAnalysis {
                 continue;
             }
 
-            info!("timestamp {}", timestamp);
+            debug!("timestamp {}", timestamp);
         }
 
         self.utxos_processed += utxos.len() as u64;
-        info!("{}", self.utxos_processed);
+        debug!("{}", self.utxos_processed);
     }
 
     async fn insert_to_db(&self) {
@@ -300,7 +300,7 @@ impl UtxoAgeAnalysis {
 
         self.data.set_cs_percent(self.circulating_supply);
 
-        info!("{:?}", self.data);
+        debug!("{:?}", self.data);
 
         self.insert_to_db().await;
     }

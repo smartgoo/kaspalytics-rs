@@ -4,7 +4,7 @@ mod dag;
 
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use log::info;
+use log::debug;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -15,7 +15,6 @@ async fn main() {
         .filter(None, config.log_level)
         .init();
 
-    info!("Initializing wRPC client...");
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
             WrpcEncoding::Borsh,
@@ -27,7 +26,7 @@ async fn main() {
         .unwrap(),
     );
 
-    info!("Connecting wRPC client...");
+    debug!("Connecting wRPC client...");
     rpc_client.connect(None).await.unwrap();
 
     kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;

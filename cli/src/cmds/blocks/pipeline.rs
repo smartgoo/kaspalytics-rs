@@ -11,7 +11,7 @@ use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
-use log::{error, info};
+use log::{error, debug};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -106,7 +106,7 @@ impl BlockAnalysis {
             }
         }
 
-        info!(
+        debug!(
             "{} chain blocks loaded from DbSelectedChainStore for target window",
             self.chain_blocks.len()
         );
@@ -143,7 +143,7 @@ impl BlockAnalysis {
         // Iterate chain blocks
         for (i, (_, hash)) in self.chain_blocks.iter().skip(1).enumerate() {
             if i % 100 == 0 {
-                info!("tx_analysis processed {} chain blocks", i);
+                debug!("tx_analysis processed {} chain blocks", i);
             }
 
             let mut this_chain_blocks_merged_transactions = Vec::<TransactionId>::new();
@@ -320,10 +320,10 @@ impl BlockAnalysis {
     async fn run_inner(&mut self, pool: &PgPool) -> Result<(), StoreError> {
         // TODO custom error that wraps StoreError, other error types...
 
-        info!("Loading chain blocks from DbSelectedChainStore for target window...");
+        debug!("Loading chain blocks from DbSelectedChainStore for target window...");
         self.load_chain_blocks()?;
 
-        info!("Running tx_analysis...");
+        debug!("Running tx_analysis...");
         self.tx_analysis()?;
 
         let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);
@@ -334,7 +334,7 @@ impl BlockAnalysis {
                 continue;
             }
 
-            info!("{:?}", stats);
+            debug!("{:?}", stats);
             stats.save(pool).await;
 
             kaspalytics_utils::email::send_email(
