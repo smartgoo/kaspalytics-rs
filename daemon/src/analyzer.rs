@@ -134,7 +134,28 @@ impl Analyzer {
         .execute(&self.pg_pool)
         .await?;
 
+        let mut effective_count_per_hour = HashMap::<u64, u64>::new();
+        for entry in self.cache.per_second.iter() {
+            let (second, second_metrics) = (entry.key(), entry.value());
+            let hour = second - (second % 3600);
+            *effective_count_per_hour.entry(hour).or_insert(0) += second_metrics.effective_transaction_count;
+        }
+
+        sqlx::query(
+            r#"
+            INSERT INTO key_value ("key", "value", updated_timestamp)
+            VALUES('effective_transaction_count_per_hour_24h', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(serde_json::to_string(&effective_count_per_hour).unwrap())
+        .bind(Utc::now())
+        .execute(&self.pg_pool)
+        .await?;
+
         debug!("txs: {} | effective txs: {}", count, effective_count);
+        debug!("per hour effective tx count {:?}", effective_count_per_hour);
 
         Ok(())
     }
