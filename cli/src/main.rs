@@ -44,7 +44,10 @@ async fn main() {
 
     // Open PG connection pool
     let db = database::Database::new(config.db_uri.clone());
-    let pg_pool = db.open_connection_pool(5u32).await.unwrap();
+    let pg_pool = db
+        .open_connection_pool(config.db_max_pool_size)
+        .await
+        .unwrap();
 
     // Insert static records to PG DB
     database::initialize::insert_enums(&pg_pool).await.unwrap();

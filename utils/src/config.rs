@@ -29,6 +29,7 @@ pub struct Config {
     pub rpc_url: String,
 
     pub db_uri: String,
+    pub db_max_pool_size: u32,
 
     pub smtp_host: String,
     pub smtp_port: u16,
@@ -63,6 +64,10 @@ impl Config {
         let rpc_url = env::var("RPC_URL").unwrap();
 
         let db_uri = env::var("DB_URI").unwrap();
+        let db_max_pool_size = env::var("DB_MAX_POOL_SIZE")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap_or(5);
 
         let smtp_host = env::var("SMTP_HOST").unwrap();
         let smtp_port = env::var("SMTP_PORT").unwrap().parse::<u16>().unwrap();
@@ -77,6 +82,7 @@ impl Config {
             network_id,
             rpc_url,
             db_uri,
+            db_max_pool_size,
             smtp_host,
             smtp_port,
             smtp_from,
