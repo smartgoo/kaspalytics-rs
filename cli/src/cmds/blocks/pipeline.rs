@@ -11,7 +11,7 @@ use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
-use log::{error, debug};
+use log::{debug, error};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;

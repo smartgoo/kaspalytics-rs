@@ -92,7 +92,7 @@ impl Analyzer {
             VALUES('transaction_count_24h', $1, $2)
             ON CONFLICT ("key") DO UPDATE
                 SET "value" = $1, updated_timestamp = $2
-            "#
+            "#,
         )
         .bind(count as i64)
         .bind(Utc::now())
@@ -106,7 +106,7 @@ impl Analyzer {
             VALUES('effective_transaction_count_24h', $1, $2)
             ON CONFLICT ("key") DO UPDATE
                 SET "value" = $1, updated_timestamp = $2
-            "#
+            "#,
         )
         .bind(effective_count as i64)
         .bind(Utc::now())
@@ -139,13 +139,13 @@ impl Analyzer {
                 (version, share)
             })
             .collect();
-        
+
         sqlx::query(
             r#"INSERT INTO key_value ("key", "value", updated_timestamp)
             VALUES('miner_node_versions_1h', $1, $2)
             ON CONFLICT ("key") DO UPDATE
                 SET "value" = $1, updated_timestamp = $2
-            "#
+            "#,
         )
         .bind(serde_json::to_string(&version_share).unwrap())
         .bind(Utc::now())
