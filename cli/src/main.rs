@@ -76,16 +76,16 @@ async fn main() {
         Commands::BlockPipeline {
             start_time: _,
             end_time: _,
-        } => BlockAnalysis::run(config, &pg_pool).await,
+        } => BlockAnalysis::run(config, pg_pool).await,
         Commands::CoinMarketHistory => {
-            cmds::price::get_coin_market_history(config, &pg_pool).await;
+            cmds::price::get_coin_market_history(config, pg_pool).await;
         }
         Commands::HomePageRefresh => {
             cmds::home_page::home_page_data_refresh(rpc_client, pg_pool).await;
         }
-        Commands::SnapshotDaa => cmds::daa::snapshot_daa_timestamp(rpc_client, &pg_pool).await,
+        Commands::SnapshotDaa => cmds::daa::snapshot_daa_timestamp(rpc_client, pg_pool).await,
         Commands::SnapshotHashRate => {
-            cmds::hash_rate::snapshot_hash_rate(rpc_client, &pg_pool).await;
+            cmds::hash_rate::snapshot_hash_rate(rpc_client, pg_pool).await;
         }
         Commands::UtxoPipeline => {
             UtxoBasedPipeline::new(config.clone(), rpc_client, pg_pool)

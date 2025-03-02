@@ -2,7 +2,7 @@ use chrono::DateTime;
 use kaspalytics_utils::config::Config;
 use sqlx::PgPool;
 
-pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
+pub async fn get_coin_market_history(config: Config, pg_pool: PgPool) {
     let data = kaspalytics_utils::coingecko::get_market_chart()
         .await
         .unwrap();
@@ -35,7 +35,7 @@ pub async fn get_coin_market_history(config: Config, pg_pool: &PgPool) {
         .bind(price)
         .bind(market_cap)
         .bind(volume)
-        .execute(pg_pool)
+        .execute(&pg_pool)
         .await
         .unwrap();
     }

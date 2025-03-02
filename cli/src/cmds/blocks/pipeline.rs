@@ -347,7 +347,7 @@ impl BlockAnalysis {
         Ok(())
     }
 
-    pub async fn run(config: Config, pool: &PgPool) {
+    pub async fn run(config: Config, pool: PgPool) {
         // Sporadically (once a week-ish) a RocksDB error will be raised:
         // "Error rocksdb error IO error: No such file or directory: While open a file for random read: rusty-kaspa/kaspa-mainnet/datadir/consensus/consensus-002/1504776.sst: No such file or directory while getting block cb0c56da0c4c7948c5bf29c0f8eddbde11fc02df7641a2f27053c702bb96aef5 from database"
         // I have a hunch that is because this program is running while node pruning is in progress
@@ -367,7 +367,7 @@ impl BlockAnalysis {
 
             let mut process = BlockAnalysis::new_for_yesterday(config.clone(), storage.clone());
 
-            match process.run_inner(pool).await {
+            match process.run_inner(&pool).await {
                 Ok(_) => break,
                 Err(StoreError::DbError(_)) if retries < max_retries => {
                     // Close database connection before sleeping

@@ -26,7 +26,7 @@ pub async fn insert_to_db(
     Ok(())
 }
 
-pub async fn snapshot_hash_rate(rpc_client: Arc<KaspaRpcClient>, pg_pool: &PgPool) {
+pub async fn snapshot_hash_rate(rpc_client: Arc<KaspaRpcClient>, pg_pool: PgPool) {
     let GetBlockDagInfoResponse {
         difficulty,
         past_median_time,
@@ -36,7 +36,7 @@ pub async fn snapshot_hash_rate(rpc_client: Arc<KaspaRpcClient>, pg_pool: &PgPoo
 
     let hash_rate = (difficulty * 2f64) as u64;
 
-    insert_to_db(pg_pool, timestamp, hash_rate, difficulty as u64)
+    insert_to_db(&pg_pool, timestamp, hash_rate, difficulty as u64)
         .await
         .unwrap();
 }
