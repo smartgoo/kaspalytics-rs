@@ -136,7 +136,7 @@ impl Analyzer {
         .await?;
 
         let current_hour = now - (now % 3600);
-        let cutoff = current_hour - (24 * 3600);
+        let cutoff = current_hour - (23 * 3600);
         let mut effective_count_per_hour = HashMap::<u64, u64>::new();
 
         self.cache
