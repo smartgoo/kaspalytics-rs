@@ -5,7 +5,7 @@ mod dag;
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::database;
-use log::debug;
+use log::{debug, error, info};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -15,6 +15,8 @@ async fn main() {
     Builder::from_env(Env::default().default_filter_or("info"))
         .filter(None, config.log_level)
         .init();
+
+    info!("kaspalyticsd starting...");
 
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
@@ -52,5 +54,18 @@ async fn main() {
         analyzer::Analyzer::new(analyzer_cache, pg_pool).run().await;
     });
 
-    let _ = tokio::join!(listener_handle, analyzer_handle);
+    match tokio::try_join!(listener_handle, analyzer_handle) {
+        Ok(_) => unreachable!(),
+        Err(e) => {
+            error!("{}", e);
+
+            if config.env == kaspalytics_utils::config::Env::Prod {
+                kaspalytics_utils::email::send_email(
+                    &config,
+                    "kaspalyticsd failed!".to_string(),
+                    format!("{}", e),
+                );
+            }
+        }
+    }
 }

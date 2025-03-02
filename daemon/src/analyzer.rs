@@ -194,7 +194,7 @@ impl Analyzer {
                 continue;
             }
 
-            // Intentionally not handling errors yet. TODO
+            // Intentionally not prop or handling errors yet. TODO
             let _ = self.rolling_tx_count().await;
             let _ = self.rolling_miner_node_versions().await;
 
