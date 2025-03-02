@@ -85,6 +85,7 @@ impl Analyzer {
 
 impl Analyzer {
     async fn rolling_tx_count(&self) -> Result<(), sqlx::Error> {
+        // TODO break this function out into it's own service and modularize analysis performed
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -134,12 +135,22 @@ impl Analyzer {
         .execute(&self.pg_pool)
         .await?;
 
+        let current_hour = now - (now % 3600);
+        let cutoff = current_hour - (24 * 3600);
         let mut effective_count_per_hour = HashMap::<u64, u64>::new();
-        for entry in self.cache.per_second.iter() {
-            let (second, second_metrics) = (entry.key(), entry.value());
-            let hour = second - (second % 3600);
-            *effective_count_per_hour.entry(hour).or_insert(0) += second_metrics.effective_transaction_count;
-        }
+
+        self.cache
+            .per_second
+            .iter()
+            .map(|entry| {
+                let second = *entry.key();
+                let hour = second - (second % 3600);
+                (hour, entry.value().effective_transaction_count)
+            })
+            .filter(|(hour, _)| *hour >= cutoff)
+            .for_each(|(hour, count)| {
+                *effective_count_per_hour.entry(hour).or_insert(0) += count;
+            });
 
         sqlx::query(
             r#"
@@ -161,6 +172,7 @@ impl Analyzer {
     }
 
     async fn rolling_miner_node_versions(&self) -> Result<(), BlockMinerProcessError> {
+        // TODO break this function out into it's own service and modularize analysis performed
         let mut version_counts = HashMap::<String, u64>::new();
 
         for block in &self.cache.blocks {
