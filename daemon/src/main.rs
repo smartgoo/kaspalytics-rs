@@ -4,6 +4,7 @@ mod dag;
 
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
+use kaspalytics_utils::database;
 use log::debug;
 use std::sync::Arc;
 
@@ -31,6 +32,9 @@ async fn main() {
 
     kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
 
+    let db = database::Database::new(config.db_uri.clone());
+    let pg_pool = db.open_connection_pool(5u32).await.unwrap();
+
     let cache = Arc::new(cache::Cache::default());
 
     let listener_cache = cache.clone();
@@ -42,7 +46,7 @@ async fn main() {
 
     let analyzer_cache = cache.clone();
     let analyzer_handle = tokio::spawn(async move {
-        analyzer::Analyzer::new(analyzer_cache).run().await;
+        analyzer::Analyzer::new(analyzer_cache, pg_pool).run().await;
     });
 
     let _ = tokio::join!(listener_handle, analyzer_handle);

@@ -2592,6 +2592,7 @@ dependencies = [
 name = "kaspalyticsd"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dashmap",
  "env_logger",
  "kaspa-hashes",
@@ -2599,6 +2600,9 @@ dependencies = [
  "kaspa-wrpc-client",
  "kaspalytics-utils",
  "log",
+ "serde",
+ "serde_json",
+ "sqlx",
  "tokio",
 ]
 

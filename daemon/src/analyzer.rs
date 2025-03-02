@@ -1,6 +1,8 @@
 use crate::cache::Cache;
+use chrono::Utc;
 use kaspa_hashes::Hash;
-use log::info;
+use log::{debug, info};
+use sqlx::{self, PgPool};
 use std::collections::HashMap;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -50,11 +52,12 @@ impl BlockMiner {
 
 pub struct Analyzer {
     cache: Arc<Cache>,
+    pg_pool: PgPool,
 }
 
 impl Analyzer {
-    pub fn new(cache: Arc<Cache>) -> Self {
-        Analyzer { cache }
+    pub fn new(cache: Arc<Cache>, pg_pool: PgPool) -> Self {
+        Analyzer { cache, pg_pool }
     }
 }
 
@@ -67,7 +70,7 @@ impl Analyzer {
 
         let threshold = now - 86400;
 
-        let effective_total: u64 = self
+        let effective_count: u64 = self
             .cache
             .per_second
             .iter()
@@ -75,7 +78,7 @@ impl Analyzer {
             .map(|entry| entry.effective_transaction_count)
             .sum();
 
-        let total: u64 = self
+        let count: u64 = self
             .cache
             .per_second
             .iter()
@@ -83,7 +86,35 @@ impl Analyzer {
             .map(|entry| entry.transaction_count)
             .sum();
 
-        info!("txs: {} | effective txs: {}", total, effective_total);
+        sqlx::query(
+            r#"
+            INSERT INTO key_value ("key", "value", updated_timestamp)
+            VALUES('transaction_count_24h', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value" = $1, updated_timestamp = $2
+            "#
+        )
+        .bind(count as i64)
+        .bind(Utc::now())
+        .execute(&self.pg_pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            r#"
+            INSERT INTO key_value ("key", "value", updated_timestamp)
+            VALUES('effective_transaction_count_24h', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value" = $1, updated_timestamp = $2
+            "#
+        )
+        .bind(effective_count as i64)
+        .bind(Utc::now())
+        .execute(&self.pg_pool)
+        .await
+        .unwrap();
+
+        debug!("txs: {} | effective txs: {}", count, effective_count);
     }
 
     async fn rolling_miner_node_versions(&self) {
@@ -108,14 +139,27 @@ impl Analyzer {
                 (version, share)
             })
             .collect();
+        
+        sqlx::query(
+            r#"INSERT INTO key_value ("key", "value", updated_timestamp)
+            VALUES('miner_node_versions_1h', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value" = $1, updated_timestamp = $2
+            "#
+        )
+        .bind(serde_json::to_string(&version_share).unwrap())
+        .bind(Utc::now())
+        .execute(&self.pg_pool)
+        .await
+        .unwrap();
 
-        info!("Version share: {:?}", version_share);
+        debug!("Version share: {:?}", version_share);
     }
 
     pub async fn run(&self) {
-        // TODO this whole FN needs refactor. Probably need to separate out, use channels, etc.
+        // TODO refactor entire struct
         loop {
-            // Skip if cache is not at tip just yet
+            // Skip if cache is at DAG tip
             if !self.cache.synced.load(Ordering::SeqCst) {
                 continue;
             }
@@ -123,6 +167,7 @@ impl Analyzer {
             self.rolling_tx_count().await;
             self.rolling_miner_node_versions().await;
 
+            info!("Analyzer completed, sleeping");
             sleep(Duration::from_secs(30)).await;
         }
     }

@@ -7,6 +7,7 @@ repository.workspace = true
 edition.workspace = true
 
 [dependencies]
+chrono.workspace = true
 dashmap.workspace = true
 env_logger.workspace = true
 kaspa-hashes.workspace = true
@@ -14,4 +15,7 @@ kaspa-rpc-core.workspace = true
 kaspa-wrpc-client.workspace = true
 kaspalytics-utils.workspace = true
 log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
 tokio.workspace = true
