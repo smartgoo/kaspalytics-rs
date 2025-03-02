@@ -446,7 +446,7 @@ impl UtxoBasedPipeline {
 
         kaspalytics_utils::email::send_email(
             &self.config,
-            format!("{} | utxo-pipeline completed", &self.config.env),
+            "utxo-pipeline completed".to_string(),
             "".to_string(),
         );
     }

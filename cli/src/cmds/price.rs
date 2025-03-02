@@ -42,7 +42,7 @@ pub async fn get_coin_market_history(config: Config, pg_pool: PgPool) {
 
     kaspalytics_utils::email::send_email(
         &config,
-        format!("{} | coin-market-history completed", config.env),
+        "coin-market-history completed".to_string(),
         "".to_string(),
     );
 }

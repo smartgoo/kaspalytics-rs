@@ -5,7 +5,7 @@ pub fn send_email(config: &Config, subject: String, body: String) {
     let message = Message::builder()
         .from(config.smtp_from.parse().unwrap())
         .to(config.smtp_to.parse().unwrap())
-        .subject(subject)
+        .subject(format!("{} | {}", config.env, subject))
         .body(body)
         .unwrap();
 

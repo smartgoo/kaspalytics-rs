@@ -339,7 +339,7 @@ impl BlockAnalysis {
 
             kaspalytics_utils::email::send_email(
                 &self.config,
-                format!("{} | block-pipeline completed", &self.config.env),
+                "block-pipeline completed".to_string(),
                 format!("{:?}", stats),
             );
         }
@@ -390,7 +390,7 @@ impl BlockAnalysis {
                     );
                     kaspalytics_utils::email::send_email(
                         &config,
-                        format!("{} | kaspalytics-rs alert", config.env),
+                        "block-pipeline alert".to_string(),
                         "Analysis::tx_analysis reached max retries due to database error."
                             .to_string(),
                     );
@@ -401,7 +401,7 @@ impl BlockAnalysis {
                     error!("Analysis::tx_analysis failed with error: {:?}", e);
                     kaspalytics_utils::email::send_email(
                         &config,
-                        format!("{} | kaspalytics-rs alert", config.env),
+                        "block-pipeline alert".to_string(),
                         format!("Analysis::tx_analysis failed with error: {:?}", e),
                     );
                     break;
