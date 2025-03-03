@@ -265,7 +265,7 @@ CREATE TABLE IF NOT EXISTS kas_last_moved_by_age_bucket (
 
 CREATE TABLE IF NOT EXISTS hash_rate (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "timestamp" TIMESTAMP WITH TIME ZONE, -- TODO standardize on with/without timezone
+    "timestamp" TIMESTAMP WITH TIME ZONE,
     hash_rate NUMERIC(40,0) NOT NULL,
     difficulty NUMERIC(40,0) NOT NULL
 );
@@ -274,10 +274,9 @@ CREATE INDEX idx_timestamp ON hash_rate ("timestamp");
 
 -- TODO add "granularity" field to this table (day, minute, etc.)
 -- TODO add constraint on granularity and timestmap
--- TODO standardize on with/without timezone
 CREATE TABLE IF NOT EXISTS coin_market_history (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "timestamp" TIMESTAMP WITHOUT TIME ZONE NOT NULL UNIQUE,
+    "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL UNIQUE,
     symbol CHARACTER(10) NOT NULL,
     price DOUBLE PRECISION NOT NULL,
     market_cap DOUBLE PRECISION NOT NULL,
@@ -288,5 +287,5 @@ CREATE TABLE IF NOT EXISTS key_value (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "key" CHARACTER VARYING NOT NULL UNIQUE,
     "value" CHARACTER VARYING NOT NULL,
-    updated_timestamp TIMESTAMP WITHOUT TIME ZONE NOT NULL
+    updated_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
