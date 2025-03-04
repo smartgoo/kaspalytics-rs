@@ -114,40 +114,39 @@ impl Cache {
     pub fn prune(&self) {
         // TODO refactor this
 
-        // Prune blocks & transactions
-        let mut candidate_blocks: Vec<Hash> = vec![];
-
         // TODO better handling of window size
         // Currently targeting 1 hour of blocks
         let window = 3600 * 1000;
         let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
 
+        // Prune blocks
+        let mut candidate_blocks: Vec<Hash> = vec![];
         for block in self.blocks.iter() {
             if block.timestamp < pruning_timestamp {
                 candidate_blocks.push(*block.key());
             }
         }
 
+        let mut candidate_txs = Vec::new();
         for hash in candidate_blocks {
             // Remove block from blocks cache
             let (_, removed_block) = self.blocks.remove(&hash).unwrap();
 
             // Remove removed block from CachedTransaction.blocks
-            // Remove transactions whose blocks are no longer in cache
+            // Capture transactions that have no blocks in cache
             for tx in removed_block.transactions {
                 if let Some(mut cached_tx) = self.transactions.get_mut(&tx) {
-                    if let Some(idx) = cached_tx
-                        .blocks
-                        .iter()
-                        .position(|&block_hash| block_hash == hash)
-                    {
-                        cached_tx.blocks.remove(idx);
+                    cached_tx.blocks.retain(|b| *b != hash);
 
-                        if cached_tx.blocks.is_empty() {
-                            self.transactions.remove(&tx);
-                        }
+                    if cached_tx.blocks.is_empty() {
+                        candidate_txs.push(tx);
                     }
                 }
+            }
+
+            // Remove transactions
+            for tx in candidate_txs.iter() {
+                self.transactions.remove(tx);
             }
 
             // Remove block from accepting_block_transaction

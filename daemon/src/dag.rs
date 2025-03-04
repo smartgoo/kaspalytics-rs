@@ -3,7 +3,7 @@ use kaspa_hashes::Hash;
 use kaspa_rpc_core::RpcAcceptedTransactionIds;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::{debug, info};
+use log::info;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -53,9 +53,8 @@ impl DagListener {
                 self.cache
                     .transactions
                     .entry(tx_id)
-                    .or_insert(CacheTransaction::from(tx.clone()))
-                    .blocks
-                    .push(block.header.hash);
+                    .and_modify(|entry| entry.blocks.push(block.header.hash))
+                    .or_insert(CacheTransaction::from(tx.clone()));
 
                 // Increment tx count for given second
                 // TODO try to move to another task
@@ -150,7 +149,7 @@ impl DagListener {
         } = self.rpc_client.get_block_dag_info().await.unwrap();
 
         self.low_hash = Some(pruning_point_hash);
-        debug!("Starting from low_hash {:?}", self.low_hash.unwrap());
+        info!("Starting from low_hash {:?}", self.low_hash.unwrap());
 
         loop {
             let GetBlockDagInfoResponse { tip_hashes, .. } =
