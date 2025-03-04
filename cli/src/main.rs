@@ -11,6 +11,8 @@ use log::{debug, info};
 use std::sync::Arc;
 use std::time::Instant;
 
+const REQUIRED_CLI_SOFT_FD_LIMIT: u64 = 10 * 1024;
+
 #[tokio::main]
 async fn main() {
     let config = kaspalytics_utils::config::Config::from_env();
@@ -20,6 +22,14 @@ async fn main() {
     Builder::from_env(Env::default().default_filter_or("info"))
         .filter(None, cli.global_args.log_level)
         .init();
+
+    // TODO probably should move this to only the CLI commands that require it (block and utxo pipelines)
+    kaspa_utils::fd_budget::try_set_fd_limit(REQUIRED_CLI_SOFT_FD_LIMIT).unwrap_or_else(|_| {
+        panic!(
+            "kaspalytics-cli requires {} fd limit",
+            REQUIRED_CLI_SOFT_FD_LIMIT
+        )
+    });
 
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
@@ -71,7 +81,7 @@ async fn main() {
 
     // Run submitted CLI command
     let start = Instant::now();
-    debug!("{:?} command starting...", cli.command);
+    info!("{:?} command starting...", cli.command);
     match cli.command {
         Commands::BlockPipeline {
             start_time: _,

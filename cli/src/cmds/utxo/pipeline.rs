@@ -332,7 +332,7 @@ impl UtxoBasedPipeline {
                     .unwrap()
                     .to_path_buf(),
             )
-            .with_files_limit(1024) // TODO files limit?
+            .with_files_limit(kaspa_utils::fd_budget::limit()) // TODO files limit?
             .build_readonly()
             .unwrap();
         let utxo_tip_block = self.get_utxo_tip(db.clone());
