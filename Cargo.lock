@@ -1980,7 +1980,7 @@ dependencies = [
 [[package]]
 name = "kaspa-addresses"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "borsh",
  "js-sys",
@@ -1995,7 +1995,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "arc-swap",
  "async-channel 2.3.1",
@@ -2036,7 +2036,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-client"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "ahash 0.8.11",
  "cfg-if",
@@ -2065,7 +2065,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-core"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -2101,7 +2101,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-notify"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "async-channel 2.3.1",
  "cfg-if",
@@ -2121,7 +2121,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-wasm"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "cfg-if",
  "faster-hex",
@@ -2146,7 +2146,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensusmanager"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "duration-string",
  "futures",
@@ -2166,7 +2166,7 @@ dependencies = [
 [[package]]
 name = "kaspa-core"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "cfg-if",
  "ctrlc",
@@ -2185,7 +2185,7 @@ dependencies = [
 [[package]]
 name = "kaspa-database"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "bincode",
  "enum-primitive-derive",
@@ -2208,7 +2208,7 @@ dependencies = [
 [[package]]
 name = "kaspa-hashes"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "blake2b_simd",
  "borsh",
@@ -2227,7 +2227,7 @@ dependencies = [
 [[package]]
 name = "kaspa-index-core"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2247,7 +2247,7 @@ dependencies = [
 [[package]]
 name = "kaspa-math"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "borsh",
  "faster-hex",
@@ -2267,7 +2267,7 @@ dependencies = [
 [[package]]
 name = "kaspa-merkle"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "kaspa-hashes",
 ]
@@ -2275,7 +2275,7 @@ dependencies = [
 [[package]]
 name = "kaspa-mining-errors"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "kaspa-consensus-core",
  "thiserror 1.0.69",
@@ -2284,7 +2284,7 @@ dependencies = [
 [[package]]
 name = "kaspa-muhash"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "kaspa-hashes",
  "kaspa-math",
@@ -2295,7 +2295,7 @@ dependencies = [
 [[package]]
 name = "kaspa-notify"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2327,7 +2327,7 @@ dependencies = [
 [[package]]
 name = "kaspa-pow"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "js-sys",
  "kaspa-consensus-client",
@@ -2343,7 +2343,7 @@ dependencies = [
 [[package]]
 name = "kaspa-rpc-core"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2385,7 +2385,7 @@ dependencies = [
 [[package]]
 name = "kaspa-rpc-macros"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro-error",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "kaspa-txscript"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "blake2b_simd",
  "borsh",
@@ -2429,7 +2429,7 @@ dependencies = [
 [[package]]
 name = "kaspa-txscript-errors"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "secp256k1",
  "thiserror 1.0.69",
@@ -2438,7 +2438,7 @@ dependencies = [
 [[package]]
 name = "kaspa-utils"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "arc-swap",
  "async-channel 2.3.1",
@@ -2468,7 +2468,7 @@ dependencies = [
 [[package]]
 name = "kaspa-utxoindex"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "futures",
  "kaspa-consensus-core",
@@ -2488,7 +2488,7 @@ dependencies = [
 [[package]]
 name = "kaspa-wasm-core"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "faster-hex",
  "hexplay",
@@ -2500,7 +2500,7 @@ dependencies = [
 [[package]]
 name = "kaspa-wrpc-client"
 version = "0.16.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#794dbc3e6cc32477efd8b0794196f24671bce6e1"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?branch=kaspalytics-dev#49dd792eab39dad9351ee5516a235ecadabf8db7"
 dependencies = [
  "async-std",
  "async-trait",

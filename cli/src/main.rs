@@ -15,9 +15,9 @@ const REQUIRED_CLI_SOFT_FD_LIMIT: u64 = 10 * 1024;
 
 #[tokio::main]
 async fn main() {
-    let config = kaspalytics_utils::config::Config::from_env();
-
     let cli = Cli::parse();
+
+    let config = kaspalytics_utils::config::Config::from_env();
 
     Builder::from_env(Env::default().default_filter_or("info"))
         .filter(None, cli.global_args.log_level)
@@ -30,6 +30,19 @@ async fn main() {
             REQUIRED_CLI_SOFT_FD_LIMIT
         )
     });
+
+    // Open PG connection pool
+    let db = database::Database::new(config.db_uri.clone());
+    let pg_pool = db
+        .open_connection_pool(config.db_max_pool_size)
+        .await
+        .unwrap();
+
+    // Insert static records to PG DB
+    database::initialize::insert_enums(&pg_pool).await.unwrap();
+
+    // Ensure DB NetworkId matches NetworkId from .env file
+    database::initialize::validate_db_network(&config, &pg_pool).await;
 
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
@@ -51,33 +64,6 @@ async fn main() {
     //  - So this is an assumption that RPC node is same node we are reading DB of
     //  - TODO find better way to validate these via db as opposed to RPC
     kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
-
-    // Open PG connection pool
-    let db = database::Database::new(config.db_uri.clone());
-    let pg_pool = db
-        .open_connection_pool(config.db_max_pool_size)
-        .await
-        .unwrap();
-
-    // Insert static records to PG DB
-    database::initialize::insert_enums(&pg_pool).await.unwrap();
-
-    // Ensure DB NetworkId matches NetworkId from .env file
-    let db_network_id = database::initialize::get_meta_network_id(&pg_pool)
-        .await
-        .unwrap();
-    if db_network_id.is_none() {
-        // First time running with this PG database, save network
-        database::initialize::insert_network_meta(&pg_pool, config.network_id)
-            .await
-            .unwrap();
-    } else {
-        // PG database has been used in the past
-        // Validate network/suffix saved in db matches NetworkId supplied via CLI
-        if config.network_id != db_network_id.unwrap() {
-            panic!("PG database network does not match network supplied via CLI")
-        }
-    }
 
     // Run submitted CLI command
     let start = Instant::now();

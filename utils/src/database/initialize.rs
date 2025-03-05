@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::database;
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use sqlx::postgres::PgPool;
@@ -69,4 +70,26 @@ pub async fn insert_network_meta(pool: &PgPool, network_id: NetworkId) -> Result
     }
 
     Ok(())
+}
+
+pub async fn validate_db_network(config: &Config, pg_pool: &PgPool) {
+    let db_network_id = database::initialize::get_meta_network_id(pg_pool)
+        .await
+        .unwrap();
+
+    match db_network_id {
+        Some(network_id) => {
+            // PG database has been used in the past
+            // Validate network/suffix saved in db matches NetworkId supplied via CLI
+            if config.network_id != network_id {
+                panic!("PG database network does not match network supplied via CLI")
+            }
+        }
+        None => {
+            // First time running with this PG database, save network
+            database::initialize::insert_network_meta(pg_pool, config.network_id)
+                .await
+                .unwrap();
+        }
+    }
 }
