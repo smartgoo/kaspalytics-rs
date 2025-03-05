@@ -50,7 +50,6 @@ struct UtxoSnapshotHeader {
     percentile_analysis_completed: Option<bool>,
     kas_last_moved_by_age_bucket_complete: Option<bool>,
     distribution_by_kas_bucket_complete: Option<bool>,
-    distribution_by_usd_bucket_complete: Option<bool>,
 }
 
 impl UtxoSnapshotHeader {
@@ -100,7 +99,6 @@ impl UtxoSnapshotHeader {
             percentile_analysis_completed: Some(false),
             kas_last_moved_by_age_bucket_complete: Some(false),
             distribution_by_kas_bucket_complete: Some(false),
-            distribution_by_usd_bucket_complete: Some(false),
         }
     }
 

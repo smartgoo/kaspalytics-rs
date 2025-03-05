@@ -111,7 +111,6 @@ CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     unique_address_count_non_meaningful INTEGER,
     sompi_held_by_non_meaningful_addresses BIGINT,
     distribution_by_kas_bucket_complete BOOLEAN,
-    distribution_by_usd_bucket_complete BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS daa_snapshot (
