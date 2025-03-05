@@ -122,7 +122,9 @@ impl BlockAnalysis {
         let mut tx_iter_order = VecDeque::<Vec<TransactionId>>::new();
 
         // Iterate chain blocks
-        for (chain_block_index, (_, chain_block_hash)) in self.chain_blocks.iter().skip(1).enumerate() {
+        for (chain_block_index, (_, chain_block_hash)) in
+            self.chain_blocks.iter().skip(1).enumerate()
+        {
             if chain_block_index % 1000 == 0 {
                 debug!("tx_analysis processed {} chain blocks", chain_block_index);
             }
