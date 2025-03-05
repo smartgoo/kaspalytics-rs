@@ -98,7 +98,6 @@ CREATE TABLE IF NOT EXISTS block_summary (
 
 CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    snapshot_complete BOOLEAN,
     block VARCHAR(64) NOT NULL,
     block_timestamp TIMESTAMP WITH TIME ZONE,
     daa_score BIGINT NOT NULL,
