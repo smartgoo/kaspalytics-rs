@@ -44,6 +44,7 @@ async fn main() {
     // Ensure DB NetworkId matches NetworkId from .env file
     database::initialize::validate_db_network(&config, &pg_pool).await;
 
+    // TODO probably should move to only cmds that use rpc client
     let rpc_client = Arc::new(
         KaspaRpcClient::new(
             WrpcEncoding::Borsh,

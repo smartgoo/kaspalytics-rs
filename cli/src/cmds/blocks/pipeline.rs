@@ -13,7 +13,7 @@ use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
 use log::{debug, error};
 use sqlx::PgPool;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::time::sleep;
 
@@ -64,26 +64,7 @@ impl BlockAnalysis {
         }
     }
 
-    // pub fn new_from_low_hash(storage: Arc<ConsensusStorage>, network_id: NetworkId, low_hash: Hash) -> Self {
-    //     // TODO ensure is chain block. Else walk back until we get one
-    //     let block_header = storage
-    //         .headers_store
-    //         .get_header(low_hash)
-    //         .unwrap();
-
-    //     let window_start_time = block_header.timestamp;
-    //     let window_end_time = Utc::now().timestamp_millis() as u64;
-    //     let stats = Stats::new(window_start_time, window_end_time);
-
-    //     Self {
-    //         storage,
-    //         network_id,
-    //         window_start_time: window_start_time,
-    //         window_end_time: window_end_time,
-    //         chain_blocks: BTreeMap::<u64, Hash>::new(),
-    //         stats,
-    //     }
-    // }
+    // pub fn new_from_low_hash()
 }
 
 impl BlockAnalysis {
@@ -137,22 +118,22 @@ impl BlockAnalysis {
 
 impl BlockAnalysis {
     fn tx_analysis(&mut self) -> Result<(), StoreError> {
-        let mut transaction_cache = std::collections::HashSet::<TransactionId>::new();
-        let mut tx_iter_order = std::collections::VecDeque::<Vec<TransactionId>>::new();
+        let mut transaction_cache = HashSet::<TransactionId>::new();
+        let mut tx_iter_order = VecDeque::<Vec<TransactionId>>::new();
 
         // Iterate chain blocks
-        for (i, (_, hash)) in self.chain_blocks.iter().skip(1).enumerate() {
-            if i % 100 == 0 {
-                debug!("tx_analysis processed {} chain blocks", i);
+        for (chain_block_index, (_, chain_block_hash)) in self.chain_blocks.iter().skip(1).enumerate() {
+            if chain_block_index % 1000 == 0 {
+                debug!("tx_analysis processed {} chain blocks", chain_block_index);
             }
 
-            let mut this_chain_blocks_merged_transactions = Vec::<TransactionId>::new();
+            let mut this_chain_blocks_accepted_transactions = Vec::<TransactionId>::new();
 
             // Get acceptance data
-            let acceptances = self.storage.acceptance_data_store.get(*hash)?;
+            let acceptances = self.storage.acceptance_data_store.get(*chain_block_hash)?;
 
             // Load UTXOs from utxo diffs store
-            let utxos = self.get_utxos_for_chain_block(*hash)?;
+            let utxos = self.get_utxos_for_chain_block(*chain_block_hash)?;
 
             // Iterate blocks in current chain block's mergeset
             for mergeset_data in acceptances.iter() {
@@ -160,10 +141,12 @@ impl BlockAnalysis {
                     .storage
                     .headers_store
                     .get_header(mergeset_data.block_hash)?;
+
                 let transactions = self
                     .storage
                     .block_transactions_store
                     .get(mergeset_data.block_hash)?;
+
                 let is_chain_block = match self
                     .storage
                     .selected_chain_store
@@ -291,7 +274,7 @@ impl BlockAnalysis {
                         .and_modify(|stats| stats.fees.push(tx_fee));
 
                     transaction_cache.insert(tx.id());
-                    this_chain_blocks_merged_transactions.push(tx.id());
+                    this_chain_blocks_accepted_transactions.push(tx.id());
                 }
 
                 self.stats.entry(block_time_s).and_modify(|stats| {
@@ -301,9 +284,9 @@ impl BlockAnalysis {
                 });
             }
 
-            tx_iter_order.push_back(this_chain_blocks_merged_transactions);
+            tx_iter_order.push_back(this_chain_blocks_accepted_transactions);
 
-            if i >= 2700 {
+            if chain_block_index >= 2700 {
                 if let Some(tx_ids) = tx_iter_order.pop_front() {
                     for tx_id in tx_ids {
                         transaction_cache.remove(&tx_id);
@@ -348,13 +331,11 @@ impl BlockAnalysis {
     }
 
     pub async fn run(config: Config, pool: PgPool) {
-        // Sporadically (once a week-ish) a RocksDB error will be raised:
-        // "Error rocksdb error IO error: No such file or directory: While open a file for random read: rusty-kaspa/kaspa-mainnet/datadir/consensus/consensus-002/1504776.sst: No such file or directory while getting block cb0c56da0c4c7948c5bf29c0f8eddbde11fc02df7641a2f27053c702bb96aef5 from database"
-        // I have a hunch that is because this program is running while node pruning is in progress
-        // And that during/after pruning, RocksDB is performing compaction
-        // The read_only connection is supposed to create a snapshot (I think?) and prevent this (again, or so I think)...
+        // Sporadically, a RocksDB error will be raised about missing SST file
+        // The read_only conn creates a point in time view of database
+        // But I think SST files are still being deleted by primary
+        // This might be mostly(?) alleviated now by setting FD budget higher than SST file count
         // The below loop is an attempt to catch this error and retry every X minutes for up to X retry attempts
-        // Let's see how this goes...
         let mut retries = 0;
         let max_retries = 120;
         let retry_delay = std::time::Duration::from_secs(60);
