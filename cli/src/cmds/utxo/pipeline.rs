@@ -31,6 +31,8 @@ struct UtxoSetLoadResults {
 
     // Count of addresses that hold a dust balance
     dust_address_count: u64,
+
+    pub_key_format_errors: u64,
 }
 
 #[allow(dead_code)]
@@ -250,8 +252,14 @@ impl UtxoBasedPipeline {
                 ScriptPublicKeyBucket(key[..key.len() - TRANSACTION_OUTPOINT_KEY_SIZE].to_vec());
             let script_public_key = ScriptPublicKey::from(script_public_key_bucket);
 
-            let address =
-                extract_script_pub_key_address(&script_public_key, Prefix::Mainnet).unwrap();
+            let address = match extract_script_pub_key_address(&script_public_key, Prefix::Mainnet)
+            {
+                Ok(addr) => addr,
+                Err(_) => {
+                    results.pub_key_format_errors += 1;
+                    continue;
+                }
+            };
 
             *results.address_balances.entry(address).or_insert(0) += utxo.amount;
         }
