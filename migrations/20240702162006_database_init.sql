@@ -12,19 +12,7 @@ CREATE TABLE IF NOT EXISTS transaction_summary (
     date date UNIQUE,
     coinbase_tx_qty INTEGER,
     tx_qty INTEGER,
-    unaccepted_tx_qty INTEGER,
-    input_amt_total NUMERIC,
-    input_amt_per_tx_mean DOUBLE PRECISION,
-    input_amt_per_tx_median DOUBLE PRECISION,
-    input_amt_per_tx_min NUMERIC,
-    input_amt_per_tx_max NUMERIC,
     input_qty_total INTEGER,
-    output_amt_total_coinbase NUMERIC,
-    output_amt_total NUMERIC,
-    output_amt_per_tx_mean DOUBLE PRECISION,
-    output_amt_per_tx_median DOUBLE PRECISION,
-    output_amt_per_tx_min NUMERIC,
-    output_amt_per_tx_max NUMERIC,
     output_qty_total_coinbase INTEGER,
     output_qty_total INTEGER,
     fees_total NUMERIC,
@@ -40,12 +28,7 @@ CREATE TABLE IF NOT EXISTS transaction_summary (
     tx_per_second_mean DOUBLE PRECISION,
     tx_per_second_median DOUBLE PRECISION,
     tx_per_second_min DOUBLE PRECISION,
-    tx_per_second_max DOUBLE PRECISION,
-    output_amt_total_change_adjusted NUMERIC,
-    output_amt_per_tx_mean_change_adjusted NUMERIC,
-    output_amt_per_tx_median_change_adjusted NUMERIC,
-    output_amt_per_tx_min_change_adjusted NUMERIC,
-    output_amt_per_tx_max_change_adjusted NUMERIC
+    tx_per_second_max DOUBLE PRECISION
 );
 
 CREATE TABLE IF NOT EXISTS block_summary (
