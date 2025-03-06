@@ -26,9 +26,6 @@ pub struct Stats {
     // blue_block_interval - mean, median, min, max TODO-FUTURE
     // blue_blocks_per_second - mean, median, min, max TODO-FUTURE
 
-    // Accepted transactions per accepting (SPC) block
-    pub transaction_count_per_spc_block: Vec<u64>,
-
     // Accepted transactions per block
     pub transaction_count_per_block: Vec<u64>,
 
@@ -63,7 +60,6 @@ impl Stats {
             granularity,
             epoch_second,
             spc_block_count: 0,
-            transaction_count_per_spc_block: Vec::<u64>::new(),
             transaction_count_per_block: Vec::<u64>::new(),
             coinbase_tx_count: 0,
             regular_tx_count: 0,
@@ -162,9 +158,6 @@ impl Stats {
                     new_stats.spc_block_count += per_second_stats.spc_block_count;
 
                     new_stats
-                        .transaction_count_per_spc_block
-                        .extend(per_second_stats.transaction_count_per_spc_block.clone());
-                    new_stats
                         .transaction_count_per_block
                         .extend(per_second_stats.transaction_count_per_block.clone());
 
@@ -219,27 +212,21 @@ impl Stats {
             (
                 date, 
                 spc_blocks_total, 
-                txs_per_accepting_block_mean, txs_per_accepting_block_median, txs_per_accepting_block_min, txs_per_accepting_block_max,
                 txs_per_block_mean, txs_per_block_median, txs_per_block_min, txs_per_block_max
             )
             VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ($1, $2, $3, $4, $5, $6)
         "#;
 
         let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
             .unwrap()
             .date_naive();
 
-        let tpspc = self.vec_stats(&self.transaction_count_per_spc_block);
         let tpb = self.vec_stats(&self.transaction_count_per_block);
 
         sqlx::query(sql)
             .bind(date)
             .bind(self.spc_block_count as i64)
-            .bind(tpspc.1)
-            .bind(tpspc.2)
-            .bind(tpspc.3 as i64)
-            .bind(tpspc.4 as i64)
             .bind(tpb.1)
             .bind(tpb.2)
             .bind(tpb.3 as i64)
@@ -303,7 +290,6 @@ impl Stats {
 
 impl fmt::Debug for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tpspc = self.vec_stats(&self.transaction_count_per_spc_block);
         let tpb = self.vec_stats(&self.transaction_count_per_block);
         let fees = self.vec_stats(&self.fees);
 
@@ -311,10 +297,6 @@ impl fmt::Debug for Stats {
             .field("epoch_second", &self.epoch_second)
             .field("granularity", &self.granularity)
             .field("spc_block_count", &self.spc_block_count)
-            .field("transaction_count_per_spc_block - mean", &tpspc.1)
-            .field("transaction_count_per_spc_block - median", &tpspc.2)
-            .field("transaction_count_per_spc_block - min", &tpspc.3)
-            .field("transaction_count_per_spc_block - max", &tpspc.4)
             .field("transaction_count_per_block - mean", &tpb.1)
             .field("transaction_count_per_block - median", &tpb.2)
             .field("transaction_count_per_block - min", &tpb.3)
