@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     circulating_supply DOUBLE PRECISION,
     kas_last_moved_by_age_bucket_complete BOOLEAN,
     unique_address_count_meaningful INTEGER,
-    unique_address_count_non_meaningful INTEGER,
+    unique_address_count_dust INTEGER,
     sompi_held_by_non_meaningful_addresses BIGINT,
     distribution_by_kas_bucket_complete BOOLEAN
 );
