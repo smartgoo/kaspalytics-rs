@@ -1,4 +1,3 @@
--- Add migration script here
 CREATE TABLE IF NOT EXISTS meta (
     id SERIAL PRIMARY KEY,
     key VARCHAR(50) UNIQUE,
