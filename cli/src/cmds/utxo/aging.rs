@@ -4,7 +4,6 @@ use kaspa_utxoindex::model::CompactUtxoEntry;
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::prelude::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::debug;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;
@@ -35,18 +34,18 @@ fn diff_in_full_months(start: DateTime<Utc>, end: DateTime<Utc>) -> i32 {
 
 #[derive(Debug, Default)]
 struct Data {
-    kas_lt_1d: u64,
-    kas_1d_to_1w: u64,
-    kas_1w_to_1m: u64,
-    kas_1m_to_3m: u64,
-    kas_3m_to_6m: u64,
-    kas_6m_to_1y: u64,
-    kas_1y_to_2y: u64,
-    kas_2y_to_3y: u64,
-    kas_3y_to_5y: u64,
-    kas_5y_to_7y: u64,
-    kas_7y_to_10y: u64,
-    kas_gt_10y: u64,
+    sompi_lt_1d: u64,
+    sompi_1d_to_1w: u64,
+    sompi_1w_to_1m: u64,
+    sompi_1m_to_3m: u64,
+    sompi_3m_to_6m: u64,
+    sompi_6m_to_1y: u64,
+    sompi_1y_to_2y: u64,
+    sompi_2y_to_3y: u64,
+    sompi_3y_to_5y: u64,
+    sompi_5y_to_7y: u64,
+    sompi_7y_to_10y: u64,
+    sompi_gt_10y: u64,
 
     cs_percent_lt_1d: Decimal,
     cs_percent_1d_to_1w: Decimal,
@@ -67,18 +66,18 @@ impl Data {
         let cs = Decimal::from_u64(circulating_supply).unwrap();
         let m = Decimal::new(100i64, 0);
 
-        self.cs_percent_lt_1d = (Decimal::from_u64(self.kas_lt_1d).unwrap() / cs) * m;
-        self.cs_percent_1d_to_1w = (Decimal::from_u64(self.kas_1d_to_1w).unwrap() / cs) * m;
-        self.cs_percent_1w_to_1m = (Decimal::from_u64(self.kas_1w_to_1m).unwrap() / cs) * m;
-        self.cs_percent_1m_to_3m = (Decimal::from_u64(self.kas_1m_to_3m).unwrap() / cs) * m;
-        self.cs_percent_3m_to_6m = (Decimal::from_u64(self.kas_3m_to_6m).unwrap() / cs) * m;
-        self.cs_percent_6m_to_1y = (Decimal::from_u64(self.kas_6m_to_1y).unwrap() / cs) * m;
-        self.cs_percent_1y_to_2y = (Decimal::from_u64(self.kas_1y_to_2y).unwrap() / cs) * m;
-        self.cs_percent_2y_to_3y = (Decimal::from_u64(self.kas_2y_to_3y).unwrap() / cs) * m;
-        self.cs_percent_3y_to_5y = (Decimal::from_u64(self.kas_3y_to_5y).unwrap() / cs) * m;
-        self.cs_percent_5y_to_7y = (Decimal::from_u64(self.kas_5y_to_7y).unwrap() / cs) * m;
-        self.cs_percent_7y_to_10y = (Decimal::from_u64(self.kas_7y_to_10y).unwrap() / cs) * m;
-        self.cs_percent_gt_10y = (Decimal::from_u64(self.kas_gt_10y).unwrap() / cs) * m;
+        self.cs_percent_lt_1d = (Decimal::from_u64(self.sompi_lt_1d).unwrap() / cs) * m;
+        self.cs_percent_1d_to_1w = (Decimal::from_u64(self.sompi_1d_to_1w).unwrap() / cs) * m;
+        self.cs_percent_1w_to_1m = (Decimal::from_u64(self.sompi_1w_to_1m).unwrap() / cs) * m;
+        self.cs_percent_1m_to_3m = (Decimal::from_u64(self.sompi_1m_to_3m).unwrap() / cs) * m;
+        self.cs_percent_3m_to_6m = (Decimal::from_u64(self.sompi_3m_to_6m).unwrap() / cs) * m;
+        self.cs_percent_6m_to_1y = (Decimal::from_u64(self.sompi_6m_to_1y).unwrap() / cs) * m;
+        self.cs_percent_1y_to_2y = (Decimal::from_u64(self.sompi_1y_to_2y).unwrap() / cs) * m;
+        self.cs_percent_2y_to_3y = (Decimal::from_u64(self.sompi_2y_to_3y).unwrap() / cs) * m;
+        self.cs_percent_3y_to_5y = (Decimal::from_u64(self.sompi_3y_to_5y).unwrap() / cs) * m;
+        self.cs_percent_5y_to_7y = (Decimal::from_u64(self.sompi_5y_to_7y).unwrap() / cs) * m;
+        self.cs_percent_7y_to_10y = (Decimal::from_u64(self.sompi_7y_to_10y).unwrap() / cs) * m;
+        self.cs_percent_gt_10y = (Decimal::from_u64(self.sompi_gt_10y).unwrap() / cs) * m;
     }
 }
 
@@ -138,11 +137,11 @@ impl UtxoAgeAnalysis {
 
             if age_seconds < 86400 {
                 // Less than 1 day old
-                self.data.kas_lt_1d += utxo.amount;
+                self.data.sompi_lt_1d += utxo.amount;
                 continue;
             } else if age_seconds < 604800 {
                 // 1 day to 1 week old
-                self.data.kas_1d_to_1w += utxo.amount;
+                self.data.sompi_1d_to_1w += utxo.amount;
                 continue;
             }
 
@@ -152,39 +151,39 @@ impl UtxoAgeAnalysis {
 
             if age_months == 0 {
                 // 1 Week to 1 Month Old
-                self.data.kas_1w_to_1m += utxo.amount;
+                self.data.sompi_1w_to_1m += utxo.amount;
                 continue;
             } else if age_months < 3 {
                 // 1 Month to 3 Months Old
-                self.data.kas_1m_to_3m += utxo.amount;
+                self.data.sompi_1m_to_3m += utxo.amount;
                 continue;
             } else if age_months < 6 {
                 // 3 Months to 6 Months Ago
-                self.data.kas_3m_to_6m += utxo.amount;
+                self.data.sompi_3m_to_6m += utxo.amount;
                 continue;
             } else if age_months < 12 {
                 // 6 Months to 12 Months Ago
-                self.data.kas_6m_to_1y += utxo.amount;
+                self.data.sompi_6m_to_1y += utxo.amount;
                 continue;
             } else if age_months < 24 {
                 // 1 Year to 2 Years Ago
-                self.data.kas_1y_to_2y += utxo.amount;
+                self.data.sompi_1y_to_2y += utxo.amount;
                 continue;
             } else if age_months < 36 {
                 // 2 Years to 3 Years Ago
-                self.data.kas_2y_to_3y += utxo.amount;
+                self.data.sompi_2y_to_3y += utxo.amount;
                 continue;
             } else if age_months < 60 {
                 // 3 Years to 5 Years Ago
-                self.data.kas_3y_to_5y += utxo.amount;
+                self.data.sompi_3y_to_5y += utxo.amount;
                 continue;
             } else if age_months < 84 {
                 // 5 Years to 7 Years Ago
-                self.data.kas_5y_to_7y += utxo.amount;
+                self.data.sompi_5y_to_7y += utxo.amount;
                 continue;
             } else if age_months < 120 {
                 // 7 Years to 10 Years Ago
-                self.data.kas_7y_to_10y += utxo.amount;
+                self.data.sompi_7y_to_10y += utxo.amount;
                 continue;
             }
 
@@ -199,18 +198,18 @@ impl UtxoAgeAnalysis {
         let sql = "
             INSERT INTO kas_last_moved_by_age_bucket (
                 utxo_snapshot_id,
-                qty_kas_lt_1d,
-                qty_kas_1d_to_1w,
-                qty_kas_1w_to_1m,
-                qty_kas_1m_to_3m,
-                qty_kas_3m_to_6m,
-                qty_kas_6m_to_1y,
-                qty_kas_1y_to_2y,
-                qty_kas_2y_to_3y,
-                qty_kas_3y_to_5y,
-                qty_kas_5y_to_7y,
-                qty_kas_7y_to_10y,
-                qty_kas_gt_to_10y,
+                sompi_lt_1d,
+                sompi_1d_to_1w,
+                sompi_1w_to_1m,
+                sompi_1m_to_3m,
+                sompi_3m_to_6m,
+                sompi_6m_to_1y,
+                sompi_1y_to_2y,
+                sompi_2y_to_3y,
+                sompi_3y_to_5y,
+                sompi_5y_to_7y,
+                sompi_7y_to_10y,
+                sompi_gt_10y,
                 cs_percent_lt_1d,
                 cs_percent_1d_to_1w,
                 cs_percent_1w_to_1m,
@@ -235,18 +234,18 @@ impl UtxoAgeAnalysis {
 
         sqlx::query(sql)
             .bind(self.utxo_snapshot_id)
-            .bind((self.data.kas_lt_1d as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_1d_to_1w as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_1w_to_1m as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_1m_to_3m as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_3m_to_6m as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_6m_to_1y as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_1y_to_2y as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_2y_to_3y as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_3y_to_5y as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_5y_to_7y as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_7y_to_10y as f64 / SOMPI_PER_KAS as f64) as i64)
-            .bind((self.data.kas_gt_10y as f64 / SOMPI_PER_KAS as f64) as i64)
+            .bind(self.data.sompi_lt_1d as i64)
+            .bind(self.data.sompi_1d_to_1w as i64)
+            .bind(self.data.sompi_1w_to_1m as i64)
+            .bind(self.data.sompi_1m_to_3m as i64)
+            .bind(self.data.sompi_3m_to_6m as i64)
+            .bind(self.data.sompi_6m_to_1y as i64)
+            .bind(self.data.sompi_1y_to_2y as i64)
+            .bind(self.data.sompi_2y_to_3y as i64)
+            .bind(self.data.sompi_3y_to_5y as i64)
+            .bind(self.data.sompi_5y_to_7y as i64)
+            .bind(self.data.sompi_7y_to_10y as i64)
+            .bind(self.data.sompi_gt_10y as i64)
             .bind(self.data.cs_percent_lt_1d)
             .bind(self.data.cs_percent_1d_to_1w)
             .bind(self.data.cs_percent_1w_to_1m)
