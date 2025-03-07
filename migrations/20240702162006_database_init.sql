@@ -60,7 +60,6 @@ CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
 CREATE TABLE IF NOT EXISTS daa_snapshot (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     daa_score BIGINT NOT NULL,
-    block_timestamp_milliseconds BIGINT NOT NULL,
     block_timestamp TIMESTAMP WITH TIME ZONE
 );
 
