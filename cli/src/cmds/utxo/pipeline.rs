@@ -62,7 +62,7 @@ impl UtxoSnapshotHeader {
         kas_price_usd: f64,
         circulating_supply: u64,
     ) -> Self {
-        let dt = chrono::DateTime::from_timestamp((block_timestamp / 1000) as i64, 0).unwrap();
+        let dt = chrono::DateTime::from_timestamp_millis(block_timestamp as i64).unwrap();
 
         let r = sqlx::query(
             r#"
