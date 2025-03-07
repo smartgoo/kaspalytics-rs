@@ -47,15 +47,15 @@ CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     block VARCHAR(64) NOT NULL,
     block_timestamp TIMESTAMP WITH TIME ZONE,
     daa_score BIGINT NOT NULL,
-    utxo_count INTEGER,
-    unique_address_count INTEGER,
+    utxo_count BIGINT,
+    unique_address_count BIGINT,
     kas_price_usd DOUBLE PRECISION,
     percentile_analysis_completed BOOLEAN,
     circulating_supply DOUBLE PRECISION,
     kas_last_moved_by_age_bucket_complete BOOLEAN,
-    unique_address_count_meaningful INTEGER,
-    unique_address_count_dust INTEGER,
-    sompi_held_by_non_meaningful_addresses BIGINT,
+    unique_address_count_meaningful BIGINT,
+    unique_address_count_dust BIGINT,
+    sompi_held_by_dust_addresses BIGINT,
     distribution_by_kas_bucket_complete BOOLEAN
 );
 

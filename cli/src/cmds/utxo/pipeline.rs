@@ -48,7 +48,7 @@ struct UtxoSnapshotHeader {
     unique_address_count: u64,
     unique_address_count_meaningful: u64,
     unique_address_count_dust: u64,
-    sompi_held_by_non_meaningful_addresses: u64,
+    sompi_held_by_dust_addresses: u64,
     percentile_analysis_completed: Option<bool>,
     kas_last_moved_by_age_bucket_complete: Option<bool>,
     distribution_by_kas_bucket_complete: Option<bool>,
@@ -97,7 +97,7 @@ impl UtxoSnapshotHeader {
             unique_address_count: 0,
             unique_address_count_meaningful: 0,
             unique_address_count_dust: 0,
-            sompi_held_by_non_meaningful_addresses: 0,
+            sompi_held_by_dust_addresses: 0,
             percentile_analysis_completed: Some(false),
             kas_last_moved_by_age_bucket_complete: Some(false),
             distribution_by_kas_bucket_complete: Some(false),
@@ -136,10 +136,10 @@ impl UtxoSnapshotHeader {
             .unwrap();
     }
 
-    async fn set_sompi_held_by_non_meaningful_addresses(&self, count: u64) {
+    async fn set_sompi_held_by_dust_addresses(&self, count: u64) {
         let sql = r#"
             UPDATE utxo_snapshot_header
-            SET sompi_held_by_non_meaningful_addresses = $1
+            SET sompi_held_by_dust_addresses = $1
             WHERE id = $2
         "#;
 
@@ -387,7 +387,7 @@ impl UtxoBasedPipeline {
             .set_unique_address_count_dust(utxo_set_results.dust_address_count)
             .await;
         utxo_snapshot_header
-            .set_sompi_held_by_non_meaningful_addresses(utxo_set_results.dust_address_sompi_total)
+            .set_sompi_held_by_dust_addresses(utxo_set_results.dust_address_sompi_total)
             .await;
         utxo_snapshot_header
             .set_unique_address_count_meaningful(address_balances.clone().len() as u64)
