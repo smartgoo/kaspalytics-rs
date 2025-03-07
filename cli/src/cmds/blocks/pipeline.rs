@@ -190,7 +190,7 @@ impl BlockAnalysis {
 
                             self.stats
                                 .entry(block_time_s)
-                                .and_modify(|stats| stats.spc_block_count += 1);
+                                .and_modify(|stats| stats.chain_block_count += 1);
 
                             accepted_transactions_in_this_block += 1;
 

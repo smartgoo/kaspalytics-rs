@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS transaction_summary (
 CREATE TABLE IF NOT EXISTS block_summary (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     date date UNIQUE,
-    spc_blocks_total INTEGER,
+    chain_block_count INTEGER,
     txs_per_block_mean DOUBLE PRECISION,
     txs_per_block_median DOUBLE PRECISION,
     txs_per_block_min DOUBLE PRECISION,

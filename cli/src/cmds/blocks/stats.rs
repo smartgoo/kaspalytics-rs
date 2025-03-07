@@ -17,8 +17,8 @@ pub struct Stats {
 
     // -----------------------------------
     // Block Summary
-    pub spc_block_count: u64,
-    // non_spc_block_count: u64 TODO-FUTURE
+    pub chain_block_count: u64,
+    // non_chain_block_count: u64 TODO-FUTURE
     // blue_block_count: u64 TODO-FUTURE
     // red_block_count: u64 TODO-FUTURE
     // daa_count: u64 TODO-FUTURE
@@ -59,7 +59,7 @@ impl Stats {
         Self {
             granularity,
             epoch_second,
-            spc_block_count: 0,
+            chain_block_count: 0,
             transaction_count_per_block: Vec::<u64>::new(),
             coinbase_tx_count: 0,
             regular_tx_count: 0,
@@ -155,7 +155,7 @@ impl Stats {
             rolled_up
                 .entry(key)
                 .and_modify(|new_stats| {
-                    new_stats.spc_block_count += per_second_stats.spc_block_count;
+                    new_stats.chain_block_count += per_second_stats.chain_block_count;
 
                     new_stats
                         .transaction_count_per_block
@@ -211,7 +211,7 @@ impl Stats {
             INSERT INTO block_summary
             (
                 date, 
-                spc_blocks_total, 
+                chain_block_count, 
                 txs_per_block_mean, txs_per_block_median, txs_per_block_min, txs_per_block_max
             )
             VALUES
@@ -226,7 +226,7 @@ impl Stats {
 
         sqlx::query(sql)
             .bind(date)
-            .bind(self.spc_block_count as i64)
+            .bind(self.chain_block_count as i64)
             .bind(tpb.1)
             .bind(tpb.2)
             .bind(tpb.3 as i64)
@@ -296,7 +296,7 @@ impl fmt::Debug for Stats {
         f.debug_struct("Stats")
             .field("epoch_second", &self.epoch_second)
             .field("granularity", &self.granularity)
-            .field("spc_block_count", &self.spc_block_count)
+            .field("chain_block_count", &self.chain_block_count)
             .field("transaction_count_per_block - mean", &tpb.1)
             .field("transaction_count_per_block - median", &tpb.2)
             .field("transaction_count_per_block - min", &tpb.3)

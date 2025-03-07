@@ -380,7 +380,9 @@ impl UtxoBasedPipeline {
             .set_utxo_count(utxo_set_results.utxo_count)
             .await;
         utxo_snapshot_header
-            .set_unique_address_count(address_balances.clone().len() as u64 + utxo_set_results.dust_address_count)
+            .set_unique_address_count(
+                address_balances.clone().len() as u64 + utxo_set_results.dust_address_count,
+            )
             .await;
         utxo_snapshot_header
             .set_unique_address_count_dust(utxo_set_results.dust_address_count)
