@@ -46,7 +46,6 @@ struct UtxoSnapshotHeader {
     circulating_supply: u64,
     utxo_count: u64,
     unique_address_count: u64,
-    unique_address_count_meaningful: u64,
     unique_address_count_dust: u64,
     sompi_held_by_dust_addresses: u64,
     percentile_analysis_completed: Option<bool>,
@@ -95,7 +94,6 @@ impl UtxoSnapshotHeader {
             circulating_supply,
             utxo_count: 0,
             unique_address_count: 0,
-            unique_address_count_meaningful: 0,
             unique_address_count_dust: 0,
             sompi_held_by_dust_addresses: 0,
             percentile_analysis_completed: Some(false),
@@ -119,7 +117,20 @@ impl UtxoSnapshotHeader {
             .unwrap();
     }
 
-    // async fn set_unique_address_count()
+    async fn set_unique_address_count(&self, count: u64) {
+        let sql = r#"
+            UPDATE utxo_snapshot_header
+            SET unique_address_count = $1
+            WHERE id = $2
+        "#;
+
+        sqlx::query(sql)
+            .bind(count as i64)
+            .bind(self.id)
+            .execute(&self.pg_pool)
+            .await
+            .unwrap();
+    }
 
     async fn set_unique_address_count_dust(&self, count: u64) {
         let sql = r#"
@@ -140,21 +151,6 @@ impl UtxoSnapshotHeader {
         let sql = r#"
             UPDATE utxo_snapshot_header
             SET sompi_held_by_dust_addresses = $1
-            WHERE id = $2
-        "#;
-
-        sqlx::query(sql)
-            .bind(count as i64)
-            .bind(self.id)
-            .execute(&self.pg_pool)
-            .await
-            .unwrap();
-    }
-
-    async fn set_unique_address_count_meaningful(&self, count: u64) {
-        let sql = r#"
-            UPDATE utxo_snapshot_header
-            SET unique_address_count_meaningful = $1
             WHERE id = $2
         "#;
 
@@ -384,13 +380,13 @@ impl UtxoBasedPipeline {
             .set_utxo_count(utxo_set_results.utxo_count)
             .await;
         utxo_snapshot_header
+            .set_unique_address_count(address_balances.clone().len() as u64 + utxo_set_results.dust_address_count)
+            .await;
+        utxo_snapshot_header
             .set_unique_address_count_dust(utxo_set_results.dust_address_count)
             .await;
         utxo_snapshot_header
             .set_sompi_held_by_dust_addresses(utxo_set_results.dust_address_sompi_total)
-            .await;
-        utxo_snapshot_header
-            .set_unique_address_count_meaningful(address_balances.clone().len() as u64)
             .await;
 
         // Store address balances in DB
