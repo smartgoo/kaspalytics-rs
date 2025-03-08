@@ -1,5 +1,4 @@
 use kaspa_addresses::Address;
-use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::debug;
 use rust_decimal::{prelude::FromPrimitive, prelude::ToPrimitive, Decimal};
 use rust_decimal_macros::dec;
@@ -38,12 +37,10 @@ impl Percentile {
 
 #[derive(Debug)]
 struct PercentileData {
-    // TODO switch uom from kas to sompi
     percentile: Percentile,
-    min_kas: Decimal,
-    max_kas: Decimal,
-    average_kas: Decimal,
-    total_kas: Decimal,
+    min_sompi: u64,
+    average_sompi: u64,
+    total_sompi: u64,
     circulating_supply_percent: Decimal,
     address_count: u64,
 }
@@ -52,10 +49,9 @@ impl PercentileData {
     pub fn new(percentile: Percentile) -> Self {
         Self {
             percentile,
-            min_kas: dec!(0),
-            max_kas: dec!(0),
-            average_kas: dec!(0),
-            total_kas: dec!(0),
+            min_sompi: 0,
+            average_sompi: 0,
+            total_sompi: 0,
             circulating_supply_percent: dec!(0),
             address_count: 0,
         }
@@ -102,25 +98,15 @@ impl AddressPercentileAnalysis {
 
             let slice = &balances[0..top_count];
 
-            // TODO temporarily the following are in KAS, instead of sompi.
-            // convert back to sompi. requires update to all existing data in db first though
-            percentile.min_kas =
-                Decimal::from_f64(*slice.iter().min().unwrap() as f64 / SOMPI_PER_KAS as f64)
-                    .unwrap();
-            percentile.max_kas =
-                Decimal::from_f64(*slice.iter().max().unwrap() as f64 / SOMPI_PER_KAS as f64)
-                    .unwrap();
+            percentile.min_sompi = *slice.iter().min().unwrap();
 
-            let total_kas = slice.iter().sum::<u64>() as f64 / SOMPI_PER_KAS as f64;
+            let total_sompi = slice.iter().sum::<u64>();
             let address_count = slice.len() as u64;
-            let circulating_supply_kas = self.circulating_supply / SOMPI_PER_KAS;
 
-            percentile.average_kas = Decimal::from_f64(total_kas / address_count as f64)
-                .unwrap()
-                .round_dp(4);
-            percentile.total_kas = Decimal::from_f64(total_kas).unwrap();
+            percentile.average_sompi = total_sompi / address_count;
+            percentile.total_sompi = total_sompi;
             percentile.circulating_supply_percent =
-                Decimal::from_f64((total_kas / circulating_supply_kas as f64) * 100f64)
+                Decimal::from_f64((total_sompi as f64 / self.circulating_supply as f64) * 100f64)
                     .unwrap()
                     .round_dp(2);
             percentile.address_count = address_count;
@@ -136,51 +122,51 @@ impl AddressPercentileAnalysis {
             INSERT INTO percentile_analysis (
                 utxo_snapshot_id,
 
-                min_kas_top_point01_percent,
-                avg_kas_top_point01_percent,
-                total_kas_top_point01_percent,
+                min_sompi_top_point01_percent,
+                avg_sompi_top_point01_percent,
+                total_sompi_top_point01_percent,
                 addr_count_top_point01_percent,
                 cs_percent_top_point01_percent,
 
-                min_kas_top_point10_percent,
-                avg_kas_top_point10_percent,
-                total_kas_top_point10_percent,
+                min_sompi_top_point10_percent,
+                avg_sompi_top_point10_percent,
+                total_sompi_top_point10_percent,
                 addr_count_top_point10_percent,
                 cs_percent_top_point10_percent,
 
-                min_kas_top_1_percent,
-                avg_kas_top_1_percent,
-                total_kas_top_1_percent,
+                min_sompi_top_1_percent,
+                avg_sompi_top_1_percent,
+                total_sompi_top_1_percent,
                 addr_count_top_1_percent,
                 cs_percent_top_1_percent,
 
-                min_kas_top_5_percent,
-                avg_kas_top_5_percent,
-                total_kas_top_5_percent,
+                min_sompi_top_5_percent,
+                avg_sompi_top_5_percent,
+                total_sompi_top_5_percent,
                 addr_count_top_5_percent,
                 cs_percent_top_5_percent,
 
-                min_kas_top_10_percent,
-                avg_kas_top_10_percent,
-                total_kas_top_10_percent,
+                min_sompi_top_10_percent,
+                avg_sompi_top_10_percent,
+                total_sompi_top_10_percent,
                 addr_count_top_10_percent,
                 cs_percent_top_10_percent,
 
-                min_kas_top_25_percent,
-                avg_kas_top_25_percent,
-                total_kas_top_25_percent,
+                min_sompi_top_25_percent,
+                avg_sompi_top_25_percent,
+                total_sompi_top_25_percent,
                 addr_count_top_25_percent,
                 cs_percent_top_25_percent,
 
-                min_kas_top_50_percent,
-                avg_kas_top_50_percent,
-                total_kas_top_50_percent,
+                min_sompi_top_50_percent,
+                avg_sompi_top_50_percent,
+                total_sompi_top_50_percent,
                 addr_count_top_50_percent,
                 cs_percent_top_50_percent,
 
-                min_kas_top_75_percent,
-                avg_kas_top_75_percent,
-                total_kas_top_75_percent,
+                min_sompi_top_75_percent,
+                avg_sompi_top_75_percent,
+                total_sompi_top_75_percent,
                 addr_count_top_75_percent,
                 cs_percent_top_75_percent
             ) VALUES (
@@ -194,9 +180,9 @@ impl AddressPercentileAnalysis {
         args.add(self.utxo_snapshot_id).unwrap();
 
         for p in &self.percentiles {
-            args.add(p.min_kas.to_f64().unwrap()).unwrap();
-            args.add(p.average_kas.to_f64().unwrap()).unwrap();
-            args.add(p.total_kas.to_f64().unwrap()).unwrap();
+            args.add(p.min_sompi as i64).unwrap();
+            args.add(p.average_sompi as i64).unwrap();
+            args.add(p.total_sompi as i64).unwrap();
             args.add(p.address_count as i64).unwrap();
             args.add(p.circulating_supply_percent.to_f64().unwrap())
                 .unwrap();
