@@ -150,67 +150,67 @@ impl DistributionByKASBucketAnalysis {
 
                 addr_qty_0_to_p01,
                 pct_addr_0_to_p01,
-                tot_kas_0_to_p01,
+                sompi_0_to_p01,
                 cs_percent_0_to_p01,
                 tot_usd_0_to_p01,
 
                 addr_qty_p01_to_1,
                 pct_addr_p01_to_1,
-                tot_kas_p01_to_1,
+                sompi_p01_to_1,
                 cs_percent_p01_to_1,
                 tot_usd_p01_to_1,
 
                 addr_qty_1_to_100,
                 pct_addr_1_to_100,
-                tot_kas_1_to_100,
+                sompi_1_to_100,
                 cs_percent_1_to_100,
                 tot_usd_1_to_100,
 
                 addr_qty_100_to_1k,
                 pct_addr_100_to_1k,
-                tot_kas_100_to_1k,
+                sompi_100_to_1k,
                 cs_percent_100_to_1k,
                 tot_usd_100_to_1k,
 
                 addr_qty_1k_to_10k,
                 pct_addr_1k_to_10k,
-                tot_kas_1k_to_10k,
+                sompi_1k_to_10k,
                 cs_percent_1k_to_10k,
                 tot_usd_1k_to_10k,
 
                 addr_qty_10k_to_100k,
                 pct_addr_10k_to_100k,
-                tot_kas_10k_to_100k,
+                sompi_10k_to_100k,
                 cs_percent_10k_to_100k,
                 tot_usd_10k_to_100k,
 
                 addr_qty_100k_to_1m,
                 pct_addr_100k_to_1m,
-                tot_kas_100k_to_1m,
+                sompi_100k_to_1m,
                 cs_percent_100k_to_1m,
                 tot_usd_100k_to_1m,
 
                 addr_qty_1m_to_10m,
                 pct_addr_1m_to_10m,
-                tot_kas_1m_to_10m,
+                sompi_1m_to_10m,
                 cs_percent_1m_to_10m,
                 tot_usd_1m_to_10m,
 
                 addr_qty_10m_to_100m,
                 pct_addr_10m_to_100m,
-                tot_kas_10m_to_100m,
+                sompi_10m_to_100m,
                 cs_percent_10m_to_100m,
                 tot_usd_10m_to_100m,
 
                 addr_qty_100m_to_1b,
                 pct_addr_100m_to_1b,
-                tot_kas_100m_to_1b,
+                sompi_100m_to_1b,
                 cs_percent_100m_to_1b,
                 tot_usd_100m_to_1b,
 
                 addr_qty_1b_to_10b,
                 pct_addr_1b_to_10b,
-                tot_kas_1b_to_10b,
+                sompi_1b_to_10b,
                 cs_percent_1b_to_10b,                
                 tot_usd_1b_to_10b
             ) VALUES (
@@ -234,8 +234,8 @@ impl DistributionByKASBucketAnalysis {
             // Address percent of bucket
             args.add(bucket.percent_of_addresses * 100f64).unwrap();
 
-            // Total KAS hled by bucket
-            args.add(bucket.sompi_total as f64 / SOMPI_PER_KAS as f64)
+            // Total sompi hled by bucket
+            args.add(bucket.sompi_total as i64)
                 .unwrap();
 
             // CS Percent held by bucket
