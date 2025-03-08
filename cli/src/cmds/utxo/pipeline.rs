@@ -13,7 +13,6 @@ use kaspa_utxoindex::stores::indexed_utxos::{
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
-use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::debug;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
@@ -77,7 +76,7 @@ impl UtxoSnapshotHeader {
         .bind(dt)
         .bind(daa_score as i64)
         .bind(kas_price_usd)
-        .bind(circulating_supply as f64 / SOMPI_PER_KAS as f64)
+        .bind(circulating_supply as i64)
         .fetch_one(&pg_pool)
         .await
         .unwrap();

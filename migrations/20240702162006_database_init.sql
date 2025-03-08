@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS utxo_snapshot_header (
     unique_address_count BIGINT,
     kas_price_usd DOUBLE PRECISION,
     percentile_analysis_completed BOOLEAN,
-    circulating_supply DOUBLE PRECISION,
+    circulating_supply BIGINT,
     kas_last_moved_by_age_bucket_complete BOOLEAN,
     unique_address_count_dust BIGINT,
     sompi_held_by_dust_addresses BIGINT,
