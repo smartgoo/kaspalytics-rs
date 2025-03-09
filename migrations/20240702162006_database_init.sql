@@ -227,7 +227,10 @@ CREATE TABLE IF NOT EXISTS coin_market_history (
 CREATE TABLE IF NOT EXISTS key_value (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "key" CHARACTER VARYING NOT NULL UNIQUE,
-    "value" CHARACTER VARYING NOT NULL,
+    "value_char" CHARACTER VARYING NOT NULL,
+    "value_float" DOUBLE PRECISION, 
+    "value_int" BIGINT,
+    "value_json" JSON,
     updated_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
