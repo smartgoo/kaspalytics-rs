@@ -4,22 +4,27 @@ use kaspa_rpc_core::RpcAcceptedTransactionIds;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
+use sqlx::PgPool;
+use std::sync::atomic::AtomicBool;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 use tokio::time::sleep;
 
 pub struct DagListener {
     cache: Arc<Cache>,
     rpc_client: Arc<KaspaRpcClient>,
-    low_hash: Option<Hash>,
+    pg_pool: PgPool,
+    shutdown_flag: Arc<AtomicBool>,
 }
 
 impl DagListener {
-    pub fn new(cache: Arc<Cache>, rpc_client: Arc<KaspaRpcClient>) -> Self {
+    pub fn new(cache: Arc<Cache>, rpc_client: Arc<KaspaRpcClient>, pg_pool: PgPool) -> Self {
         DagListener {
             cache,
             rpc_client,
-            low_hash: None,
+            pg_pool,
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -28,7 +33,7 @@ impl DagListener {
     async fn process_blocks(&self) {
         let blocks = self
             .rpc_client
-            .get_blocks(self.low_hash, true, true)
+            .get_blocks(Some(self.cache.low_hash().await.unwrap()), true, true)
             .await
             .unwrap();
 
@@ -114,7 +119,9 @@ impl DagListener {
                 break;
             }
 
-            self.low_hash = Some(acceptance.accepting_block_hash);
+            self.cache
+                .set_low_hash(acceptance.accepting_block_hash)
+                .await;
 
             self.cache
                 .blocks
@@ -143,15 +150,15 @@ impl DagListener {
         }
     }
 
-    pub async fn run(&mut self) {
+    async fn main_loop(&mut self) {
         let GetBlockDagInfoResponse {
             pruning_point_hash, ..
         } = self.rpc_client.get_block_dag_info().await.unwrap();
 
-        self.low_hash = Some(pruning_point_hash);
-        info!("Starting from low_hash {:?}", self.low_hash.unwrap());
+        self.cache.set_low_hash(pruning_point_hash).await;
+        info!("Starting from low_hash {:?}", self.cache.low_hash().await);
 
-        loop {
+        while !self.shutdown_flag.load(Ordering::SeqCst) {
             let GetBlockDagInfoResponse { tip_hashes, .. } =
                 self.rpc_client.get_block_dag_info().await.unwrap();
 
@@ -159,7 +166,7 @@ impl DagListener {
 
             let vspc = self
                 .rpc_client
-                .get_virtual_chain_from_block(self.low_hash.unwrap(), true)
+                .get_virtual_chain_from_block(self.cache.low_hash().await.unwrap(), true)
                 .await
                 .unwrap();
 
@@ -170,14 +177,36 @@ impl DagListener {
             self.cache.prune();
             self.cache.log_size();
 
-            if tip_hashes.contains(&self.low_hash.unwrap()) {
+            if tip_hashes.contains(&self.cache.low_hash().await.unwrap()) {
                 // TODO set synced to false if ever synced then falls out of sync
-                self.cache.synced.store(true, Ordering::SeqCst);
+                self.cache.set_synced(true);
 
                 // TODO log how long it takes to reach tip
                 info!("Listener at tip, sleeping");
                 sleep(Duration::from_secs(10)).await;
             }
         }
+    }
+
+    pub async fn shutdown(&mut self) {
+        info!("DagListner shutting down...");
+
+        self.cache.store_cache_state(&self.pg_pool).await.unwrap();
+    }
+
+    pub async fn run(&mut self, mut shutdown_rx: Receiver<()>) {
+        let shutdown_flag = self.shutdown_flag.clone();
+
+        let _ = tokio::join!(
+            tokio::spawn(async move {
+                shutdown_rx.recv().await.unwrap();
+                shutdown_flag.store(true, Ordering::SeqCst);
+            }),
+            async {
+                self.main_loop().await;
+            }
+        );
+
+        self.shutdown().await;
     }
 }

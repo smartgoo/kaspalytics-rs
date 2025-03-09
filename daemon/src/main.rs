@@ -7,7 +7,6 @@ use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::database;
 use log::{debug, error, info};
 use std::sync::Arc;
-use tokio::sync::Notify;
 
 #[tokio::main]
 async fn main() {
@@ -49,22 +48,35 @@ async fn main() {
 
     let cache = Arc::new(cache::Cache::default());
 
-    let shutdown_notify = Arc::new(Notify::new());
+    let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
 
+    // Listener task
     let listener_cache = cache.clone();
+    let listener_shutdown_rx = shutdown_tx.subscribe();
+    let mut listener = dag::DagListener::new(listener_cache, rpc_client.clone(), pg_pool.clone());
     let listener_handle = tokio::spawn(async move {
-        dag::DagListener::new(listener_cache, rpc_client.clone())
-            .run()
-            .await;
+        listener.run(listener_shutdown_rx).await;
     });
 
+    // Analyzer task
     let analyzer_cache = cache.clone();
+    let listener_shutdown_rx = shutdown_tx.subscribe();
+    let analyzer = analyzer::Analyzer::new(analyzer_cache, pg_pool);
     let analyzer_handle = tokio::spawn(async move {
-        analyzer::Analyzer::new(analyzer_cache, pg_pool).run().await;
+        analyzer.run(listener_shutdown_rx).await;
+    });
+
+    // Handle interrupt
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.unwrap();
+        info!("Received Ctrl + C, shutting down...");
+        shutdown_tx.send(()).unwrap();
     });
 
     match tokio::try_join!(listener_handle, analyzer_handle) {
-        Ok(_) => unreachable!(),
+        Ok(_) => {
+            info!("Shutdown complete");
+        }
         Err(e) => {
             error!("{}", e);
 

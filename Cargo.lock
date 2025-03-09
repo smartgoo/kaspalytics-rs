@@ -863,6 +863,7 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+ "serde",
 ]
 
 [[package]]
@@ -2593,6 +2594,7 @@ dependencies = [
 name = "kaspalyticsd"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "chrono",
  "dashmap",
  "env_logger",

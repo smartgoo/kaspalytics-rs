@@ -1,3 +1,4 @@
+use chrono::Utc;
 use dashmap::DashMap;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
@@ -5,10 +6,14 @@ use kaspa_rpc_core::{
     RpcTransactionOutput,
 };
 use log::info;
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
 
 #[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
 pub struct CacheBlock {
     pub hash: Hash,
 
@@ -41,6 +46,7 @@ impl From<RpcBlock> for CacheBlock {
 }
 
 #[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
 pub struct CacheTransaction {
     pub id: RpcTransactionId,
     pub inputs: Vec<RpcTransactionInput>,
@@ -76,7 +82,7 @@ impl From<RpcTransaction> for CacheTransaction {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SecondMetrics {
     pub block_count: u64,
     pub transaction_count: u64,
@@ -86,7 +92,9 @@ pub struct SecondMetrics {
 #[derive(Default)]
 pub struct Cache {
     // Synced to DAG tip
-    pub synced: AtomicBool,
+    synced: AtomicBool,
+
+    low_hash: RwLock<Option<Hash>>,
 
     pub tip_timestamp: AtomicU64,
 
@@ -95,6 +103,25 @@ pub struct Cache {
     pub accepting_block_transactions: DashMap<Hash, Vec<RpcTransactionId>>,
 
     pub per_second: DashMap<u64, SecondMetrics>,
+}
+
+impl Cache {
+    pub async fn set_low_hash(&self, hash: Hash) {
+        let mut h = self.low_hash.write().await;
+        *h = Some(hash);
+    }
+
+    pub async fn low_hash(&self) -> Option<Hash> {
+        *self.low_hash.read().await
+    }
+
+    pub fn set_synced(&self, state: bool) {
+        self.synced.store(state, Ordering::SeqCst);
+    }
+
+    pub fn synced(&self) -> bool {
+        self.synced.load(Ordering::SeqCst)
+    }
 }
 
 impl Cache {
@@ -161,5 +188,108 @@ impl Cache {
             .as_secs();
         let threshold = now - 86400 * 2;
         self.per_second.retain(|second, _| *second > threshold);
+    }
+}
+
+impl Cache {
+    // pub async fn load_cache_state_to_cache(pg_pool: &PgPool) -> Result<Cache, sqlx::Error> {
+    //     Ok(())
+    // }
+
+    pub async fn store_cache_state(&self, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
+        info!("Storing cache state... ");
+
+        // Store synced status
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_bool", updated_timestamp)
+            VALUES('synced', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_bool" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(self.synced())
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        // Store low_hash
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_char", updated_timestamp)
+            VALUES('low_hash', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_char" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(self.low_hash().await.unwrap().to_string())
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        // Insert tip_timestamp to db
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_int", updated_timestamp)
+            VALUES('tip_timestamp', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_int" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(self.tip_timestamp.load(Ordering::SeqCst) as i64)
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        // Insert blocks to db
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
+            VALUES('blocks', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_bytea" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(bincode::serialize(&self.blocks).unwrap())
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        // Insert transactions to db
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
+            VALUES('transactions', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_bytea" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(bincode::serialize(&self.transactions).unwrap())
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        // Insert accepting_block_transactions to db
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
+            VALUES('accepting_block_transactions', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_bytea" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(bincode::serialize(&self.accepting_block_transactions).unwrap())
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        // Insert per_second to db
+        sqlx::query(
+            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
+            VALUES('per_second', $1, $2)
+            ON CONFLICT ("key") DO UPDATE
+                SET "value_bytea" = $1, updated_timestamp = $2
+            "#,
+        )
+        .bind(bincode::serialize(&self.per_second).unwrap())
+        .bind(Utc::now())
+        .execute(pg_pool)
+        .await?;
+
+        Ok(())
     }
 }

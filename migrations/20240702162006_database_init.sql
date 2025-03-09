@@ -247,5 +247,6 @@ CREATE TABLE IF NOT EXISTS cache_state (
     "value_int" BIGINT,
     "value_float" DOUBLE PRECISION,
     "value_bytea" BYTEA,
+    "value_bool" BOOLEAN,
     updated_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
