@@ -8,7 +8,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::cache::Cache;
 
 pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> {
-    // TODO break this function out into it's own service and modularize analysis performed
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

@@ -16,7 +16,7 @@ pub enum PayloadParseError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum BlockMinerProcessError {
+pub enum MiningAnalyzerError {
     #[error("{0}")]
     DbError(#[from] sqlx::Error),
 
@@ -70,13 +70,13 @@ impl BlockMiner {
     }
 }
 
-pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), BlockMinerProcessError> {
+pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyzerError> {
     let mut version_counts = HashMap::<String, u64>::new();
 
     for block in &cache.blocks {
         let coinbase_tx_id = block.transactions.first().unwrap();
         let coinbase_tx = cache.transactions.get(coinbase_tx_id).ok_or(
-            BlockMinerProcessError::MissingCoinbaseTransaction(
+            MiningAnalyzerError::MissingCoinbaseTransaction(
                 coinbase_tx_id.to_string(),
                 block.key().to_string(),
             ),
