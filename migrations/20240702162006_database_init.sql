@@ -224,13 +224,11 @@ CREATE TABLE IF NOT EXISTS coin_market_history (
     volume DOUBLE PRECISION NOT NULL
 );
 
+-- TODO diff value_ fields for different types
 CREATE TABLE IF NOT EXISTS key_value (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "key" CHARACTER VARYING NOT NULL UNIQUE,
-    "value_char" CHARACTER VARYING NOT NULL,
-    "value_float" DOUBLE PRECISION, 
-    "value_int" BIGINT,
-    "value_json" JSON,
+    "value" CHARACTER VARYING NOT NULL,
     updated_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
