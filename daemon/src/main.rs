@@ -7,6 +7,7 @@ use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::database;
 use log::{debug, error, info};
 use std::sync::Arc;
+use tokio::sync::Notify;
 
 #[tokio::main]
 async fn main() {
@@ -47,6 +48,8 @@ async fn main() {
     kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
 
     let cache = Arc::new(cache::Cache::default());
+
+    let shutdown_notify = Arc::new(Notify::new());
 
     let listener_cache = cache.clone();
     let listener_handle = tokio::spawn(async move {

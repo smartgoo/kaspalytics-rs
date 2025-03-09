@@ -239,3 +239,13 @@ CREATE TABLE IF NOT EXISTS known_addresses (
     type CHARACTER VARYING NOT NULL,
     added_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS cache_state (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "key" CHARACTER VARYING NOT NULL UNIQUE,
+    "value_char" CHARACTER VARYING,
+    "value_int" BIGINT,
+    "value_float" DOUBLE PRECISION,
+    "value_bytea" BYTEA,
+    updated_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
+);
