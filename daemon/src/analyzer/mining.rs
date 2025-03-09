@@ -1,6 +1,7 @@
 use crate::cache::Cache;
 use chrono::Utc;
 use kaspa_hashes::Hash;
+use kaspa_rpc_core::RpcAddress;
 use log::debug;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -55,23 +56,26 @@ struct BlockMiner {
     hash: Hash,
     timestamp: u64,
     node_version: String,
-    // address: RpcAddress,
+    address: RpcAddress,
     // miner
 }
 
 impl BlockMiner {
-    fn try_new(hash: Hash, timestamp: u64, payload: Vec<u8>) -> Result<Self, PayloadParseError> {
+    fn try_new(hash: Hash, timestamp: u64, payload: Vec<u8>, address: RpcAddress) -> Result<Self, PayloadParseError> {
         let node_version = parse_payload_node_version(payload)?;
         Ok(Self {
             hash,
             timestamp,
             node_version,
+            address
         })
     }
 }
 
 pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyzerError> {
+    // TODO store mining by address
     let mut version_counts = HashMap::<String, u64>::new();
+    let mut miner_counts = HashMap::<RpcAddress, u64>::new();
 
     for block in &cache.blocks {
         let coinbase_tx_id = block.transactions.first().unwrap();
@@ -83,9 +87,15 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyze
         )?;
 
         let block_miner =
-            BlockMiner::try_new(*block.key(), block.timestamp, coinbase_tx.payload.clone())?;
+            BlockMiner::try_new(
+                *block.key(),
+                block.timestamp,
+                coinbase_tx.payload.clone(),
+                coinbase_tx.outputs[0].verbose_data.clone().unwrap().script_public_key_address,
+            )?;
 
         *version_counts.entry(block_miner.node_version).or_insert(0) += 1;
+        *miner_counts.entry(block_miner.address).or_insert(0) += 1;
     }
 
     let total_blocks = version_counts.values().sum::<u64>();
@@ -110,7 +120,20 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyze
     .execute(&pg_pool)
     .await?;
 
+    sqlx::query(
+        r#"INSERT INTO key_value ("key", "value", updated_timestamp)
+        VALUES('miner_block_counts_1h', $1, $2)
+        ON CONFLICT ("key") DO UPDATE
+            SET "value" = $1, updated_timestamp = $2
+        "#,
+    )
+    .bind(serde_json::to_string(&miner_counts).unwrap())
+    .bind(Utc::now())
+    .execute(&pg_pool)
+    .await?;
+
     debug!("Version share: {:?}", version_share);
+    debug!("Miner block counts: {:?}", miner_counts);
 
     Ok(())
 }

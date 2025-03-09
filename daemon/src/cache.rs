@@ -44,7 +44,7 @@ impl From<RpcBlock> for CacheBlock {
 pub struct CacheTransaction {
     pub id: RpcTransactionId,
     pub inputs: Vec<RpcTransactionInput>,
-    pub outpouts: Vec<RpcTransactionOutput>,
+    pub outputs: Vec<RpcTransactionOutput>,
     // lock_time: u64,
     pub subnetwork_id: RpcSubnetworkId,
     pub gas: u64,
@@ -62,7 +62,7 @@ impl From<RpcTransaction> for CacheTransaction {
         CacheTransaction {
             id: value.verbose_data.clone().unwrap().transaction_id,
             inputs: value.inputs,
-            outpouts: value.outputs,
+            outputs: value.outputs,
             // lock_time: value.lock_time,
             subnetwork_id: value.subnetwork_id,
             gas: value.gas,
