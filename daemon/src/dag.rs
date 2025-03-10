@@ -151,11 +151,14 @@ impl DagListener {
     }
 
     async fn main_loop(&mut self) {
-        let GetBlockDagInfoResponse {
-            pruning_point_hash, ..
-        } = self.rpc_client.get_block_dag_info().await.unwrap();
+        if self.cache.low_hash().await.is_none() {
+            let GetBlockDagInfoResponse {
+                pruning_point_hash, ..
+            } = self.rpc_client.get_block_dag_info().await.unwrap();
 
-        self.cache.set_low_hash(pruning_point_hash).await;
+            self.cache.set_low_hash(pruning_point_hash).await;
+        }
+
         info!("Starting from low_hash {:?}", self.cache.low_hash().await);
 
         while !self.shutdown_flag.load(Ordering::SeqCst) {

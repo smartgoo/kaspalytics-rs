@@ -2,12 +2,12 @@ use chrono::Utc;
 use dashmap::DashMap;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcSubnetworkId, RpcTransaction, RpcTransactionId, RpcTransactionInput,
-    RpcTransactionOutput,
+    RpcBlock, RpcScriptClass, RpcScriptPublicKey, RpcSubnetworkId, RpcTransaction,
+    RpcTransactionId, RpcTransactionInput, RpcTransactionOutput, RpcTransactionOutputVerboseData,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
@@ -16,14 +16,9 @@ use tokio::sync::RwLock;
 #[derive(Serialize, Deserialize)]
 pub struct CacheBlock {
     pub hash: Hash,
-
-    // RpcBlockHeader fields
     pub timestamp: u64,
     pub daa_score: u64,
-
     pub transactions: Vec<RpcTransactionId>,
-
-    // RpcBlockVerboseData
     pub selected_parent_hash: Hash,
     pub is_chain_block: bool,
 }
@@ -45,13 +40,34 @@ impl From<RpcBlock> for CacheBlock {
     }
 }
 
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CacheTransactionOutput {
+    pub value: u64,
+    pub script_public_key: RpcScriptPublicKey,
+    pub script_public_key_type: RpcScriptClass,
+    pub script_public_key_address: String,
+}
+
+impl From<RpcTransactionOutput> for CacheTransactionOutput {
+    fn from(value: RpcTransactionOutput) -> Self {
+        Self {
+            value: value.value,
+            script_public_key: value.script_public_key,
+            script_public_key_type: value.verbose_data.clone().unwrap().script_public_key_type,
+            script_public_key_address: value.verbose_data.unwrap().script_public_key_address.to_string(),
+        }
+    }
+}
+
+// TODO clean up and standardize Rpc* vs. Cache*
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize)]
 pub struct CacheTransaction {
     pub id: RpcTransactionId,
     pub inputs: Vec<RpcTransactionInput>,
-    pub outputs: Vec<RpcTransactionOutput>,
-    // lock_time: u64,
+    pub outputs: Vec<CacheTransactionOutput>,
+    lock_time: u64,
     pub subnetwork_id: RpcSubnetworkId,
     pub gas: u64,
     pub payload: Vec<u8>,
@@ -68,8 +84,12 @@ impl From<RpcTransaction> for CacheTransaction {
         CacheTransaction {
             id: value.verbose_data.clone().unwrap().transaction_id,
             inputs: value.inputs,
-            outputs: value.outputs,
-            // lock_time: value.lock_time,
+            outputs: value
+                .outputs
+                .iter()
+                .map(|o| CacheTransactionOutput::from(o.clone()))
+                .collect(),
+            lock_time: value.lock_time,
             subnetwork_id: value.subnetwork_id,
             gas: value.gas,
             payload: value.payload,
@@ -192,35 +212,98 @@ impl Cache {
 }
 
 impl Cache {
-    // pub async fn load_cache_state_to_cache(pg_pool: &PgPool) -> Result<Cache, sqlx::Error> {
-    //     Ok(())
-    // }
+    pub async fn load_cache_state(pg_pool: &PgPool) -> Result<Cache, sqlx::Error> {
+        // Get low_hash
+        let low_hash_bytes =
+            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'low_hash'"#)
+                .fetch_one(pg_pool)
+                .await?
+                .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let low_hash = bincode::deserialize::<Hash>(&low_hash_bytes).unwrap();
+
+        // Get tip_timestamp
+        let tip_timestamp =
+            sqlx::query(r#"SELECT "value_int" FROM cache_state WHERE "key" = 'tip_timestamp'"#)
+                .fetch_one(pg_pool)
+                .await?
+                .try_get::<i64, &str>("value_int")?;
+
+        // Get blocks map
+        let blocks_bytes =
+            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'blocks'"#)
+                .fetch_one(pg_pool)
+                .await?
+                .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let blocks = bincode::deserialize::<DashMap<Hash, CacheBlock>>(&blocks_bytes).unwrap();
+
+        // Get transactions map
+        let transactions_bytes =
+            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'transactions'"#)
+                .fetch_one(pg_pool)
+                .await?
+                .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let transactions = bincode::deserialize::<DashMap<RpcTransactionId, CacheTransaction>>(
+            &transactions_bytes,
+        )
+        .unwrap();
+
+        // Get accepting_block_transactions map
+        let accepting_block_transactions_bytes = sqlx::query(
+            r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'accepting_block_transactions'"#,
+        )
+        .fetch_one(pg_pool)
+        .await?
+        .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let accepting_block_transactions = bincode::deserialize::<
+            DashMap<Hash, Vec<RpcTransactionId>>,
+        >(&accepting_block_transactions_bytes)
+        .unwrap();
+
+        // Get per_second map
+        let per_second_bytes =
+            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'per_second'"#)
+                .fetch_one(pg_pool)
+                .await?
+                .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let per_second =
+            bincode::deserialize::<DashMap<u64, SecondMetrics>>(&per_second_bytes).unwrap();
+
+        Ok(Cache {
+            synced: AtomicBool::new(false),
+            low_hash: RwLock::new(Some(low_hash)),
+            tip_timestamp: AtomicU64::new(tip_timestamp as u64),
+            blocks,
+            transactions,
+            accepting_block_transactions,
+            per_second,
+        })
+    }
 
     pub async fn store_cache_state(&self, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
         info!("Storing cache state... ");
 
         // Store synced status
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_bool", updated_timestamp)
-            VALUES('synced', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_bool" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(self.synced())
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        // sqlx::query(
+        //     r#"INSERT INTO cache_state ("key", "value_bool", updated_timestamp)
+        //     VALUES('synced', $1, $2)
+        //     ON CONFLICT ("key") DO UPDATE
+        //         SET "value_bool" = $1, updated_timestamp = $2
+        //     "#,
+        // )
+        // .bind(self.synced())
+        // .bind(Utc::now())
+        // .execute(pg_pool)
+        // .await?;
 
         // Store low_hash
         sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_char", updated_timestamp)
+            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
             VALUES('low_hash', $1, $2)
             ON CONFLICT ("key") DO UPDATE
-                SET "value_char" = $1, updated_timestamp = $2
+                SET "value_bytea" = $1, updated_timestamp = $2
             "#,
         )
-        .bind(self.low_hash().await.unwrap().to_string())
+        .bind(bincode::serialize(&self.low_hash().await.unwrap()).unwrap())
         .bind(Utc::now())
         .execute(pg_pool)
         .await?;

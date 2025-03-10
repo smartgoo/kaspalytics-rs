@@ -2,15 +2,18 @@ mod analyzer;
 mod cache;
 mod dag;
 
+use cache::Cache;
 use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::database;
+use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
+use kaspalytics_utils::email::send_email;
+use kaspalytics_utils::{check_rpc_node_status, database};
 use log::{debug, error, info};
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let config = kaspalytics_utils::config::Config::from_env();
+    let config = Config::from_env();
 
     Builder::from_env(Env::default().default_filter_or("info"))
         .filter(None, config.log_level)
@@ -44,9 +47,10 @@ async fn main() {
     debug!("Connecting wRPC client...");
     rpc_client.connect(None).await.unwrap();
 
-    kaspalytics_utils::check_rpc_node_status(&config, rpc_client.clone()).await;
+    check_rpc_node_status(&config, rpc_client.clone()).await;
 
-    let cache = Arc::new(cache::Cache::default());
+    let cache = Arc::new(Cache::load_cache_state(&pg_pool).await.unwrap_or_default());
+    info!("Cache log hash {:?}", cache.low_hash().await);
 
     let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
 
@@ -69,7 +73,7 @@ async fn main() {
     // Handle interrupt
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
-        info!("Received Ctrl + C, shutting down...");
+        info!("Received interrupt, shutting down...");
         shutdown_tx.send(()).unwrap();
     });
 
@@ -80,8 +84,8 @@ async fn main() {
         Err(e) => {
             error!("{}", e);
 
-            if config.env == kaspalytics_utils::config::Env::Prod {
-                kaspalytics_utils::email::send_email(
+            if config.env == KaspalyticsEnv::Prod {
+                send_email(
                     &config,
                     "kaspalyticsd failed!".to_string(),
                     format!("{}", e),
