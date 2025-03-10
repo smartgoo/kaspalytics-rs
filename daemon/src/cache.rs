@@ -1,10 +1,12 @@
 use chrono::Utc;
 use dashmap::DashMap;
+use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcScriptClass, RpcScriptPublicKey, RpcSubnetworkId, RpcTransaction,
-    RpcTransactionId, RpcTransactionInput, RpcTransactionOutput,
+    RpcBlock, RpcSubnetworkId, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint,
+    RpcTransactionOutput,
 };
+use kaspa_txscript::script_class::ScriptClass;
 use log::info;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
@@ -12,13 +14,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
+pub type CacheTransactionId = TransactionId;
+pub type CacheScriptPublicKey = ScriptPublicKey;
+pub type CacheScriptClass = ScriptClass;
+
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize)]
 pub struct CacheBlock {
     pub hash: Hash,
     pub timestamp: u64,
     pub daa_score: u64,
-    pub transactions: Vec<RpcTransactionId>,
+    pub transactions: Vec<CacheTransactionId>,
     pub selected_parent_hash: Hash,
     pub is_chain_block: bool,
 }
@@ -40,12 +46,11 @@ impl From<RpcBlock> for CacheBlock {
     }
 }
 
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CacheTransactionOutput {
     pub value: u64,
-    pub script_public_key: RpcScriptPublicKey,
-    pub script_public_key_type: RpcScriptClass,
+    pub script_public_key: CacheScriptPublicKey,
+    pub script_public_key_type: CacheScriptClass,
     pub script_public_key_address: String,
 }
 
@@ -55,7 +60,32 @@ impl From<RpcTransactionOutput> for CacheTransactionOutput {
             value: value.value,
             script_public_key: value.script_public_key,
             script_public_key_type: value.verbose_data.clone().unwrap().script_public_key_type,
-            script_public_key_address: value.verbose_data.unwrap().script_public_key_address.to_string(),
+            script_public_key_address: value
+                .verbose_data
+                .unwrap()
+                .script_public_key_address
+                .to_string(),
+        }
+    }
+}
+
+pub type CacheTransactionOutpoint = RpcTransactionOutpoint;
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CacheTransactionInput {
+    pub previous_outpoint: CacheTransactionOutpoint,
+    pub signature_script: Vec<u8>,
+    pub sequence: u64,
+    pub sig_op_count: u8,
+}
+
+impl From<RpcTransactionInput> for CacheTransactionInput {
+    fn from(value: RpcTransactionInput) -> Self {
+        Self {
+            previous_outpoint: value.previous_outpoint,
+            signature_script: value.signature_script,
+            sequence: value.sequence,
+            sig_op_count: value.sig_op_count,
         }
     }
 }
@@ -64,8 +94,8 @@ impl From<RpcTransactionOutput> for CacheTransactionOutput {
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize)]
 pub struct CacheTransaction {
-    pub id: RpcTransactionId,
-    pub inputs: Vec<RpcTransactionInput>,
+    pub id: CacheTransactionId,
+    pub inputs: Vec<CacheTransactionInput>,
     pub outputs: Vec<CacheTransactionOutput>,
     lock_time: u64,
     pub subnetwork_id: RpcSubnetworkId,
@@ -83,7 +113,11 @@ impl From<RpcTransaction> for CacheTransaction {
     fn from(value: RpcTransaction) -> Self {
         CacheTransaction {
             id: value.verbose_data.clone().unwrap().transaction_id,
-            inputs: value.inputs,
+            inputs: value
+                .inputs
+                .iter()
+                .map(|o| CacheTransactionInput::from(o.clone()))
+                .collect(),
             outputs: value
                 .outputs
                 .iter()
@@ -119,8 +153,8 @@ pub struct Cache {
     pub tip_timestamp: AtomicU64,
 
     pub blocks: DashMap<Hash, CacheBlock>,
-    pub transactions: DashMap<RpcTransactionId, CacheTransaction>,
-    pub accepting_block_transactions: DashMap<Hash, Vec<RpcTransactionId>>,
+    pub transactions: DashMap<CacheTransactionId, CacheTransaction>,
+    pub accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
 
     pub per_second: DashMap<u64, SecondMetrics>,
 }
@@ -242,7 +276,7 @@ impl Cache {
                 .fetch_one(pg_pool)
                 .await?
                 .try_get::<Vec<u8>, &str>("value_bytea")?;
-        let transactions = bincode::deserialize::<DashMap<RpcTransactionId, CacheTransaction>>(
+        let transactions = bincode::deserialize::<DashMap<CacheTransactionId, CacheTransaction>>(
             &transactions_bytes,
         )
         .unwrap();
@@ -255,7 +289,7 @@ impl Cache {
         .await?
         .try_get::<Vec<u8>, &str>("value_bytea")?;
         let accepting_block_transactions = bincode::deserialize::<
-            DashMap<Hash, Vec<RpcTransactionId>>,
+            DashMap<Hash, Vec<CacheTransactionId>>,
         >(&accepting_block_transactions_bytes)
         .unwrap();
 
@@ -267,6 +301,10 @@ impl Cache {
                 .try_get::<Vec<u8>, &str>("value_bytea")?;
         let per_second =
             bincode::deserialize::<DashMap<u64, SecondMetrics>>(&per_second_bytes).unwrap();
+
+        sqlx::query("TRUNCATE TABLE cache_state")
+            .execute(pg_pool)
+            .await?;
 
         Ok(Cache {
             synced: AtomicBool::new(false),
