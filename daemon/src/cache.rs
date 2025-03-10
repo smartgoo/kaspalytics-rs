@@ -1,10 +1,10 @@
 use chrono::Utc;
 use dashmap::DashMap;
+use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcSubnetworkId, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint,
-    RpcTransactionOutput,
+    RpcBlock, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint, RpcTransactionOutput,
 };
 use kaspa_txscript::script_class::ScriptClass;
 use log::info;
@@ -90,6 +90,8 @@ impl From<RpcTransactionInput> for CacheTransactionInput {
     }
 }
 
+pub type CacheSubnetworkId = SubnetworkId;
+
 // TODO clean up and standardize Rpc* vs. Cache*
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize)]
@@ -98,7 +100,7 @@ pub struct CacheTransaction {
     pub inputs: Vec<CacheTransactionInput>,
     pub outputs: Vec<CacheTransactionOutput>,
     lock_time: u64,
-    pub subnetwork_id: RpcSubnetworkId,
+    pub subnetwork_id: CacheSubnetworkId,
     pub gas: u64,
     pub payload: Vec<u8>,
     pub mass: u64,
@@ -176,13 +178,21 @@ impl Cache {
     pub fn synced(&self) -> bool {
         self.synced.load(Ordering::SeqCst)
     }
+
+    pub fn set_tip_timestamp(&self, timestamp: u64) {
+        self.tip_timestamp.store(timestamp, Ordering::SeqCst);
+    }
+
+    pub fn tip_timestamp(&self) -> u64 {
+        self.tip_timestamp.load(Ordering::SeqCst)
+    }
 }
 
 impl Cache {
     pub fn log_size(&self) {
         info!(
             "tip_timestamp: {} | blocks: {} | transactions {} | accepting_blocks_transactions {} | per_second {}",
-            self.tip_timestamp.load(Ordering::SeqCst) / 1000,
+            self.tip_timestamp() / 1000,
             self.blocks.len(),
             self.transactions.len(),
             self.accepting_block_transactions.len(),
@@ -198,7 +208,8 @@ impl Cache {
         // TODO better handling of window size
         // Currently targeting 1 hour of blocks
         let window = 3600 * 1000;
-        let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
+        // let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
+        let pruning_timestamp = self.tip_timestamp() - window;
 
         // Prune blocks
         let mut candidate_blocks: Vec<Hash> = vec![];
@@ -354,7 +365,7 @@ impl Cache {
                 SET "value_int" = $1, updated_timestamp = $2
             "#,
         )
-        .bind(self.tip_timestamp.load(Ordering::SeqCst) as i64)
+        .bind(self.tip_timestamp() as i64)
         .bind(Utc::now())
         .execute(pg_pool)
         .await?;

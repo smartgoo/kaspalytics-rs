@@ -69,10 +69,8 @@ impl DagListener {
                     .and_modify(|ps| ps.transaction_count += 1);
             }
 
-            self.cache.tip_timestamp.store(
-                blocks.blocks.last().unwrap().header.timestamp,
-                Ordering::SeqCst,
-            );
+            self.cache
+                .set_tip_timestamp(blocks.blocks.last().unwrap().header.timestamp);
         }
     }
 
