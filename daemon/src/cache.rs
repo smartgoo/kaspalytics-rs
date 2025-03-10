@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
     RpcBlock, RpcScriptClass, RpcScriptPublicKey, RpcSubnetworkId, RpcTransaction,
-    RpcTransactionId, RpcTransactionInput, RpcTransactionOutput, RpcTransactionOutputVerboseData,
+    RpcTransactionId, RpcTransactionInput, RpcTransactionOutput,
 };
 use log::info;
 use serde::{Deserialize, Serialize};

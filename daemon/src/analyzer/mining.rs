@@ -94,11 +94,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyze
             *block.key(),
             block.timestamp,
             coinbase_tx.payload.clone(),
-            coinbase_tx.outputs[0]
-                .verbose_data
-                .clone()
-                .unwrap()
-                .script_public_key_address,
+            coinbase_tx.outputs[0].script_public_key_address.clone(),
         )?;
 
         *version_counts.entry(block_miner.node_version).or_insert(0) += 1;

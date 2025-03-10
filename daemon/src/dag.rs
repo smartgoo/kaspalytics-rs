@@ -159,6 +159,7 @@ impl DagListener {
             self.cache.set_low_hash(pruning_point_hash).await;
         }
 
+        // TODO handle situation where cache low hash has been pruned
         info!("Starting from low_hash {:?}", self.cache.low_hash().await);
 
         while !self.shutdown_flag.load(Ordering::SeqCst) {
