@@ -11,10 +11,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_float", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('price_usd', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_float" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(coin_response.market_data.current_price.usd)
@@ -25,10 +25,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_float", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('price_btc', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_float" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(coin_response.market_data.current_price.btc)
@@ -39,10 +39,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_float", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('market_cap', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_float" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(coin_response.market_data.market_cap.usd)
@@ -53,10 +53,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_float", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('volume', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_float" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(coin_response.market_data.total_volume.usd)
@@ -69,10 +69,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_int", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('daa_score', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_int" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(block_dag.virtual_daa_score as i64)
@@ -83,10 +83,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_char", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('pruning_point', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_char" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(block_dag.pruning_point_hash.to_string())
@@ -99,10 +99,10 @@ pub async fn home_page_data_refresh(rpc_client: Arc<KaspaRpcClient>, pg_pool: Pg
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_int", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('cs_sompi', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_int" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(coin_supply.circulating_sompi as i64)

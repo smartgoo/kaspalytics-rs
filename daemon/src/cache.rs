@@ -150,9 +150,9 @@ pub struct Cache {
     // Synced to DAG tip
     synced: AtomicBool,
 
-    low_hash: RwLock<Option<Hash>>,
+    low_hash: RwLock<Option<Hash>>, // use std
 
-    pub tip_timestamp: AtomicU64,
+    tip_timestamp: AtomicU64,
 
     pub blocks: DashMap<Hash, CacheBlock>,
     pub transactions: DashMap<CacheTransactionId, CacheTransaction>,
@@ -258,6 +258,8 @@ impl Cache {
 
 impl Cache {
     pub async fn load_cache_state(pg_pool: &PgPool) -> Result<Cache, sqlx::Error> {
+        info!("Attempting to load cache state...");
+
         // Get low_hash
         let low_hash_bytes =
             sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'low_hash'"#)
@@ -330,19 +332,6 @@ impl Cache {
 
     pub async fn store_cache_state(&self, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
         info!("Storing cache state... ");
-
-        // Store synced status
-        // sqlx::query(
-        //     r#"INSERT INTO cache_state ("key", "value_bool", updated_timestamp)
-        //     VALUES('synced', $1, $2)
-        //     ON CONFLICT ("key") DO UPDATE
-        //         SET "value_bool" = $1, updated_timestamp = $2
-        //     "#,
-        // )
-        // .bind(self.synced())
-        // .bind(Utc::now())
-        // .execute(pg_pool)
-        // .await?;
 
         // Store low_hash
         sqlx::query(
