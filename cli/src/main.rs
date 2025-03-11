@@ -11,7 +11,7 @@ use log::{debug, info};
 use std::sync::Arc;
 use std::time::Instant;
 
-const REQUIRED_CLI_SOFT_FD_LIMIT: u64 = 10 * 1024;
+const REQUIRED_CLI_SOFT_FD_LIMIT: u64 = 20 * 1024;
 
 #[tokio::main]
 async fn main() {
