@@ -112,10 +112,10 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyze
         .collect();
 
     sqlx::query(
-        r#"INSERT INTO key_value ("key", "value_json", updated_timestamp)
+        r#"INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('miner_node_versions_1h', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_json" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(serde_json::to_string(&version_share).unwrap())
@@ -124,10 +124,10 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), MiningAnalyze
     .await?;
 
     sqlx::query(
-        r#"INSERT INTO key_value ("key", "value_json", updated_timestamp)
+        r#"INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('miner_block_counts_1h', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_json" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(serde_json::to_string(&miner_counts).unwrap())

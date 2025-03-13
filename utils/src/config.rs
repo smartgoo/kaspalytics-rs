@@ -31,6 +31,8 @@ pub struct Config {
     pub db_uri: String,
     pub db_max_pool_size: u32,
 
+    pub checkpoint_root_dir: PathBuf,
+
     pub smtp_host: String,
     pub smtp_port: u16,
     pub smtp_from: String,
@@ -63,6 +65,9 @@ impl Config {
 
         let rpc_url = env::var("RPC_URL").unwrap();
 
+        let checkpoint_root_dir =
+            PathBuf::from_str(&env::var("CHECKPOINT_ROOT_DIR").unwrap()).unwrap();
+
         let db_uri = env::var("DB_URI").unwrap();
         let db_max_pool_size = env::var("DB_MAX_POOL_SIZE")
             .unwrap()
@@ -81,6 +86,7 @@ impl Config {
             log_level,
             network_id,
             rpc_url,
+            checkpoint_root_dir,
             db_uri,
             db_max_pool_size,
             smtp_host,

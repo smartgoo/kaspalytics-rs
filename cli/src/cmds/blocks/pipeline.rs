@@ -11,6 +11,7 @@ use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
+use kaspalytics_utils::kaspad::db::ConsensusStorageCheckpoint;
 use log::{debug, error};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -102,6 +103,7 @@ impl BlockAnalysis {
         hash: Hash,
     ) -> Result<HashMap<TransactionOutpoint, UtxoEntry>, StoreError> {
         let utxo_diffs = self.storage.utxo_diffs_store.get(hash)?;
+
         let mut utxos = HashMap::<TransactionOutpoint, UtxoEntry>::new();
 
         utxo_diffs.removed().iter().for_each(|(outpoint, utxo)| {
@@ -343,24 +345,23 @@ impl BlockAnalysis {
         let retry_delay = std::time::Duration::from_secs(60);
 
         loop {
-            let storage = kaspalytics_utils::kaspad::db::init_consensus_storage(
-                config.network_id,
-                &config.kaspad_dirs.active_consensus_db_dir,
-            );
+            let storage = ConsensusStorageCheckpoint::new(config.clone());
 
-            let mut process = BlockAnalysis::new_for_yesterday(config.clone(), storage.clone());
+            let mut process =
+                BlockAnalysis::new_for_yesterday(config.clone(), storage.inner.clone());
 
             match process.run_inner(&pool).await {
                 Ok(_) => break,
-                Err(StoreError::DbError(_)) if retries < max_retries => {
+                Err(StoreError::DbError(err)) if retries < max_retries => {
                     // Close database connection before sleeping
                     // Inside retries window. Sleep and try again
                     drop(process);
                     drop(storage);
 
                     retries += 1;
+                    error!("{}", err);
                     error!(
-                        "Database error on tx_analysis attempt {}/{}. Retrying in {:?}...",
+                        "Database error during tx_analysis attempt {}/{}. Retrying in {:?}...\n",
                         retries, max_retries, retry_delay
                     );
                     sleep(retry_delay).await;

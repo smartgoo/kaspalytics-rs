@@ -31,10 +31,10 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_int", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('transaction_count_24h', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_int" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(count as i64)
@@ -44,10 +44,10 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_int", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('effective_transaction_count_24h', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_int" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(effective_count as i64)
@@ -74,10 +74,10 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
 
     sqlx::query(
         r#"
-        INSERT INTO key_value ("key", "value_json", updated_timestamp)
+        INSERT INTO key_value ("key", "value", updated_timestamp)
         VALUES('effective_transaction_count_per_hour_24h', $1, $2)
         ON CONFLICT ("key") DO UPDATE
-            SET "value_json" = $1, updated_timestamp = $2
+            SET "value" = $1, updated_timestamp = $2
         "#,
     )
     .bind(serde_json::to_string(&effective_count_per_hour).unwrap())

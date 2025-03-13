@@ -11,8 +11,6 @@ use log::{debug, info};
 use std::sync::Arc;
 use std::time::Instant;
 
-const REQUIRED_CLI_SOFT_FD_LIMIT: u64 = 20 * 1024;
-
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -24,12 +22,6 @@ async fn main() {
         .init();
 
     // TODO probably should move this to only the CLI commands that require it (block and utxo pipelines)
-    kaspa_utils::fd_budget::try_set_fd_limit(REQUIRED_CLI_SOFT_FD_LIMIT).unwrap_or_else(|_| {
-        panic!(
-            "kaspalytics-cli requires {} fd limit",
-            REQUIRED_CLI_SOFT_FD_LIMIT
-        )
-    });
 
     // Open PG connection pool
     let db = database::Database::new(config.db_uri.clone());
