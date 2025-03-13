@@ -336,10 +336,10 @@ impl BlockAnalysis {
 
     pub async fn run(config: Config, pool: PgPool) {
         // Sporadically, a RocksDB error will be raised about missing SST file
-        // The read_only conn creates a point in time view of database
-        // But I think SST files are still being deleted by primary
-        // This might be mostly(?) alleviated now by setting FD budget higher than SST file count
-        // The below loop is an attempt to catch this error and retry every X minutes for up to X retry attempts
+        // The readonly conn creates a point in time view of database
+        // But SST files are being deleted by primary
+        // New rdb connection uses a readonly over a checkpoint to attempt to address this
+        // If checkpoint fixes the issue, might be able to remove below retry loop 
         let mut retries = 0;
         let max_retries = 120;
         let retry_delay = std::time::Duration::from_secs(60);
