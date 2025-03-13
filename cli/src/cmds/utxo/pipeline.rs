@@ -436,7 +436,7 @@ impl UtxoBasedPipeline {
             .set_kas_last_moved_by_age_bucket_complete(self.pg_pool.clone())
             .await;
 
-        kaspalytics_utils::email::send_email(
+        let _ = kaspalytics_utils::email::send_email(
             &self.config,
             "utxo-pipeline completed".to_string(),
             "".to_string(),

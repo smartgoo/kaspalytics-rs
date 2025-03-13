@@ -85,7 +85,7 @@ async fn main() {
             error!("{}", e);
 
             if config.env == KaspalyticsEnv::Prod {
-                send_email(
+                let _ = send_email(
                     &config,
                     "kaspalyticsd failed!".to_string(),
                     format!("{}", e),

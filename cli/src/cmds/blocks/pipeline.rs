@@ -324,7 +324,7 @@ impl BlockAnalysis {
             debug!("{:?}", stats);
             stats.save(pool).await;
 
-            kaspalytics_utils::email::send_email(
+            let _ = kaspalytics_utils::email::send_email(
                 &self.config,
                 "block-pipeline completed".to_string(),
                 format!("{:?}", stats),
@@ -339,7 +339,7 @@ impl BlockAnalysis {
         // The readonly conn creates a point in time view of database
         // But SST files are being deleted by primary
         // New rdb connection uses a readonly over a checkpoint to attempt to address this
-        // If checkpoint fixes the issue, might be able to remove below retry loop 
+        // If checkpoint fixes the issue, might be able to remove below retry loop
         let mut retries = 0;
         let max_retries = 120;
         let retry_delay = std::time::Duration::from_secs(60);
@@ -372,7 +372,7 @@ impl BlockAnalysis {
                         "Analysis::tx_analysis failed after {} attempts. Exiting...",
                         retries
                     );
-                    kaspalytics_utils::email::send_email(
+                    let _ = kaspalytics_utils::email::send_email(
                         &config,
                         "block-pipeline alert".to_string(),
                         "Analysis::tx_analysis reached max retries due to database error."
@@ -383,7 +383,7 @@ impl BlockAnalysis {
                 Err(e) => {
                     // Handle other errors and exit
                     error!("Analysis::tx_analysis failed with error: {:?}", e);
-                    kaspalytics_utils::email::send_email(
+                    let _ = kaspalytics_utils::email::send_email(
                         &config,
                         "block-pipeline alert".to_string(),
                         format!("Analysis::tx_analysis failed with error: {:?}", e),
