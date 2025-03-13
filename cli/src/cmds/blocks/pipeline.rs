@@ -35,6 +35,7 @@ impl BlockAnalysis {
             .date_naive()
             .and_hms_opt(0, 0, 0)
             .unwrap();
+
         let start_of_yesterday = start_of_today - chrono::Duration::days(1);
         let end_of_yesterday = start_of_today - chrono::Duration::milliseconds(1);
 
@@ -263,11 +264,13 @@ impl BlockAnalysis {
 
                     for output in tx.outputs.iter() {
                         tx_fee -= output.value;
+
                         let address = extract_script_pub_key_address(
                             &output.script_public_key,
                             self.config.network_id.into(),
                         )
                         .unwrap();
+
                         self.stats.entry(block_time_s).and_modify(|stats| {
                             stats.unique_recipients.insert(address);
                         });
@@ -322,7 +325,7 @@ impl BlockAnalysis {
             }
 
             debug!("{:?}", stats);
-            stats.save(pool).await;
+            stats.save(pool).await.unwrap(); // TODO handle
 
             let _ = kaspalytics_utils::email::send_email(
                 &self.config,

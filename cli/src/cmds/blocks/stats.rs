@@ -205,86 +205,89 @@ impl Stats {
 }
 
 impl Stats {
-    async fn save_block_summary(&self, pool: &PgPool) {
-        // TODO make sure date record isn't already in table
-        let sql = r#"
-            INSERT INTO block_summary
-            (
-                date, 
-                chain_block_count, 
-                txs_per_block_mean, txs_per_block_median, txs_per_block_min, txs_per_block_max
-            )
-            VALUES
-            ($1, $2, $3, $4, $5, $6)
-        "#;
-
+    async fn save_block_summary(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
         let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
             .unwrap()
             .date_naive();
 
         let tpb = self.vec_stats(&self.transaction_count_per_block);
 
-        sqlx::query(sql)
-            .bind(date)
-            .bind(self.chain_block_count as i64)
-            .bind(tpb.1)
-            .bind(tpb.2)
-            .bind(tpb.3 as i64)
-            .bind(tpb.4 as i64)
-            .execute(pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            r#"
+                INSERT INTO block_summary
+                (
+                    date, 
+                    chain_block_count, 
+                    txs_per_block_mean, txs_per_block_median, txs_per_block_min, txs_per_block_max
+                )
+                VALUES
+                ($1, $2, $3, $4, $5, $6)
+            "#,
+        )
+        .bind(date)
+        .bind(self.chain_block_count as i64)
+        .bind(tpb.1)
+        .bind(tpb.2)
+        .bind(tpb.3 as i64)
+        .bind(tpb.4 as i64)
+        .execute(pool)
+        .await?;
+
+        Ok(())
     }
 
-    async fn save_transaction_summary(&self, pool: &PgPool) {
-        // TODO make sure date record isn't already in table
-        let sql = r#"
-            INSERT INTO transaction_summary
-            (   
-                date, 
-                coinbase_tx_qty, tx_qty, input_qty_total, output_qty_total_coinbase, output_qty_total, 
-                fees_total, fees_mean, fees_median, fees_min, fees_max,
-                skipped_tx_missing_inputs, inputs_missing_previous_outpoint,
-                unique_senders, unique_recipients, unique_addresses, 
-                tx_per_second_mean, tx_per_second_max
-            )
-            VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-        "#;
-
+    async fn save_transaction_summary(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
         let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
             .unwrap()
             .date_naive();
+
         let fees = self.vec_stats(&self.fees);
         let tps_mean = self.tps_mean();
 
-        sqlx::query(sql)
-            .bind(date)
-            .bind(self.coinbase_tx_count as i64)
-            .bind(self.regular_tx_count as i64)
-            .bind(self.input_count as i64)
-            .bind(self.output_count_coinbase_tx as i64)
-            .bind(self.output_count_regular_tx as i64)
-            .bind(fees.0 as i64)
-            .bind(fees.1)
-            .bind(fees.2)
-            .bind(fees.3 as i64)
-            .bind(fees.4 as i64)
-            .bind(self.skipped_tx_count_cannot_resolve_inputs as i64)
-            .bind(self.input_count_missing_previous_outpoints as i64)
-            .bind(self.unique_senders.len() as i64)
-            .bind(self.unique_recipients.len() as i64)
-            .bind(self.unique_address_count() as i64)
-            .bind(tps_mean)
-            .bind(self.tps_max as i64)
-            .execute(pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            r#"
+                INSERT INTO transaction_summary
+                (   
+                    date, 
+                    coinbase_tx_qty, tx_qty, input_qty_total, output_qty_total_coinbase, output_qty_total, 
+                    fees_total, fees_mean, fees_median, fees_min, fees_max,
+                    skipped_tx_missing_inputs, inputs_missing_previous_outpoint,
+                    unique_senders, unique_recipients, unique_addresses, 
+                    tx_per_second_mean, tx_per_second_max
+                )
+                VALUES
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            "#
+        )
+        .bind(date)
+        .bind(self.coinbase_tx_count as i64)
+        .bind(self.regular_tx_count as i64)
+        .bind(self.input_count as i64)
+        .bind(self.output_count_coinbase_tx as i64)
+        .bind(self.output_count_regular_tx as i64)
+        .bind(fees.0 as i64)
+        .bind(fees.1)
+        .bind(fees.2)
+        .bind(fees.3 as i64)
+        .bind(fees.4 as i64)
+        .bind(self.skipped_tx_count_cannot_resolve_inputs as i64)
+        .bind(self.input_count_missing_previous_outpoints as i64)
+        .bind(self.unique_senders.len() as i64)
+        .bind(self.unique_recipients.len() as i64)
+        .bind(self.unique_address_count() as i64)
+        .bind(tps_mean)
+        .bind(self.tps_max as i64)
+        .execute(pool)
+        .await?;
+
+        Ok(())
     }
 
-    pub async fn save(&self, pool: &PgPool) {
-        self.save_block_summary(pool).await;
-        self.save_transaction_summary(pool).await;
+    pub async fn save(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
+        self.save_block_summary(pool).await?;
+        self.save_transaction_summary(pool).await?;
+
+        Ok(())
     }
 }
 
