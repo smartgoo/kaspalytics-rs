@@ -3,8 +3,8 @@ use kaspa_hashes::Hash;
 use kaspa_rpc_core::RpcAcceptedTransactionIds;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
+use kaspalytics_utils::config::Config;
 use log::info;
-use sqlx::PgPool;
 use std::sync::atomic::AtomicBool;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
@@ -12,18 +12,18 @@ use tokio::sync::broadcast::Receiver;
 use tokio::time::sleep;
 
 pub struct DagListener {
+    config: Config,
     cache: Arc<Cache>,
     rpc_client: Arc<KaspaRpcClient>,
-    pg_pool: PgPool,
     shutdown_flag: Arc<AtomicBool>,
 }
 
 impl DagListener {
-    pub fn new(cache: Arc<Cache>, rpc_client: Arc<KaspaRpcClient>, pg_pool: PgPool) -> Self {
+    pub fn new(config: Config, cache: Arc<Cache>, rpc_client: Arc<KaspaRpcClient>) -> Self {
         DagListener {
+            config,
             cache,
             rpc_client,
-            pg_pool,
             shutdown_flag: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -193,7 +193,10 @@ impl DagListener {
     pub async fn shutdown(&mut self) {
         info!("DagListner shutting down...");
 
-        self.cache.store_cache_state(&self.pg_pool).await.unwrap();
+        self.cache
+            .store_cache_state(self.config.clone())
+            .await
+            .unwrap();
     }
 
     pub async fn run(&mut self, mut shutdown_rx: Receiver<()>) {

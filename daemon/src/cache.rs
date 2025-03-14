@@ -1,4 +1,3 @@
-use chrono::Utc;
 use dashmap::DashMap;
 use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
@@ -7,11 +6,13 @@ use kaspa_rpc_core::{
     RpcBlock, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint, RpcTransactionOutput,
 };
 use kaspa_txscript::script_class::ScriptClass;
+use kaspalytics_utils::config::Config;
 use log::info;
+use rocksdb::DB;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, Row};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 use tokio::sync::RwLock;
 
 pub type CacheTransactionId = TransactionId;
@@ -256,68 +257,68 @@ impl Cache {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
+#[derive(Error, Debug)]
+pub enum CacheStateError {
+    #[error("{0}")]
+    DbError(#[from] rocksdb::Error),
+
+    #[error("{0}")]
+    DeserializationError(#[from] Box<bincode::ErrorKind>),
+
+    #[error("Missing data at {0}")]
+    MissingKeyError(String),
+}
+
 impl Cache {
-    pub async fn load_cache_state(pg_pool: &PgPool) -> Result<Cache, sqlx::Error> {
+    pub async fn load_cache_state(config: Config) -> Result<Cache, CacheStateError> {
         info!("Attempting to load cache state...");
 
+        let db = DB::open_default(config.kaspalytics_dir.join("cache_state")).unwrap();
+
         // Get low_hash
-        let low_hash_bytes =
-            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'low_hash'"#)
-                .fetch_one(pg_pool)
-                .await?
-                .try_get::<Vec<u8>, &str>("value_bytea")?;
-        let low_hash = bincode::deserialize::<Hash>(&low_hash_bytes).unwrap();
+        let low_hash_bytes = db
+            .get(b"low_hash")?
+            .ok_or(CacheStateError::MissingKeyError("low_hash".to_string()))?;
+        let low_hash = bincode::deserialize::<Hash>(&low_hash_bytes)?;
 
         // Get tip_timestamp
-        let tip_timestamp =
-            sqlx::query(r#"SELECT "value_int" FROM cache_state WHERE "key" = 'tip_timestamp'"#)
-                .fetch_one(pg_pool)
-                .await?
-                .try_get::<i64, &str>("value_int")?;
+        let tip_timestamp_bytes =
+            db.get(b"tip_timestamp")?
+                .ok_or(CacheStateError::MissingKeyError(
+                    "tip_timestamp".to_string(),
+                ))?;
+        let tip_timestamp = bincode::deserialize::<u64>(&tip_timestamp_bytes)?;
 
         // Get blocks map
-        let blocks_bytes =
-            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'blocks'"#)
-                .fetch_one(pg_pool)
-                .await?
-                .try_get::<Vec<u8>, &str>("value_bytea")?;
-        let blocks = bincode::deserialize::<DashMap<Hash, CacheBlock>>(&blocks_bytes).unwrap();
+        let blocks_bytes = db
+            .get(b"blocks")?
+            .ok_or(CacheStateError::MissingKeyError("blocks".to_string()))?;
+        let blocks = bincode::deserialize::<DashMap<Hash, CacheBlock>>(&blocks_bytes)?;
 
         // Get transactions map
-        let transactions_bytes =
-            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'transactions'"#)
-                .fetch_one(pg_pool)
-                .await?
-                .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let transactions_bytes = db
+            .get(b"transactions")?
+            .ok_or(CacheStateError::MissingKeyError("transactions".to_string()))?;
         let transactions = bincode::deserialize::<DashMap<CacheTransactionId, CacheTransaction>>(
             &transactions_bytes,
-        )
-        .unwrap();
+        )?;
 
         // Get accepting_block_transactions map
-        let accepting_block_transactions_bytes = sqlx::query(
-            r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'accepting_block_transactions'"#,
-        )
-        .fetch_one(pg_pool)
-        .await?
-        .try_get::<Vec<u8>, &str>("value_bytea")?;
+        let accepting_block_transactions_bytes =
+            db.get(b"accepting_block_transactions")?
+                .ok_or(CacheStateError::MissingKeyError(
+                    "accepting_block_transactions".to_string(),
+                ))?;
         let accepting_block_transactions = bincode::deserialize::<
             DashMap<Hash, Vec<CacheTransactionId>>,
-        >(&accepting_block_transactions_bytes)
-        .unwrap();
+        >(&accepting_block_transactions_bytes)?;
 
         // Get per_second map
-        let per_second_bytes =
-            sqlx::query(r#"SELECT "value_bytea" FROM cache_state WHERE "key" = 'per_second'"#)
-                .fetch_one(pg_pool)
-                .await?
-                .try_get::<Vec<u8>, &str>("value_bytea")?;
-        let per_second =
-            bincode::deserialize::<DashMap<u64, SecondMetrics>>(&per_second_bytes).unwrap();
-
-        sqlx::query("TRUNCATE TABLE cache_state")
-            .execute(pg_pool)
-            .await?;
+        let per_second_bytes = db
+            .get(b"per_second")?
+            .ok_or(CacheStateError::MissingKeyError("per_second".to_string()))?;
+        let per_second = bincode::deserialize::<DashMap<u64, SecondMetrics>>(&per_second_bytes)?;
 
         Ok(Cache {
             synced: AtomicBool::new(false),
@@ -330,86 +331,34 @@ impl Cache {
         })
     }
 
-    pub async fn store_cache_state(&self, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
+    pub async fn store_cache_state(&self, config: Config) -> Result<(), CacheStateError> {
         info!("Storing cache state... ");
 
+        let db = DB::open_default(config.kaspalytics_dir.join("cache_state"))?;
+
         // Store low_hash
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
-            VALUES('low_hash', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_bytea" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(bincode::serialize(&self.low_hash().await.unwrap()).unwrap())
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        db.put(
+            b"low_hash",
+            bincode::serialize(&self.low_hash().await.unwrap()).unwrap(),
+        )?;
 
         // Insert tip_timestamp to db
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_int", updated_timestamp)
-            VALUES('tip_timestamp', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_int" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(self.tip_timestamp() as i64)
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        db.put(b"tip_timestamp", bincode::serialize(&self.tip_timestamp())?)?;
 
         // Insert blocks to db
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
-            VALUES('blocks', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_bytea" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(bincode::serialize(&self.blocks).unwrap())
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        db.put(b"blocks", bincode::serialize(&self.blocks)?)?;
 
         // Insert transactions to db
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
-            VALUES('transactions', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_bytea" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(bincode::serialize(&self.transactions).unwrap())
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        db.put(b"transactions", bincode::serialize(&self.transactions)?)?;
 
         // Insert accepting_block_transactions to db
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
-            VALUES('accepting_block_transactions', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_bytea" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(bincode::serialize(&self.accepting_block_transactions).unwrap())
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        db.put(
+            b"accepting_block_transactions",
+            bincode::serialize(&self.accepting_block_transactions)?,
+        )?;
 
         // Insert per_second to db
-        sqlx::query(
-            r#"INSERT INTO cache_state ("key", "value_bytea", updated_timestamp)
-            VALUES('per_second', $1, $2)
-            ON CONFLICT ("key") DO UPDATE
-                SET "value_bytea" = $1, updated_timestamp = $2
-            "#,
-        )
-        .bind(bincode::serialize(&self.per_second).unwrap())
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+        db.put(b"per_second", bincode::serialize(&self.per_second)?)?;
 
         Ok(())
     }

@@ -49,7 +49,11 @@ async fn main() {
 
     check_rpc_node_status(&config, rpc_client.clone()).await;
 
-    let cache = Arc::new(Cache::load_cache_state(&pg_pool).await.unwrap_or_default());
+    let cache = Arc::new(
+        Cache::load_cache_state(config.clone())
+            .await
+            .unwrap_or_default(),
+    );
     info!("Cache log hash {:?}", cache.low_hash().await);
 
     let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
@@ -57,7 +61,7 @@ async fn main() {
     // Listener task
     let listener_cache = cache.clone();
     let listener_shutdown_rx = shutdown_tx.subscribe();
-    let mut listener = dag::DagListener::new(listener_cache, rpc_client.clone(), pg_pool.clone());
+    let mut listener = dag::DagListener::new(config.clone(), listener_cache, rpc_client.clone());
     let listener_handle = tokio::spawn(async move {
         listener.run(listener_shutdown_rx).await;
     });
