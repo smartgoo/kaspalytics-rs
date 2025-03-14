@@ -71,14 +71,23 @@ impl BlockAnalysis {
 
 impl BlockAnalysis {
     fn load_chain_blocks(&mut self) -> Result<(), StoreError> {
-        for (key, hash) in self
+        for entry in self
             .storage
             .selected_chain_store
             .read()
             .access_hash_by_index
             .iterator()
-            .map(|p| p.unwrap())
         {
+            let (key, hash) = entry.map_err(|err| {
+                if let Some(rocksdb_err) = err.downcast_ref::<rocksdb::Error>() {
+                    StoreError::DbError(rocksdb_err.clone())
+                } else if let Ok(bincode_err) = err.downcast::<Box<bincode::ErrorKind>>() {
+                    StoreError::DeserializationError(*bincode_err)
+                } else {
+                    unreachable!()
+                }
+            })?;
+
             let key = u64::from_le_bytes((*key).try_into().unwrap());
             let header = self.storage.headers_store.get_header(hash)?;
 
