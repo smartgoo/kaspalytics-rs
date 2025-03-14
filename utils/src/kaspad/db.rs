@@ -33,7 +33,7 @@ pub fn init_readonly_db(path: PathBuf, files_limit: i32) -> Arc<DB> {
 
 pub fn checkpoint_path(config: Config, prefix: CheckpointSource) -> PathBuf {
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
-    let mut checkpoint_path = config.checkpoint_root_dir.clone();
+    let mut checkpoint_path = config.kaspalytics_dir.clone();
     checkpoint_path.push(format!("{}_{}", prefix, timestamp));
     checkpoint_path
 }
