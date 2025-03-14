@@ -251,7 +251,7 @@ impl Cache {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let threshold = now - 86400 * 2;
+        let threshold = now - (86400f64 * 1.1) as u64;
         self.per_second.retain(|second, _| *second > threshold);
     }
 }
