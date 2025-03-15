@@ -4,7 +4,7 @@ use kaspa_rpc_core::RpcAcceptedTransactionIds;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
-use log::info;
+use log::{info, warn};
 use std::sync::atomic::AtomicBool;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
@@ -76,6 +76,22 @@ impl DagListener {
 
     async fn process_vspc_removed(&self, removed_chain_blocks: Vec<Hash>) {
         for removed_chain_block in removed_chain_blocks.iter() {
+            match self.cache.blocks.get(removed_chain_block) {
+                Some(block) => {
+                    info!(
+                        "Removed chain block {} found in blocks cache, block timestamp {}",
+                        removed_chain_block,
+                        block.value().timestamp
+                    );
+                }
+                None => {
+                    warn!(
+                        "Removed chain block {} not found in blocks cache",
+                        removed_chain_block
+                    );
+                }
+            }
+
             // TODO handling for when reorg is below cache depth
 
             self.cache
@@ -154,11 +170,15 @@ impl DagListener {
                 pruning_point_hash, ..
             } = self.rpc_client.get_block_dag_info().await.unwrap();
 
-            self.cache.set_low_hash(pruning_point_hash).await;
-        }
+            info!("Starting from pruning point {:?}", pruning_point_hash);
 
-        // TODO handle situation where cache low hash has been pruned
-        info!("Starting from low_hash {:?}", self.cache.low_hash().await);
+            self.cache.set_low_hash(pruning_point_hash).await;
+        } else {
+            info!(
+                "Starting from cache low_hash {:?}",
+                self.cache.low_hash().await
+            );
+        }
 
         while !self.shutdown_flag.load(Ordering::SeqCst) {
             let GetBlockDagInfoResponse { tip_hashes, .. } =

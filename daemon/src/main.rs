@@ -4,6 +4,7 @@ mod dag;
 
 use cache::Cache;
 use env_logger::{Builder, Env};
+use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
 use kaspalytics_utils::email::send_email;
@@ -49,12 +50,31 @@ async fn main() {
 
     check_rpc_node_status(&config, rpc_client.clone()).await;
 
-    let cache = Arc::new(
-        Cache::load_cache_state(config.clone())
-            .await
-            .unwrap_or_default(),
-    );
-    info!("Cache log hash {:?}", cache.low_hash().await);
+    let cache = match Cache::load_cache_state(config.clone()).await {
+        Ok(cache) => {
+            let low_hash = cache.low_hash().await.unwrap();
+            match rpc_client.get_block(low_hash, false).await {
+                Ok(_) => {
+                    info!("Cache low hash {} still held by Kaspa node", low_hash);
+                    Arc::new(cache)
+                }
+                Err(RpcError::RpcSubsystem(_)) => {
+                    info!(
+                        "Cache low hash {} no longer held by Kaspa node. Resetting cache",
+                        low_hash
+                    );
+                    Arc::new(Cache::default())
+                }
+                Err(err) => {
+                    panic!(
+                        "Unhandled RPC error during cache initialization: {}",
+                        err,
+                    );
+                }
+            }
+        }
+        Err(_) => Arc::new(Cache::default()),
+    };
 
     let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
 
