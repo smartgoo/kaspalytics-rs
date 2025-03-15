@@ -1,10 +1,8 @@
-use crate::cache::{Cache, CacheBlock, CacheTransaction};
-use kaspa_hashes::Hash;
-use kaspa_rpc_core::RpcAcceptedTransactionIds;
+use crate::cache::Cache;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
-use log::{info, warn};
+use log::info;
 use std::sync::atomic::AtomicBool;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
@@ -37,130 +35,44 @@ impl DagListener {
             .await
             .unwrap();
 
-        for block in blocks.blocks.iter() {
-            self.cache
-                .blocks
-                .insert(block.header.hash, CacheBlock::from(block.clone()));
+        let tip_timestamp = blocks.blocks.last().unwrap().header.timestamp;
 
-            let block_epoch_second = block.header.timestamp / 1000;
-
-            // Increment block count for given second
-            // TODO try to move to another task
-            self.cache
-                .per_second
-                .entry(block_epoch_second)
-                .and_modify(|ps| ps.block_count += 1)
-                .or_default();
-
-            for tx in block.transactions.iter() {
-                let tx_id = tx.verbose_data.as_ref().unwrap().transaction_id;
-
-                self.cache
-                    .transactions
-                    .entry(tx_id)
-                    .and_modify(|entry| entry.blocks.push(block.header.hash))
-                    .or_insert(CacheTransaction::from(tx.clone()));
-
-                // Increment tx count for given second
-                // TODO try to move to another task
-                self.cache
-                    .per_second
-                    .entry(block_epoch_second)
-                    .and_modify(|ps| ps.transaction_count += 1);
-            }
-
-            self.cache
-                .set_tip_timestamp(blocks.blocks.last().unwrap().header.timestamp);
+        for block in blocks.blocks {
+            self.cache.insert_block(block);
         }
+
+        self.cache.set_tip_timestamp(tip_timestamp);
     }
 
-    async fn process_vspc_removed(&self, removed_chain_blocks: Vec<Hash>) {
-        for removed_chain_block in removed_chain_blocks.iter() {
-            match self.cache.blocks.get(removed_chain_block) {
-                Some(block) => {
-                    info!(
-                        "Removed chain block {} found in blocks cache, block timestamp {}",
-                        removed_chain_block,
-                        block.value().timestamp
-                    );
-                }
-                None => {
-                    warn!(
-                        "Removed chain block {} not found in blocks cache",
-                        removed_chain_block
-                    );
-                }
-            }
+    async fn process_vspc(&mut self) {
+        let vspc = self
+            .rpc_client
+            .get_virtual_chain_from_block(self.cache.low_hash().await.unwrap(), true)
+            .await
+            .unwrap();
 
-            // TODO handling for when reorg is below cache depth
-
-            self.cache
-                .blocks
-                .entry(*removed_chain_block)
-                .and_modify(|block| block.is_chain_block = false);
-
-            let (_, removed_transactions) = self
-                .cache
-                .accepting_block_transactions
-                .remove(removed_chain_block)
-                .unwrap();
-
-            for tx_id in removed_transactions.iter() {
-                self.cache
-                    .transactions
-                    .entry(*tx_id)
-                    .and_modify(|tx| tx.accepting_block_hash = None);
-
-                let tx_timestamp = self.cache.transactions.get(tx_id).unwrap().block_time / 1000;
-
-                // Decrement effective tx count for given second
-                // TODO try to move to another task
-                self.cache
-                    .per_second
-                    .entry(tx_timestamp)
-                    .and_modify(|ps| ps.effective_transaction_count -= 1);
-            }
+        // Handle removed chain blocks
+        for removed_chain_block in vspc.removed_chain_block_hashes {
+            self.cache.remove_chain_block(removed_chain_block);
         }
-    }
 
-    async fn process_vspc_added(&mut self, acceptance_data: Vec<RpcAcceptedTransactionIds>) {
-        for acceptance in acceptance_data.iter() {
+        // Handle added chain blocks
+        for acceptance_obj in vspc.accepted_transaction_ids {
+            // If GetBlocks has not yet reached this block, break
             if !self
                 .cache
                 .blocks
-                .contains_key(&acceptance.accepting_block_hash)
+                .contains_key(&acceptance_obj.accepting_block_hash)
             {
                 break;
             }
 
+            // Set cache low hash, will pick up next iteration
             self.cache
-                .set_low_hash(acceptance.accepting_block_hash)
+                .set_low_hash(acceptance_obj.accepting_block_hash)
                 .await;
 
-            self.cache
-                .blocks
-                .entry(acceptance.accepting_block_hash)
-                .and_modify(|block| block.is_chain_block = true);
-
-            for tx_id in acceptance.accepted_transaction_ids.iter() {
-                self.cache.transactions.entry(*tx_id).and_modify(|tx| {
-                    tx.accepting_block_hash = Some(acceptance.accepting_block_hash)
-                });
-
-                let tx_timestamp = self.cache.transactions.get(tx_id).unwrap().block_time / 1000;
-
-                // Increment effective tx count for given second
-                // TODO try to move to another task
-                self.cache
-                    .per_second
-                    .entry(tx_timestamp)
-                    .and_modify(|ps| ps.effective_transaction_count += 1);
-            }
-
-            self.cache.accepting_block_transactions.insert(
-                acceptance.accepting_block_hash,
-                acceptance.accepted_transaction_ids.clone(),
-            );
+            self.cache.add_chain_block_acceptance_data(acceptance_obj);
         }
     }
 
@@ -185,18 +97,10 @@ impl DagListener {
                 self.rpc_client.get_block_dag_info().await.unwrap();
 
             self.process_blocks().await;
-
-            let vspc = self
-                .rpc_client
-                .get_virtual_chain_from_block(self.cache.low_hash().await.unwrap(), true)
-                .await
-                .unwrap();
-
-            self.process_vspc_removed(vspc.removed_chain_block_hashes)
-                .await;
-            self.process_vspc_added(vspc.accepted_transaction_ids).await;
+            self.process_vspc().await;
 
             self.cache.prune();
+
             self.cache.log_size();
 
             if tip_hashes.contains(&self.cache.low_hash().await.unwrap()) {

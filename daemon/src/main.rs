@@ -66,10 +66,7 @@ async fn main() {
                     Arc::new(Cache::default())
                 }
                 Err(err) => {
-                    panic!(
-                        "Unhandled RPC error during cache initialization: {}",
-                        err,
-                    );
+                    panic!("Unhandled RPC error during cache initialization: {}", err);
                 }
             }
         }

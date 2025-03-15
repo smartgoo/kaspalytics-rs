@@ -3,11 +3,12 @@ use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint, RpcTransactionOutput,
+    RpcAcceptedTransactionIds, RpcBlock, RpcTransaction, RpcTransactionInput,
+    RpcTransactionOutpoint, RpcTransactionOutput,
 };
 use kaspa_txscript::script_class::ScriptClass;
 use kaspalytics_utils::config::Config;
-use log::info;
+use log::{info, warn};
 use rocksdb::DB;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -187,6 +188,121 @@ impl Cache {
     pub fn tip_timestamp(&self) -> u64 {
         self.tip_timestamp.load(Ordering::SeqCst)
     }
+
+    fn insert_transaction(&self, transaction: RpcTransaction) {
+        let tx_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
+        let block_hash = transaction.verbose_data.clone().unwrap().block_hash;
+        let block_time = transaction.verbose_data.clone().unwrap().block_time;
+
+        // Add transaction to map
+        self.transactions
+            .entry(tx_id)
+            .and_modify(|entry| entry.blocks.push(block_hash))
+            .or_insert(CacheTransaction::from(transaction.clone()));
+
+        // Increment per second stats TOTAL (not effective) tx count
+        self.per_second
+            .entry(block_time / 1000)
+            .and_modify(|ps| ps.transaction_count += 1);
+    }
+
+    pub fn insert_block(&self, block: RpcBlock) {
+        // Add block to map
+        self.blocks
+            .insert(block.header.hash, CacheBlock::from(block.clone()));
+
+        // Increment per second stats block count
+        self.per_second
+            .entry(block.header.timestamp / 1000)
+            .and_modify(|v| v.block_count += 1)
+            .or_default();
+
+        // Process transactions in the block
+        for tx in block.transactions.iter() {
+            self.insert_transaction(tx.clone());
+        }
+    }
+
+    fn remove_transaction_acceptance(&self, transaction_id: Hash) {
+        // Remove former accepting block hash from transaction
+        self.transactions
+            .entry(transaction_id)
+            .and_modify(|v| v.accepting_block_hash = None);
+
+        let tx_timestamp = self.transactions.get(&transaction_id).unwrap().block_time / 1000;
+
+        // Decrement per second effective tx count
+        self.per_second
+            .entry(tx_timestamp)
+            .and_modify(|v| v.effective_transaction_count -= 1);
+    }
+
+    pub fn remove_chain_block(&self, removed_chain_block: Hash) {
+        // Temporary while working thru bug...
+        match self.blocks.get(&removed_chain_block) {
+            Some(block) => {
+                info!(
+                    "Removed chain block {} found in blocks cache, block timestamp {}",
+                    removed_chain_block,
+                    block.value().timestamp
+                );
+            }
+            None => {
+                warn!(
+                    "Removed chain block {} not found in blocks cache",
+                    removed_chain_block
+                );
+            }
+        }
+
+        // Set block's chain block status to false
+        self.blocks
+            .entry(removed_chain_block)
+            .and_modify(|v| v.is_chain_block = false);
+
+        // Remove chain block and all accepted txs from map
+        let (_, removed_transactions) = self
+            .accepting_block_transactions
+            .remove(&removed_chain_block)
+            .unwrap();
+
+        // Process each removed tx
+        for tx_id in removed_transactions {
+            self.remove_transaction_acceptance(tx_id);
+        }
+    }
+
+    fn add_transaction_acceptance(&self, transaction_id: Hash, accepting_block_hash: Hash) {
+        // Set transactions accepting block hash
+        self.transactions
+            .entry(transaction_id)
+            .and_modify(|v| v.accepting_block_hash = Some(accepting_block_hash));
+
+        let tx_timestamp = self.transactions.get(&transaction_id).unwrap().block_time / 1000;
+
+        // Increment effective transaction count
+        self.per_second
+            .entry(tx_timestamp)
+            .and_modify(|v| v.effective_transaction_count += 1);
+    }
+
+    pub fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds) {
+        // Set block's chain block status to true
+        self.blocks
+            .entry(acceptance_data.accepting_block_hash)
+            .and_modify(|v| v.is_chain_block = true);
+
+        // Add chain block and it's accepted transactions
+        self.accepting_block_transactions.insert(
+            acceptance_data.accepting_block_hash,
+            acceptance_data.accepted_transaction_ids.clone(),
+        );
+
+        // Process transactions
+        for tx_id in acceptance_data.accepted_transaction_ids {
+            self.add_transaction_acceptance(tx_id, acceptance_data.accepting_block_hash);
+        }
+    }
 }
 
 impl Cache {
@@ -272,9 +388,10 @@ pub enum CacheStateError {
 
 impl Cache {
     pub async fn load_cache_state(config: Config) -> Result<Cache, CacheStateError> {
+        // TODO refactor store and load function to better handle DB
         info!("Attempting to load cache state...");
 
-        let db = DB::open_default(config.kaspalytics_dir.join("cache_state")).unwrap();
+        let db = DB::open_default(config.kaspalytics_dir.join("cache_state"))?;
 
         // Get low_hash
         let low_hash_bytes = db
@@ -339,7 +456,7 @@ impl Cache {
         // Store low_hash
         db.put(
             b"low_hash",
-            bincode::serialize(&self.low_hash().await.unwrap()).unwrap(),
+            bincode::serialize(&self.low_hash().await.unwrap())?,
         )?;
 
         // Insert tip_timestamp to db
