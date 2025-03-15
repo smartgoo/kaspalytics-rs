@@ -13,7 +13,7 @@ use kaspa_utxoindex::stores::indexed_utxos::{
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
-use kaspalytics_utils::kaspad::db::UtxoIndexCheckpoint;
+use kaspalytics_utils::kaspad::db::UtxoIndexSecondary;
 use log::debug;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
@@ -323,7 +323,7 @@ impl UtxoBasedPipeline {
 
         // Get UTXO tips from utxoindex db
         debug!("Loading UTXO tips from RocksDB...");
-        let db = UtxoIndexCheckpoint::new(self.config.clone());
+        let db = UtxoIndexSecondary::new(self.config.clone());
 
         let utxo_tip_block = self.get_utxo_tip(db.db.clone());
         let utxo_tip_circulating_supply = self.get_circulating_supply(db.db.clone());

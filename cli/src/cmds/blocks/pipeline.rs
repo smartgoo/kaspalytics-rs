@@ -11,7 +11,7 @@ use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
-use kaspalytics_utils::kaspad::db::ConsensusStorageCheckpoint;
+use kaspalytics_utils::kaspad::db::ConsensusStorageSecondary;
 use log::{debug, error};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -357,7 +357,7 @@ impl BlockAnalysis {
         let retry_delay = std::time::Duration::from_secs(60);
 
         loop {
-            let storage = ConsensusStorageCheckpoint::new(config.clone());
+            let storage = ConsensusStorageSecondary::new(config.clone());
 
             let mut process =
                 BlockAnalysis::new_for_yesterday(config.clone(), storage.inner.clone());
