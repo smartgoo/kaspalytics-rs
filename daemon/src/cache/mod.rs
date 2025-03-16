@@ -1,158 +1,25 @@
+pub mod model;
+pub mod per_second;
+
 use dashmap::DashMap;
-use kaspa_consensus_core::subnets::SubnetworkId;
-use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_hashes::Hash;
-use kaspa_rpc_core::{
-    RpcAcceptedTransactionIds, RpcBlock, RpcTransaction, RpcTransactionInput,
-    RpcTransactionOutpoint, RpcTransactionOutput,
-};
-use kaspa_txscript::script_class::ScriptClass;
+use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcBlock, RpcTransaction};
 use kaspalytics_utils::config::Config;
 use log::{info, warn};
+use model::*;
+use per_second::*;
 use rocksdb::DB;
-use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tokio::sync::RwLock;
-
-pub type CacheTransactionId = TransactionId;
-pub type CacheScriptPublicKey = ScriptPublicKey;
-pub type CacheScriptClass = ScriptClass;
-
-#[allow(dead_code)]
-#[derive(Serialize, Deserialize)]
-pub struct CacheBlock {
-    pub hash: Hash,
-    pub timestamp: u64,
-    pub daa_score: u64,
-    pub transactions: Vec<CacheTransactionId>,
-    pub selected_parent_hash: Hash,
-    pub is_chain_block: bool,
-}
-
-impl From<RpcBlock> for CacheBlock {
-    fn from(value: RpcBlock) -> Self {
-        CacheBlock {
-            hash: value.header.hash,
-            timestamp: value.header.timestamp,
-            daa_score: value.header.daa_score,
-            transactions: value
-                .transactions
-                .iter()
-                .map(|tx| tx.verbose_data.clone().unwrap().transaction_id)
-                .collect(),
-            selected_parent_hash: value.verbose_data.clone().unwrap().selected_parent_hash,
-            is_chain_block: value.verbose_data.unwrap().is_chain_block,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CacheTransactionOutput {
-    pub value: u64,
-    pub script_public_key: CacheScriptPublicKey,
-    pub script_public_key_type: CacheScriptClass,
-    pub script_public_key_address: String,
-}
-
-impl From<RpcTransactionOutput> for CacheTransactionOutput {
-    fn from(value: RpcTransactionOutput) -> Self {
-        Self {
-            value: value.value,
-            script_public_key: value.script_public_key,
-            script_public_key_type: value.verbose_data.clone().unwrap().script_public_key_type,
-            script_public_key_address: value
-                .verbose_data
-                .unwrap()
-                .script_public_key_address
-                .to_string(),
-        }
-    }
-}
-
-pub type CacheTransactionOutpoint = RpcTransactionOutpoint;
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CacheTransactionInput {
-    pub previous_outpoint: CacheTransactionOutpoint,
-    pub signature_script: Vec<u8>,
-    pub sequence: u64,
-    pub sig_op_count: u8,
-}
-
-impl From<RpcTransactionInput> for CacheTransactionInput {
-    fn from(value: RpcTransactionInput) -> Self {
-        Self {
-            previous_outpoint: value.previous_outpoint,
-            signature_script: value.signature_script,
-            sequence: value.sequence,
-            sig_op_count: value.sig_op_count,
-        }
-    }
-}
-
-pub type CacheSubnetworkId = SubnetworkId;
-
-// TODO clean up and standardize Rpc* vs. Cache*
-#[allow(dead_code)]
-#[derive(Serialize, Deserialize)]
-pub struct CacheTransaction {
-    pub id: CacheTransactionId,
-    pub inputs: Vec<CacheTransactionInput>,
-    pub outputs: Vec<CacheTransactionOutput>,
-    lock_time: u64,
-    pub subnetwork_id: CacheSubnetworkId,
-    pub gas: u64,
-    pub payload: Vec<u8>,
-    pub mass: u64,
-    pub compute_mass: u64,
-    // block_time: u64,
-    pub blocks: Vec<Hash>,
-    pub block_time: u64,
-    pub accepting_block_hash: Option<Hash>,
-}
-
-impl From<RpcTransaction> for CacheTransaction {
-    fn from(value: RpcTransaction) -> Self {
-        CacheTransaction {
-            id: value.verbose_data.clone().unwrap().transaction_id,
-            inputs: value
-                .inputs
-                .iter()
-                .map(|o| CacheTransactionInput::from(o.clone()))
-                .collect(),
-            outputs: value
-                .outputs
-                .iter()
-                .map(|o| CacheTransactionOutput::from(o.clone()))
-                .collect(),
-            lock_time: value.lock_time,
-            subnetwork_id: value.subnetwork_id,
-            gas: value.gas,
-            payload: value.payload,
-            mass: value.mass,
-            compute_mass: value.verbose_data.clone().unwrap().compute_mass,
-            blocks: vec![value.verbose_data.clone().unwrap().block_hash],
-            block_time: value.verbose_data.clone().unwrap().block_time,
-            accepting_block_hash: None,
-        }
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct SecondMetrics {
-    pub block_count: u64,
-    pub transaction_count: u64,
-    pub effective_transaction_count: u64,
-}
 
 #[derive(Default)]
 pub struct Cache {
     // Synced to DAG tip
     synced: AtomicBool,
 
-    low_hash: RwLock<Option<Hash>>, // use std
+    low_hash: RwLock<Option<Hash>>, // TODO use std
 
     tip_timestamp: AtomicU64,
 
@@ -160,7 +27,7 @@ pub struct Cache {
     pub transactions: DashMap<CacheTransactionId, CacheTransaction>,
     pub accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
 
-    pub per_second: DashMap<u64, SecondMetrics>,
+    pub seconds: DashMap<u64, SecondMetrics>,
 }
 
 impl Cache {
@@ -189,7 +56,7 @@ impl Cache {
         self.tip_timestamp.load(Ordering::SeqCst)
     }
 
-    fn insert_transaction(&self, transaction: RpcTransaction) {
+    fn add_transaction(&self, transaction: RpcTransaction) {
         let tx_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
         let block_hash = transaction.verbose_data.clone().unwrap().block_hash;
         let block_time = transaction.verbose_data.clone().unwrap().block_time;
@@ -200,26 +67,26 @@ impl Cache {
             .and_modify(|entry| entry.blocks.push(block_hash))
             .or_insert(CacheTransaction::from(transaction.clone()));
 
-        // Increment per second stats TOTAL (not effective) tx count
-        self.per_second
+        // Call per second add process
+        self.seconds
             .entry(block_time / 1000)
-            .and_modify(|ps| ps.transaction_count += 1);
+            .and_modify(|v| v.add_transaction());
     }
 
-    pub fn insert_block(&self, block: RpcBlock) {
+    pub fn add_block(&self, block: RpcBlock) {
         // Add block to map
         self.blocks
             .insert(block.header.hash, CacheBlock::from(block.clone()));
 
         // Increment per second stats block count
-        self.per_second
+        self.seconds
             .entry(block.header.timestamp / 1000)
-            .and_modify(|v| v.block_count += 1)
-            .or_default();
+            .or_default()
+            .add_block(block.transactions[0].payload.clone());
 
         // Process transactions in the block
-        for tx in block.transactions.iter() {
-            self.insert_transaction(tx.clone());
+        for tx in block.transactions {
+            self.add_transaction(tx);
         }
     }
 
@@ -229,12 +96,12 @@ impl Cache {
             .entry(transaction_id)
             .and_modify(|v| v.accepting_block_hash = None);
 
-        let tx_timestamp = self.transactions.get(&transaction_id).unwrap().block_time / 1000;
+        let tx_timestamp = self.transactions.get(&transaction_id).unwrap().block_time;
 
         // Decrement per second effective tx count
-        self.per_second
+        self.seconds
             .entry(tx_timestamp)
-            .and_modify(|v| v.effective_transaction_count -= 1);
+            .and_modify(|v| v.remove_transaction_acceptance());
     }
 
     pub fn remove_chain_block(&self, removed_chain_block: Hash) {
@@ -278,12 +145,12 @@ impl Cache {
             .entry(transaction_id)
             .and_modify(|v| v.accepting_block_hash = Some(accepting_block_hash));
 
-        let tx_timestamp = self.transactions.get(&transaction_id).unwrap().block_time / 1000;
+        let tx_timestamp = self.transactions.get(&transaction_id).unwrap().block_time;
 
         // Increment effective transaction count
-        self.per_second
+        self.seconds
             .entry(tx_timestamp)
-            .and_modify(|v| v.effective_transaction_count += 1);
+            .and_modify(|v| v.add_transaction_acceptance());
     }
 
     pub fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds) {
@@ -313,7 +180,7 @@ impl Cache {
             self.blocks.len(),
             self.transactions.len(),
             self.accepting_block_transactions.len(),
-            self.per_second.len(),
+            self.seconds.len(),
         );
     }
 }
@@ -323,8 +190,8 @@ impl Cache {
         // TODO refactor this
 
         // TODO better handling of window size
-        // Currently targeting 1 hour of blocks
-        let window = 3600 * 1000;
+        // Currently targeting 5 mins of block data
+        let window = 5 * 60 * 1000;
         // let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
         let pruning_timestamp = self.tip_timestamp() - window;
 
@@ -368,8 +235,8 @@ impl Cache {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let threshold = now - (86400f64 * 1.1) as u64;
-        self.per_second.retain(|second, _| *second > threshold);
+        let threshold = now - (86_400f64 * 1.1) as u64;
+        self.seconds.retain(|second, _| *second > threshold);
     }
 }
 
@@ -435,7 +302,7 @@ impl Cache {
         let per_second_bytes = db
             .get(b"per_second")?
             .ok_or(CacheStateError::MissingKeyError("per_second".to_string()))?;
-        let per_second = bincode::deserialize::<DashMap<u64, SecondMetrics>>(&per_second_bytes)?;
+        let seconds = bincode::deserialize::<DashMap<u64, SecondMetrics>>(&per_second_bytes)?;
 
         Ok(Cache {
             synced: AtomicBool::new(false),
@@ -444,7 +311,7 @@ impl Cache {
             blocks,
             transactions,
             accepting_block_transactions,
-            per_second,
+            seconds,
         })
     }
 
@@ -475,7 +342,7 @@ impl Cache {
         )?;
 
         // Insert per_second to db
-        db.put(b"per_second", bincode::serialize(&self.per_second)?)?;
+        db.put(b"per_second", bincode::serialize(&self.seconds)?)?;
 
         Ok(())
     }

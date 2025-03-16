@@ -22,26 +22,16 @@ dashmap = { version = "6.1.0", features = ["serde"] }
 dirs = "5.0.1"
 dotenvy = "0.15.7"
 env_logger = "0.11.3"
-# kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-hashes = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-# kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
-kaspa-addresses = { path = "../rusty-kaspa-smartgoo/crypto/addresses" }
-kaspa-consensus = { path = "../rusty-kaspa-smartgoo/consensus" }
-kaspa-consensus-core = { path = "../rusty-kaspa-smartgoo/consensus/core" }
-kaspa-database = { path = "../rusty-kaspa-smartgoo/database" }
-kaspa-hashes = { path = "../rusty-kaspa-smartgoo/crypto/hashes" }
-kaspa-rpc-core = { path = "../rusty-kaspa-smartgoo/rpc/core" }
-kaspa-txscript = { path = "../rusty-kaspa-smartgoo/crypto/txscript" }
-kaspa-utils = { path = "../rusty-kaspa-smartgoo/utils" }
-kaspa-utxoindex = { path = "../rusty-kaspa-smartgoo/indexes/utxoindex" }
-kaspa-wrpc-client = { path = "../rusty-kaspa-smartgoo/rpc/wrpc/client" }
+kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-hashes = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
+kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", branch = "kaspalytics-dev" }
 kaspalytics-cache = { version = "0.1.0", path = "cache" }
 kaspalytics-cli = { version = "0.1.0", path = "cli" }
 kaspalytics-indexer = { version = "0.1.0", path = "indexer" }

@@ -1,6 +1,6 @@
 mod analyzer;
 mod cache;
-mod dag;
+mod listener;
 
 use cache::Cache;
 use env_logger::{Builder, Env};
@@ -78,7 +78,8 @@ async fn main() {
     // Listener task
     let listener_cache = cache.clone();
     let listener_shutdown_rx = shutdown_tx.subscribe();
-    let mut listener = dag::DagListener::new(config.clone(), listener_cache, rpc_client.clone());
+    let mut listener =
+        listener::DagListener::new(config.clone(), listener_cache, rpc_client.clone());
     let listener_handle = tokio::spawn(async move {
         listener.run(listener_shutdown_rx).await;
     });

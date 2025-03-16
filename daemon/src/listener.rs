@@ -2,10 +2,10 @@ use crate::cache::Cache;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
-use log::info;
+use log::{debug, info};
 use std::sync::atomic::AtomicBool;
 use std::sync::{atomic::Ordering, Arc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast::Receiver;
 use tokio::time::sleep;
 
@@ -29,27 +29,31 @@ impl DagListener {
 
 impl DagListener {
     async fn process_blocks(&self) {
+        let s = Instant::now();
         let blocks = self
             .rpc_client
             .get_blocks(Some(self.cache.low_hash().await.unwrap()), true, true)
             .await
             .unwrap();
+        debug!("get_blocks took {:?}", s.elapsed());
 
         let tip_timestamp = blocks.blocks.last().unwrap().header.timestamp;
 
         for block in blocks.blocks {
-            self.cache.insert_block(block);
+            self.cache.add_block(block);
         }
 
         self.cache.set_tip_timestamp(tip_timestamp);
     }
 
     async fn process_vspc(&mut self) {
+        let s = Instant::now();
         let vspc = self
             .rpc_client
             .get_virtual_chain_from_block(self.cache.low_hash().await.unwrap(), true)
             .await
             .unwrap();
+        debug!("get_virtual_chain_from_block took {:?}", s.elapsed());
 
         // Handle removed chain blocks
         for removed_chain_block in vspc.removed_chain_block_hashes {

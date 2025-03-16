@@ -2,6 +2,7 @@ use chrono::Utc;
 use log::debug;
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -16,17 +17,17 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
     let threshold = now - 86400;
 
     let effective_count: u64 = cache
-        .per_second
+        .seconds
         .iter()
         .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.effective_transaction_count)
+        .map(|entry| entry.effective_transaction_count.load(Ordering::SeqCst))
         .sum();
 
     let count: u64 = cache
-        .per_second
+        .seconds
         .iter()
         .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.transaction_count)
+        .map(|entry| entry.transaction_count.load(Ordering::SeqCst))
         .sum();
 
     sqlx::query(
@@ -60,12 +61,18 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
     let mut effective_count_per_hour = HashMap::<u64, u64>::new();
 
     cache
-        .per_second
+        .seconds
         .iter()
         .map(|entry| {
             let second = *entry.key();
             let hour = second - (second % 3600);
-            (hour, entry.value().effective_transaction_count)
+            (
+                hour,
+                entry
+                    .value()
+                    .effective_transaction_count
+                    .load(Ordering::SeqCst),
+            )
         })
         .filter(|(hour, _)| *hour >= cutoff)
         .for_each(|(hour, count)| {
