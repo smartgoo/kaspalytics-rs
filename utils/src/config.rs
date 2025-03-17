@@ -72,13 +72,14 @@ impl Config {
 
         let rpc_url = env::var("RPC_URL").unwrap();
 
-        let kaspalytics_dir = match env::var("KASPALYTICS_DIR") {
+        let mut kaspalytics_dir = match env::var("KASPALYTICS_DIR") {
             Ok(v) => PathBuf::from(&v),
             Err(VarError::NotPresent) => get_app_dir(".kaspalytics".to_string()),
             Err(_) => panic!(),
         };
-        let kaspalytics_network_dir = kaspalytics_dir.join(network_id.to_string());
-        let _ = std::fs::create_dir_all(kaspalytics_dir.join(&kaspalytics_network_dir));
+        kaspalytics_dir.push(env.to_string());
+        kaspalytics_dir.push(network_id.to_string());
+        let _ = std::fs::create_dir_all(&kaspalytics_dir);
 
         let db_uri = env::var("DB_URI").unwrap();
         let db_max_pool_size = env::var("DB_MAX_POOL_SIZE")
@@ -98,7 +99,7 @@ impl Config {
             log_level,
             network_id,
             rpc_url,
-            kaspalytics_dir: kaspalytics_network_dir,
+            kaspalytics_dir,
             db_uri,
             db_max_pool_size,
             smtp_host,
