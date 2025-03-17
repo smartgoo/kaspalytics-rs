@@ -65,7 +65,7 @@ impl Cache {
         self.transactions
             .entry(tx_id)
             .and_modify(|entry| entry.blocks.push(block_hash))
-            .or_insert(CacheTransaction::from(transaction.clone()));
+            .or_insert(CacheTransaction::from(transaction));
 
         // Call per second add process
         self.seconds

@@ -38,12 +38,11 @@ impl DagListener {
         debug!("get_blocks took {:?}", s.elapsed());
 
         let tip_timestamp = blocks.blocks.last().unwrap().header.timestamp;
+        self.cache.set_tip_timestamp(tip_timestamp);
 
         for block in blocks.blocks {
             self.cache.add_block(block);
         }
-
-        self.cache.set_tip_timestamp(tip_timestamp);
     }
 
     async fn process_vspc(&mut self) {
