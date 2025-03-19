@@ -10,16 +10,17 @@ use model::*;
 use per_second::*;
 use rocksdb::DB;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 #[derive(Default)]
 pub struct Cache {
     // Synced to DAG tip
     synced: AtomicBool,
 
-    low_hash: RwLock<Option<Hash>>, // TODO use std
+    // low_hash: RwLock<Option<Hash>>,
+    last_known_chain_block: RwLock<Option<Hash>>,
 
     tip_timestamp: AtomicU64,
 
@@ -28,16 +29,28 @@ pub struct Cache {
     pub accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
 
     pub seconds: DashMap<u64, SecondMetrics>,
+
+    // pruning_point
+    // pruning_point_timestamp
 }
 
 impl Cache {
-    pub async fn set_low_hash(&self, hash: Hash) {
-        let mut h = self.low_hash.write().await;
+    // pub fn set_low_hash(&self, hash: Hash) {
+    //     let mut h = self.low_hash.write().unwrap();
+    //     *h = Some(hash);
+    // }
+
+    // pub fn low_hash(&self) -> Option<Hash> {
+    //     *self.low_hash.read().unwrap()
+    // }
+
+    pub fn set_last_known_chain_block(&self, hash: Hash) {
+        let mut h = self.last_known_chain_block.write().unwrap();
         *h = Some(hash);
     }
 
-    pub async fn low_hash(&self) -> Option<Hash> {
-        *self.low_hash.read().await
+    pub fn last_known_chain_block(&self) -> Option<Hash> {
+        *self.last_known_chain_block.read().unwrap()
     }
 
     pub fn set_synced(&self, state: bool) {
@@ -74,9 +87,15 @@ impl Cache {
     }
 
     pub fn add_block(&self, block: RpcBlock) {
-        // Add block to map
-        self.blocks
-            .insert(block.header.hash, CacheBlock::from(block.clone()));
+        // Add block to map if it does not yet exist
+        match self.blocks.entry(block.header.hash) {
+            dashmap::Entry::Occupied(_) => {
+                return;
+            }
+            dashmap::Entry::Vacant(e) => {
+                e.insert(CacheBlock::from(block.clone()));
+            }
+        }
 
         // Increment per second stats block count
         self.seconds
@@ -100,26 +119,36 @@ impl Cache {
 
         // Decrement per second effective tx count
         self.seconds
-            .entry(tx_timestamp)
+            .entry(tx_timestamp / 1000)
             .and_modify(|v| v.remove_transaction_acceptance());
     }
 
     pub fn remove_chain_block(&self, removed_chain_block: Hash) {
         // Temporary while working thru bug...
-        match self.blocks.get(&removed_chain_block) {
+        let removed_chain_block_data = match self.blocks.get(&removed_chain_block) {
             Some(block) => {
                 info!(
                     "Removed chain block {} found in blocks cache, block timestamp {}",
                     removed_chain_block,
                     block.value().timestamp
                 );
+                block
             }
             None => {
                 warn!(
                     "Removed chain block {} not found in blocks cache",
                     removed_chain_block
                 );
+                return;
             }
+        };
+
+        if removed_chain_block_data.timestamp > self.tip_timestamp() {
+            warn!(
+                "Removed chain block {} timestamp greater than tip_timestamp",
+                removed_chain_block
+            );
+            return;
         }
 
         // Set block's chain block status to false
@@ -149,7 +178,7 @@ impl Cache {
 
         // Increment effective transaction count
         self.seconds
-            .entry(tx_timestamp)
+            .entry(tx_timestamp / 1000)
             .and_modify(|v| v.add_transaction_acceptance());
     }
 
@@ -261,10 +290,16 @@ impl Cache {
         let db = DB::open_default(config.kaspalytics_dir.join("cache_state"))?;
 
         // Get low_hash
-        let low_hash_bytes = db
-            .get(b"low_hash")?
+        // let low_hash_bytes = db
+        //     .get(b"low_hash")?
+        //     .ok_or(CacheStateError::MissingKeyError("low_hash".to_string()))?;
+        // let low_hash = bincode::deserialize::<Hash>(&low_hash_bytes)?;
+
+        // Get vspc_low_hash
+        let last_known_chain_block_bytes = db
+            .get(b"last_known_chain_block")?
             .ok_or(CacheStateError::MissingKeyError("low_hash".to_string()))?;
-        let low_hash = bincode::deserialize::<Hash>(&low_hash_bytes)?;
+        let last_known_chain_block = bincode::deserialize::<Hash>(&last_known_chain_block_bytes)?;
 
         // Get tip_timestamp
         let tip_timestamp_bytes =
@@ -306,7 +341,8 @@ impl Cache {
 
         Ok(Cache {
             synced: AtomicBool::new(false),
-            low_hash: RwLock::new(Some(low_hash)),
+            // low_hash: RwLock::new(Some(low_hash)),
+            last_known_chain_block: std::sync::RwLock::new(Some(last_known_chain_block)),
             tip_timestamp: AtomicU64::new(tip_timestamp as u64),
             blocks,
             transactions,
@@ -321,9 +357,15 @@ impl Cache {
         let db = DB::open_default(config.kaspalytics_dir.join("cache_state"))?;
 
         // Store low_hash
+        // db.put(
+        //     b"low_hash",
+        //     bincode::serialize(&self.low_hash().unwrap())?,
+        // )?;
+
+        // Store vspc_low_hash
         db.put(
-            b"low_hash",
-            bincode::serialize(&self.low_hash().await.unwrap())?,
+            b"last_known_chain_block",
+            bincode::serialize(&self.last_known_chain_block().unwrap())?,
         )?;
 
         // Insert tip_timestamp to db

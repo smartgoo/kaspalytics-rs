@@ -2,43 +2,46 @@ use crate::cache::Cache;
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
-use log::{debug, info};
+use log::info;
 use std::sync::atomic::AtomicBool;
 use std::sync::{atomic::Ordering, Arc};
-use std::time::{Duration, Instant};
-use tokio::sync::broadcast::Receiver;
+use std::time::Duration;
 use tokio::time::sleep;
 
 pub struct DagListener {
     config: Config,
     cache: Arc<Cache>,
     rpc_client: Arc<KaspaRpcClient>,
-    shutdown_flag: Arc<AtomicBool>,
+    shutdown_indicator: Arc<AtomicBool>,
 }
 
 impl DagListener {
-    pub fn new(config: Config, cache: Arc<Cache>, rpc_client: Arc<KaspaRpcClient>) -> Self {
+    pub fn new(
+        config: Config,
+        cache: Arc<Cache>,
+        rpc_client: Arc<KaspaRpcClient>,
+        shutdown_indicator: Arc<AtomicBool>,
+    ) -> Self {
         DagListener {
             config,
             cache,
             rpc_client,
-            shutdown_flag: Arc::new(AtomicBool::new(false)),
+            shutdown_indicator,
         }
     }
 }
 
 impl DagListener {
     async fn process_blocks(&self) {
-        let s = Instant::now();
         let blocks = self
             .rpc_client
-            .get_blocks(Some(self.cache.low_hash().await.unwrap()), true, true)
+            .get_blocks(
+                Some(self.cache.last_known_chain_block().unwrap()),
+                true,
+                true,
+            )
             .await
             .unwrap();
-        debug!("get_blocks took {:?}", s.elapsed());
-
-        let tip_timestamp = blocks.blocks.last().unwrap().header.timestamp;
-        self.cache.set_tip_timestamp(tip_timestamp);
 
         for block in blocks.blocks {
             self.cache.add_block(block);
@@ -46,13 +49,11 @@ impl DagListener {
     }
 
     async fn process_vspc(&mut self) {
-        let s = Instant::now();
         let vspc = self
             .rpc_client
-            .get_virtual_chain_from_block(self.cache.low_hash().await.unwrap(), true)
+            .get_virtual_chain_from_block(self.cache.last_known_chain_block().unwrap(), true)
             .await
             .unwrap();
-        debug!("get_virtual_chain_from_block took {:?}", s.elapsed());
 
         // Handle removed chain blocks
         for removed_chain_block in vspc.removed_chain_block_hashes {
@@ -70,51 +71,19 @@ impl DagListener {
                 break;
             }
 
-            // Set cache low hash, will pick up next iteration
             self.cache
-                .set_low_hash(acceptance_obj.accepting_block_hash)
-                .await;
+                .add_chain_block_acceptance_data(acceptance_obj.clone());
 
-            self.cache.add_chain_block_acceptance_data(acceptance_obj);
-        }
-    }
-
-    async fn main_loop(&mut self) {
-        if self.cache.low_hash().await.is_none() {
-            let GetBlockDagInfoResponse {
-                pruning_point_hash, ..
-            } = self.rpc_client.get_block_dag_info().await.unwrap();
-
-            info!("Starting from pruning point {:?}", pruning_point_hash);
-
-            self.cache.set_low_hash(pruning_point_hash).await;
-        } else {
-            info!(
-                "Starting from cache low_hash {:?}",
-                self.cache.low_hash().await
-            );
+            self.cache
+                .set_last_known_chain_block(acceptance_obj.accepting_block_hash);
         }
 
-        while !self.shutdown_flag.load(Ordering::SeqCst) {
-            let GetBlockDagInfoResponse { tip_hashes, .. } =
-                self.rpc_client.get_block_dag_info().await.unwrap();
-
-            self.process_blocks().await;
-            self.process_vspc().await;
-
-            self.cache.prune();
-
-            self.cache.log_size();
-
-            if tip_hashes.contains(&self.cache.low_hash().await.unwrap()) {
-                // TODO set synced to false if ever synced then falls out of sync
-                self.cache.set_synced(true);
-
-                // TODO log how long it takes to reach tip
-                info!("Listener at tip, sleeping");
-                sleep(Duration::from_secs(10)).await;
-            }
-        }
+        let block = self
+            .rpc_client
+            .get_block(self.cache.last_known_chain_block().unwrap(), false)
+            .await
+            .unwrap();
+        self.cache.set_tip_timestamp(block.header.timestamp);
     }
 
     pub async fn shutdown(&mut self) {
@@ -126,18 +95,42 @@ impl DagListener {
             .unwrap();
     }
 
-    pub async fn run(&mut self, mut shutdown_rx: Receiver<()>) {
-        let shutdown_flag = self.shutdown_flag.clone();
+    pub async fn run(&mut self) {
+        if self.cache.last_known_chain_block().is_none() {
+            let GetBlockDagInfoResponse {
+                pruning_point_hash, ..
+            } = self.rpc_client.get_block_dag_info().await.unwrap();
 
-        let _ = tokio::join!(
-            tokio::spawn(async move {
-                shutdown_rx.recv().await.unwrap();
-                shutdown_flag.store(true, Ordering::SeqCst);
-            }),
-            async {
-                self.main_loop().await;
+            info!("Starting from pruning point {:?}", pruning_point_hash);
+
+            self.cache.set_last_known_chain_block(pruning_point_hash);
+        } else {
+            info!(
+                "Starting from cache last_known_chain_block {:?}",
+                self.cache.last_known_chain_block()
+            );
+        }
+
+        while !self.shutdown_indicator.load(Ordering::Relaxed) {
+            let GetBlockDagInfoResponse { tip_hashes, .. } =
+                self.rpc_client.get_block_dag_info().await.unwrap();
+
+            self.process_blocks().await;
+            self.process_vspc().await;
+
+            self.cache.prune();
+
+            self.cache.log_size();
+
+            if tip_hashes.contains(&self.cache.last_known_chain_block().unwrap()) {
+                // TODO set synced to false if ever synced then falls out of sync
+                self.cache.set_synced(true);
+
+                // TODO log how long it takes to reach tip
+                info!("Listener at tip, sleeping");
+                sleep(Duration::from_secs(10)).await;
             }
-        );
+        }
 
         self.shutdown().await;
     }

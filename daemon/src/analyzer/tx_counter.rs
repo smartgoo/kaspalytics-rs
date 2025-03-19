@@ -20,14 +20,14 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
         .seconds
         .iter()
         .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.effective_transaction_count.load(Ordering::SeqCst))
+        .map(|entry| entry.effective_transaction_count.load(Ordering::Relaxed))
         .sum();
 
     let count: u64 = cache
         .seconds
         .iter()
         .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.transaction_count.load(Ordering::SeqCst))
+        .map(|entry| entry.transaction_count.load(Ordering::Relaxed))
         .sum();
 
     sqlx::query(
@@ -71,7 +71,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
                 entry
                     .value()
                     .effective_transaction_count
-                    .load(Ordering::SeqCst),
+                    .load(Ordering::Relaxed),
             )
         })
         .filter(|(hour, _)| *hour >= cutoff)

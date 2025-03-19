@@ -10,6 +10,7 @@ use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
 use kaspalytics_utils::email::send_email;
 use kaspalytics_utils::{check_rpc_node_status, database};
 use log::{debug, error, info};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -52,16 +53,19 @@ async fn main() {
 
     let cache = match Cache::load_cache_state(config.clone()).await {
         Ok(cache) => {
-            let low_hash = cache.low_hash().await.unwrap();
-            match rpc_client.get_block(low_hash, false).await {
+            let last_known_chain_block = cache.last_known_chain_block().unwrap();
+            match rpc_client.get_block(last_known_chain_block, false).await {
                 Ok(_) => {
-                    info!("Cache low hash {} still held by Kaspa node", low_hash);
+                    info!(
+                        "Cache last_known_chain_block {} still held by Kaspa node",
+                        last_known_chain_block,
+                    );
                     Arc::new(cache)
                 }
                 Err(RpcError::RpcSubsystem(_)) => {
                     info!(
-                        "Cache low hash {} no longer held by Kaspa node. Resetting cache",
-                        low_hash
+                        "Cache last_known_chain_block {} no longer held by Kaspa node. Resetting cache",
+                        last_known_chain_block
                     );
                     Arc::new(Cache::default())
                 }
@@ -73,30 +77,33 @@ async fn main() {
         Err(_) => Arc::new(Cache::default()),
     };
 
-    let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
+    let shutdown_indicator = Arc::new(AtomicBool::new(false));
 
     // Listener task
     let listener_cache = cache.clone();
-    let listener_shutdown_rx = shutdown_tx.subscribe();
-    let mut listener =
-        listener::DagListener::new(config.clone(), listener_cache, rpc_client.clone());
+    let mut listener = listener::DagListener::new(
+        config.clone(),
+        listener_cache,
+        rpc_client.clone(),
+        shutdown_indicator.clone(),
+    );
     let listener_handle = tokio::spawn(async move {
-        listener.run(listener_shutdown_rx).await;
+        listener.run().await;
     });
 
     // Analyzer task
     let analyzer_cache = cache.clone();
-    let listener_shutdown_rx = shutdown_tx.subscribe();
-    let analyzer = analyzer::Analyzer::new(analyzer_cache, pg_pool);
+    // let listener_shutdown_rx = shutdown_tx.subscribe();
+    let analyzer = analyzer::Analyzer::new(analyzer_cache, pg_pool, shutdown_indicator.clone());
     let analyzer_handle = tokio::spawn(async move {
-        analyzer.run(listener_shutdown_rx).await;
+        analyzer.run().await;
     });
 
     // Handle interrupt
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
         info!("Received interrupt, shutting down...");
-        shutdown_tx.send(()).unwrap();
+        shutdown_indicator.store(true, Ordering::Relaxed);
     });
 
     match tokio::try_join!(listener_handle, analyzer_handle) {

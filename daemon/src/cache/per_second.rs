@@ -57,16 +57,16 @@ impl SecondMetrics {
     }
 
     pub fn add_transaction(&self) {
-        self.transaction_count.fetch_add(1, Ordering::SeqCst);
+        self.transaction_count.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn add_transaction_acceptance(&self) {
         self.effective_transaction_count
-            .fetch_add(1, Ordering::SeqCst);
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn remove_transaction_acceptance(&self) {
         self.effective_transaction_count
-            .fetch_sub(1, Ordering::SeqCst);
+            .fetch_sub(1, Ordering::Relaxed);
     }
 }
