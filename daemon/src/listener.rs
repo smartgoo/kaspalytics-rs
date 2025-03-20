@@ -72,11 +72,10 @@ impl DagListener {
             }
 
             self.cache
-                .set_last_known_chain_block(acceptance_obj.accepting_block_hash.clone())
+                .set_last_known_chain_block(acceptance_obj.accepting_block_hash)
                 .await;
 
-            self.cache
-                .add_chain_block_acceptance_data(acceptance_obj);
+            self.cache.add_chain_block_acceptance_data(acceptance_obj);
         }
 
         let block = self

@@ -12,14 +12,14 @@ use rocksdb::DB;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub struct Cache {
     // Synced to DAG tip
     synced: AtomicBool,
 
-    last_known_chain_block: RwLock<Option<Hash>>,
+    last_known_chain_block: Mutex<Option<Hash>>,
 
     tip_timestamp: AtomicU64,
 
@@ -34,12 +34,11 @@ pub struct Cache {
 
 impl Cache {
     pub async fn set_last_known_chain_block(&self, hash: Hash) {
-        let mut h = self.last_known_chain_block.write().await;
-        *h = Some(hash);
+        *self.last_known_chain_block.lock().await = Some(hash)
     }
 
     pub async fn last_known_chain_block(&self) -> Option<Hash> {
-        *self.last_known_chain_block.read().await
+        *self.last_known_chain_block.lock().await
     }
 
     pub fn set_synced(&self, state: bool) {
@@ -118,34 +117,36 @@ impl Cache {
 
     pub fn remove_chain_block(&self, removed_chain_block: Hash) {
         // Temporary while working thru bug...
-        let removed_chain_block_data = match self.blocks.get(&removed_chain_block) {
-            Some(block) => {
-                info!(
-                    "Removed chain block {} found in blocks cache, block timestamp {}",
-                    removed_chain_block,
-                    block.value().timestamp
-                );
-                block
-            }
-            None => {
+        {
+            let removed_chain_block_data = match self.blocks.get(&removed_chain_block) {
+                Some(block) => {
+                    info!(
+                        "Removed chain block {} found in blocks cache, block timestamp {}",
+                        removed_chain_block,
+                        block.value().timestamp
+                    );
+                    block
+                }
+                None => {
+                    warn!(
+                        "Removed chain block {} not found in blocks cache",
+                        removed_chain_block
+                    );
+                    return;
+                }
+            };
+
+            // TODO find better way of handling.
+            // I think since removed_chain_blocks are returned in high to low order,
+            // there are situations where removed_chain_block is not in
+            // accepting_block_transactions map yet
+            if removed_chain_block_data.timestamp > self.tip_timestamp() {
                 warn!(
-                    "Removed chain block {} not found in blocks cache",
+                    "Removed chain block {} timestamp greater than tip_timestamp",
                     removed_chain_block
                 );
                 return;
             }
-        };
-
-        // TODO find better way of handling.
-        // I think since removed_chain_blocks are returned in high to low order,
-        // there are situations where removed_chain_block is not in
-        // accepting_block_transactions map yet
-        if removed_chain_block_data.timestamp > self.tip_timestamp() {
-            warn!(
-                "Removed chain block {} timestamp greater than tip_timestamp",
-                removed_chain_block
-            );
-            return;
         }
 
         // Set block's chain block status to false
@@ -204,7 +205,8 @@ impl Cache {
         let behind = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() - tt;
+            .as_secs()
+            - tt;
 
         info!(
             "tip_timestamp: {} ({}s behind) | blocks: {} | transactions {} | accepting_blocks_transactions {} | per_second {}",
@@ -345,7 +347,7 @@ impl Cache {
 
         Ok(Cache {
             synced: AtomicBool::new(false),
-            last_known_chain_block: RwLock::new(Some(last_known_chain_block)),
+            last_known_chain_block: Mutex::new(Some(last_known_chain_block)),
             tip_timestamp: AtomicU64::new(tip_timestamp as u64),
             blocks,
             transactions,
