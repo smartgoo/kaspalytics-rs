@@ -53,7 +53,7 @@ async fn main() {
 
     let cache = match Cache::load_cache_state(config.clone()).await {
         Ok(cache) => {
-            let last_known_chain_block = cache.last_known_chain_block().unwrap();
+            let last_known_chain_block = cache.last_known_chain_block().await.unwrap();
             match rpc_client.get_block(last_known_chain_block, false).await {
                 Ok(_) => {
                     info!(
@@ -93,7 +93,6 @@ async fn main() {
 
     // Analyzer task
     let analyzer_cache = cache.clone();
-    // let listener_shutdown_rx = shutdown_tx.subscribe();
     let analyzer = analyzer::Analyzer::new(analyzer_cache, pg_pool, shutdown_indicator.clone());
     let analyzer_handle = tokio::spawn(async move {
         analyzer.run().await;

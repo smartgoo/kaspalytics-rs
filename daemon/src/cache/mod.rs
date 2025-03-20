@@ -10,16 +10,15 @@ use model::*;
 use per_second::*;
 use rocksdb::DB;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 #[derive(Default)]
 pub struct Cache {
     // Synced to DAG tip
     synced: AtomicBool,
 
-    // low_hash: RwLock<Option<Hash>>,
     last_known_chain_block: RwLock<Option<Hash>>,
 
     tip_timestamp: AtomicU64,
@@ -29,28 +28,18 @@ pub struct Cache {
     pub accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
 
     pub seconds: DashMap<u64, SecondMetrics>,
-
     // pruning_point
     // pruning_point_timestamp
 }
 
 impl Cache {
-    // pub fn set_low_hash(&self, hash: Hash) {
-    //     let mut h = self.low_hash.write().unwrap();
-    //     *h = Some(hash);
-    // }
-
-    // pub fn low_hash(&self) -> Option<Hash> {
-    //     *self.low_hash.read().unwrap()
-    // }
-
-    pub fn set_last_known_chain_block(&self, hash: Hash) {
-        let mut h = self.last_known_chain_block.write().unwrap();
+    pub async fn set_last_known_chain_block(&self, hash: Hash) {
+        let mut h = self.last_known_chain_block.write().await;
         *h = Some(hash);
     }
 
-    pub fn last_known_chain_block(&self) -> Option<Hash> {
-        *self.last_known_chain_block.read().unwrap()
+    pub async fn last_known_chain_block(&self) -> Option<Hash> {
+        *self.last_known_chain_block.read().await
     }
 
     pub fn set_synced(&self, state: bool) {
@@ -71,16 +60,19 @@ impl Cache {
 
     fn add_transaction(&self, transaction: RpcTransaction) {
         let tx_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
-        let block_hash = transaction.verbose_data.clone().unwrap().block_hash;
-        let block_time = transaction.verbose_data.clone().unwrap().block_time;
+        let block_hash = transaction.verbose_data.as_ref().unwrap().block_hash;
+        let block_time = transaction.verbose_data.as_ref().unwrap().block_time;
 
         // Add transaction to map
+        // If already in map, add block hash to CacheTransaction.blocks vec
         self.transactions
             .entry(tx_id)
             .and_modify(|entry| entry.blocks.push(block_hash))
             .or_insert(CacheTransaction::from(transaction));
 
-        // Call per second add process
+        // Add to seconds map
+        // Always increase transaction count even if tx already in map
+        // Effective tx count handled elsewhere
         self.seconds
             .entry(block_time / 1000)
             .and_modify(|v| v.add_transaction());
@@ -88,6 +80,7 @@ impl Cache {
 
     pub fn add_block(&self, block: RpcBlock) {
         // Add block to map if it does not yet exist
+        // Otherwise return, to prevent seconds map fields from increasing on duplicate data
         match self.blocks.entry(block.header.hash) {
             dashmap::Entry::Occupied(_) => {
                 return;
@@ -143,6 +136,10 @@ impl Cache {
             }
         };
 
+        // TODO find better way of handling.
+        // I think since removed_chain_blocks are returned in high to low order,
+        // there are situations where removed_chain_block is not in
+        // accepting_block_transactions map yet
         if removed_chain_block_data.timestamp > self.tip_timestamp() {
             warn!(
                 "Removed chain block {} timestamp greater than tip_timestamp",
@@ -341,8 +338,7 @@ impl Cache {
 
         Ok(Cache {
             synced: AtomicBool::new(false),
-            // low_hash: RwLock::new(Some(low_hash)),
-            last_known_chain_block: std::sync::RwLock::new(Some(last_known_chain_block)),
+            last_known_chain_block: RwLock::new(Some(last_known_chain_block)),
             tip_timestamp: AtomicU64::new(tip_timestamp as u64),
             blocks,
             transactions,
@@ -365,7 +361,7 @@ impl Cache {
         // Store vspc_low_hash
         db.put(
             b"last_known_chain_block",
-            bincode::serialize(&self.last_known_chain_block().unwrap())?,
+            bincode::serialize(&self.last_known_chain_block().await.unwrap())?,
         )?;
 
         // Insert tip_timestamp to db

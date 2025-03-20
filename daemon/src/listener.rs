@@ -36,12 +36,12 @@ impl DagListener {
         let blocks = self
             .rpc_client
             .get_blocks(
-                Some(self.cache.last_known_chain_block().unwrap()),
+                Some(self.cache.last_known_chain_block().await.unwrap()),
                 true,
                 true,
             )
             .await
-            .unwrap();
+            .unwrap(); // TODO error handling
 
         for block in blocks.blocks {
             self.cache.add_block(block);
@@ -51,9 +51,9 @@ impl DagListener {
     async fn process_vspc(&mut self) {
         let vspc = self
             .rpc_client
-            .get_virtual_chain_from_block(self.cache.last_known_chain_block().unwrap(), true)
+            .get_virtual_chain_from_block(self.cache.last_known_chain_block().await.unwrap(), true)
             .await
-            .unwrap();
+            .unwrap(); // TODO error handling
 
         // Handle removed chain blocks
         for removed_chain_block in vspc.removed_chain_block_hashes {
@@ -72,15 +72,16 @@ impl DagListener {
             }
 
             self.cache
-                .add_chain_block_acceptance_data(acceptance_obj.clone());
+                .set_last_known_chain_block(acceptance_obj.accepting_block_hash.clone())
+                .await;
 
             self.cache
-                .set_last_known_chain_block(acceptance_obj.accepting_block_hash);
+                .add_chain_block_acceptance_data(acceptance_obj);
         }
 
         let block = self
             .rpc_client
-            .get_block(self.cache.last_known_chain_block().unwrap(), false)
+            .get_block(self.cache.last_known_chain_block().await.unwrap(), false)
             .await
             .unwrap();
         self.cache.set_tip_timestamp(block.header.timestamp);
@@ -96,18 +97,20 @@ impl DagListener {
     }
 
     pub async fn run(&mut self) {
-        if self.cache.last_known_chain_block().is_none() {
+        if self.cache.last_known_chain_block().await.is_none() {
             let GetBlockDagInfoResponse {
                 pruning_point_hash, ..
             } = self.rpc_client.get_block_dag_info().await.unwrap();
 
             info!("Starting from pruning point {:?}", pruning_point_hash);
 
-            self.cache.set_last_known_chain_block(pruning_point_hash);
+            self.cache
+                .set_last_known_chain_block(pruning_point_hash)
+                .await;
         } else {
             info!(
                 "Starting from cache last_known_chain_block {:?}",
-                self.cache.last_known_chain_block()
+                self.cache.last_known_chain_block().await
             );
         }
 
@@ -117,16 +120,13 @@ impl DagListener {
 
             self.process_blocks().await;
             self.process_vspc().await;
-
             self.cache.prune();
-
             self.cache.log_size();
 
-            if tip_hashes.contains(&self.cache.last_known_chain_block().unwrap()) {
+            if tip_hashes.contains(&self.cache.last_known_chain_block().await.unwrap()) {
                 // TODO set synced to false if ever synced then falls out of sync
                 self.cache.set_synced(true);
 
-                // TODO log how long it takes to reach tip
                 info!("Listener at tip, sleeping");
                 sleep(Duration::from_secs(10)).await;
             }
