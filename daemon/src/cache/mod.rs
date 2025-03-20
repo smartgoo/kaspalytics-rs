@@ -200,9 +200,16 @@ impl Cache {
 
 impl Cache {
     pub fn log_size(&self) {
+        let tt = self.tip_timestamp() / 1000;
+        let behind = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() - tt;
+
         info!(
-            "tip_timestamp: {} | blocks: {} | transactions {} | accepting_blocks_transactions {} | per_second {}",
-            self.tip_timestamp() / 1000,
+            "tip_timestamp: {} ({}s behind) | blocks: {} | transactions {} | accepting_blocks_transactions {} | per_second {}",
+            tt,
+            behind,
             self.blocks.len(),
             self.transactions.len(),
             self.accepting_block_transactions.len(),
