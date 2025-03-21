@@ -155,14 +155,24 @@ impl Cache {
             .and_modify(|v| v.is_chain_block = false);
 
         // Remove chain block and all accepted txs from map
-        let (_, removed_transactions) = self
+        // let (_, removed_transactions) = self
+        //     .accepting_block_transactions
+        //     .remove(&removed_chain_block)
+        //     .unwrap();
+
+        if let Some((_, removed_transactions)) = self
             .accepting_block_transactions
             .remove(&removed_chain_block)
-            .unwrap();
-
-        // Process each removed tx
-        for tx_id in removed_transactions {
-            self.remove_transaction_acceptance(tx_id);
+        {
+            // Process each removed tx
+            for tx_id in removed_transactions {
+                self.remove_transaction_acceptance(tx_id);
+            }
+        } else {
+            warn!(
+                "Removed chain block {} does not exist in cache accepting_block_transactions map",
+                removed_chain_block
+            );
         }
     }
 
