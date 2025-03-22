@@ -89,11 +89,7 @@ impl Config {
             Err(VarError::NotPresent) => get_app_dir(".kaspalytics".to_string()),
             Err(_) => panic!(),
         };
-        let kaspalytics_dirs = KaspalyticsDirs::new(
-            env,
-            network_id,
-            kaspalytics_app_dir
-        );
+        let kaspalytics_dirs = KaspalyticsDirs::new(env, network_id, kaspalytics_app_dir);
 
         Config {
             env,
@@ -107,7 +103,7 @@ impl Config {
             smtp_from,
             smtp_to,
             kaspad_dirs,
-            kaspalytics_dirs
+            kaspalytics_dirs,
         }
     }
 }

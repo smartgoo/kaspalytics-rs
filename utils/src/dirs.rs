@@ -19,8 +19,11 @@ impl KaspalyticsDirs {
     pub fn new(env: Env, network_id: NetworkId, app_dir: PathBuf) -> Self {
         let env_dir = app_dir.join(env.to_string());
         let network_dir = env_dir.join(network_id.to_string());
-        
+        std::fs::create_dir_all(&network_dir).unwrap();
+
         let log_dir = network_dir.join(LOG_DIR);
+        let _ = std::fs::create_dir(&log_dir);
+
         let cache_dir = network_dir.join(CACHE_DIR);
 
         Self {
@@ -28,7 +31,7 @@ impl KaspalyticsDirs {
             env_dir,
             network_dir,
             log_dir,
-            cache_dir
+            cache_dir,
         }
     }
 }

@@ -305,12 +305,6 @@ impl Cache {
 
         let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;
 
-        // Get low_hash
-        // let low_hash_bytes = db
-        //     .get(b"low_hash")?
-        //     .ok_or(CacheStateError::MissingKeyError("low_hash".to_string()))?;
-        // let low_hash = bincode::deserialize::<Hash>(&low_hash_bytes)?;
-
         // Get vspc_low_hash
         let last_known_chain_block_bytes = db
             .get(b"last_known_chain_block")?
@@ -370,12 +364,6 @@ impl Cache {
         info!("Storing cache state... ");
 
         let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;
-
-        // Store low_hash
-        // db.put(
-        //     b"low_hash",
-        //     bincode::serialize(&self.low_hash().unwrap())?,
-        // )?;
 
         // Store vspc_low_hash
         db.put(

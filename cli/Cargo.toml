@@ -26,6 +26,7 @@ kaspa-wrpc-client.workspace = true
 kaspalytics-utils.workspace = true
 lettre.workspace = true
 log.workspace = true
+log4rs.workspace = true
 reqwest.workspace = true
 rlimit.workspace = true
 rocksdb.workspace = true

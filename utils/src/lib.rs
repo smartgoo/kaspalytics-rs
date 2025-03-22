@@ -5,6 +5,7 @@ pub mod dirs;
 pub mod email;
 pub mod granularity;
 pub mod kaspad;
+pub mod log;
 
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;

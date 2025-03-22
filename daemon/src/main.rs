@@ -3,11 +3,11 @@ mod cache;
 mod listener;
 
 use cache::Cache;
-use env_logger::{Builder, Env};
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
 use kaspalytics_utils::email::send_email;
+use kaspalytics_utils::log::init_logger;
 use kaspalytics_utils::{check_rpc_node_status, database};
 use log::{debug, error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,9 +17,7 @@ use std::sync::Arc;
 async fn main() {
     let config = Config::from_env();
 
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .filter(None, config.log_level)
-        .init();
+    init_logger(&config, "daemon").unwrap();
 
     info!("kaspalyticsd starting...");
 

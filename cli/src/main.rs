@@ -4,8 +4,8 @@ mod cmds;
 use clap::Parser;
 use cli::{Cli, Commands};
 use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
-use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
+use kaspalytics_utils::log::init_logger;
 use kaspalytics_utils::{database, TARGET_FD_LIMIT};
 use log::{debug, info};
 use std::sync::Arc;
@@ -17,9 +17,7 @@ async fn main() {
 
     let config = kaspalytics_utils::config::Config::from_env();
 
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .filter(None, cli.global_args.log_level)
-        .init();
+    init_logger(&config, "cli").unwrap();
 
     let (soft, hard) = rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap();
     debug!("fd limit before: soft = {}, hard = {}", soft, hard);
