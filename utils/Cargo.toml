@@ -22,7 +22,6 @@ log4rs.workspace = true
 reqwest.workspace = true
 rocksdb.workspace = true
 serde.workspace = true
-serde_yaml.workspace = true
 sqlx.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
