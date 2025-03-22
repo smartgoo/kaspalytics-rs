@@ -1,5 +1,6 @@
+use crate::dirs::KaspalyticsDirs;
 use crate::kaspad::dirs::get_app_dir;
-use crate::kaspad::dirs::Dirs;
+use crate::kaspad::dirs::KaspadDirs;
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::network::NetworkType;
 use log::LevelFilter;
@@ -32,14 +33,13 @@ pub struct Config {
     pub db_uri: String,
     pub db_max_pool_size: u32,
 
-    pub kaspalytics_dir: PathBuf,
-
     pub smtp_host: String,
     pub smtp_port: u16,
     pub smtp_from: String,
     pub smtp_to: String,
 
-    pub kaspad_dirs: Dirs,
+    pub kaspad_dirs: KaspadDirs,
+    pub kaspalytics_dirs: KaspalyticsDirs,
 }
 
 impl Config {
@@ -64,22 +64,7 @@ impl Config {
         let network_id = NetworkId::try_new(network)
             .unwrap_or_else(|_| NetworkId::with_suffix(network, netsuffix.unwrap()));
 
-        let kaspad_dir = match env::var("KASPAD_DIR") {
-            Ok(v) => PathBuf::from(v),
-            Err(VarError::NotPresent) => get_app_dir(".rusty-kaspa".to_string()),
-            Err(_) => panic!(),
-        };
-
         let rpc_url = env::var("RPC_URL").unwrap();
-
-        let mut kaspalytics_dir = match env::var("KASPALYTICS_DIR") {
-            Ok(v) => PathBuf::from(&v),
-            Err(VarError::NotPresent) => get_app_dir(".kaspalytics".to_string()),
-            Err(_) => panic!(),
-        };
-        kaspalytics_dir.push(env.to_string());
-        kaspalytics_dir.push(network_id.to_string());
-        let _ = std::fs::create_dir_all(&kaspalytics_dir);
 
         let db_uri = env::var("DB_URI").unwrap();
         let db_max_pool_size = env::var("DB_MAX_POOL_SIZE")
@@ -92,14 +77,29 @@ impl Config {
         let smtp_from = env::var("SMTP_FROM").unwrap();
         let smtp_to = env::var("SMTP_TO").unwrap();
 
-        let kaspad_dirs = Dirs::new(kaspad_dir.clone(), network_id);
+        let kaspad_app_dir = match env::var("KASPAD_APP_DIR") {
+            Ok(v) => PathBuf::from(v),
+            Err(VarError::NotPresent) => get_app_dir(".rusty-kaspa".to_string()),
+            Err(_) => panic!(),
+        };
+        let kaspad_dirs = KaspadDirs::new(kaspad_app_dir, network_id);
+
+        let kaspalytics_app_dir = match env::var("KASPALYTICS_APP_DIR") {
+            Ok(v) => PathBuf::from(v),
+            Err(VarError::NotPresent) => get_app_dir(".kaspalytics".to_string()),
+            Err(_) => panic!(),
+        };
+        let kaspalytics_dirs = KaspalyticsDirs::new(
+            env,
+            network_id,
+            kaspalytics_app_dir
+        );
 
         Config {
             env,
             log_level,
             network_id,
             rpc_url,
-            kaspalytics_dir,
             db_uri,
             db_max_pool_size,
             smtp_host,
@@ -107,6 +107,7 @@ impl Config {
             smtp_from,
             smtp_to,
             kaspad_dirs,
+            kaspalytics_dirs
         }
     }
 }

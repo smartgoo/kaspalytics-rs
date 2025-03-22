@@ -303,7 +303,7 @@ impl Cache {
         // TODO refactor store and load function to better handle DB
         info!("Attempting to load cache state...");
 
-        let db = DB::open_default(config.kaspalytics_dir.join("cache_state"))?;
+        let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;
 
         // Get low_hash
         // let low_hash_bytes = db
@@ -369,7 +369,7 @@ impl Cache {
     pub async fn store_cache_state(&self, config: Config) -> Result<(), CacheStateError> {
         info!("Storing cache state... ");
 
-        let db = DB::open_default(config.kaspalytics_dir.join("cache_state"))?;
+        let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;
 
         // Store low_hash
         // db.put(

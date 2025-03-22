@@ -17,7 +17,7 @@ pub fn get_app_dir(dir: String) -> PathBuf {
 
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct Dirs {
+pub struct KaspadDirs {
     pub app_dir: PathBuf,
     pub network_dir: PathBuf,
     pub db_dir: PathBuf,
@@ -27,7 +27,7 @@ pub struct Dirs {
     pub active_consensus_db_dir: PathBuf,
 }
 
-impl Dirs {
+impl KaspadDirs {
     pub fn new(app_dir: PathBuf, network_id: NetworkId) -> Self {
         let network_dir = app_dir.join(network_id.to_prefixed());
         let db_dir = network_dir.join("datadir");

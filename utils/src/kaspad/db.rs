@@ -42,14 +42,14 @@ pub fn init_secondary_db(primary_path: PathBuf, secondary_path: PathBuf) -> Arc<
 
 pub fn checkpoint_path(config: Config, prefix: CheckpointSource) -> PathBuf {
     let timestamp = Utc::now().format("checkpoint_%Y%m%d_%H%M%S").to_string();
-    let mut checkpoint_path = config.kaspalytics_dir.clone();
+    let mut checkpoint_path = config.kaspalytics_dirs.network_dir.clone();
     checkpoint_path.push(format!("{}_{}", prefix, timestamp));
     checkpoint_path
 }
 
 pub fn secondary_path(config: Config, prefix: CheckpointSource) -> PathBuf {
     let timestamp = Utc::now().format("secondary_%Y%m%d_%H%M%S").to_string();
-    let mut secondary_path = config.kaspalytics_dir.clone();
+    let mut secondary_path = config.kaspalytics_dirs.network_dir.clone();
     secondary_path.push(format!("{}_{}", prefix, timestamp));
     secondary_path
 }

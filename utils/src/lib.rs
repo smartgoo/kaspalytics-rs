@@ -1,6 +1,7 @@
 pub mod coingecko;
 pub mod config;
 pub mod database;
+pub mod dirs;
 pub mod email;
 pub mod granularity;
 pub mod kaspad;
