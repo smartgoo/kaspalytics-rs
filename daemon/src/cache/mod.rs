@@ -42,19 +42,19 @@ impl Cache {
     }
 
     pub fn set_synced(&self, state: bool) {
-        self.synced.store(state, Ordering::SeqCst);
+        self.synced.store(state, Ordering::Relaxed);
     }
 
     pub fn synced(&self) -> bool {
-        self.synced.load(Ordering::SeqCst)
+        self.synced.load(Ordering::Relaxed)
     }
 
     pub fn set_tip_timestamp(&self, timestamp: u64) {
-        self.tip_timestamp.store(timestamp, Ordering::SeqCst);
+        self.tip_timestamp.store(timestamp, Ordering::Relaxed);
     }
 
     pub fn tip_timestamp(&self) -> u64 {
-        self.tip_timestamp.load(Ordering::SeqCst)
+        self.tip_timestamp.load(Ordering::Relaxed)
     }
 
     fn add_transaction(&self, transaction: RpcTransaction) {
@@ -71,7 +71,7 @@ impl Cache {
 
         // Add to seconds map
         // Always increase transaction count even if tx already in map
-        // Effective tx count handled elsewhere
+        // Since effective tx count handled elsewhere
         self.seconds
             .entry(block_time / 1000)
             .and_modify(|v| v.add_transaction());
@@ -136,12 +136,11 @@ impl Cache {
                 }
             };
 
-            // TODO find better way of handling.
-            // I think since removed_chain_blocks are returned in high to low order,
+            // TODO I think since removed_chain_blocks are returned in high to low order,
             // there are situations where removed_chain_block is not in
             // accepting_block_transactions map yet
             if removed_chain_block_data.timestamp > self.tip_timestamp() {
-                warn!(
+                info!(
                     "Removed chain block {} timestamp greater than tip_timestamp",
                     removed_chain_block
                 );
@@ -154,23 +153,17 @@ impl Cache {
             .entry(removed_chain_block)
             .and_modify(|v| v.is_chain_block = false);
 
-        // Remove chain block and all accepted txs from map
-        // let (_, removed_transactions) = self
-        //     .accepting_block_transactions
-        //     .remove(&removed_chain_block)
-        //     .unwrap();
-
+        // Remove former chain blocks accepted transactions from accepting_block_transactions map
         if let Some((_, removed_transactions)) = self
             .accepting_block_transactions
             .remove(&removed_chain_block)
         {
-            // Process each removed tx
             for tx_id in removed_transactions {
                 self.remove_transaction_acceptance(tx_id);
             }
         } else {
             warn!(
-                "Removed chain block {} does not exist in cache accepting_block_transactions map",
+                "Removed chain block {} is below cache tip timestamp, and does not exist in cache accepting_block_transactions map",
                 removed_chain_block
             );
         }
@@ -237,7 +230,6 @@ impl Cache {
         // TODO better handling of window size
         // Currently targeting 5 mins of block data
         let window = 5 * 60 * 1000;
-        // let pruning_timestamp = self.tip_timestamp.fetch_sub(window, Ordering::SeqCst) - window;
         let pruning_timestamp = self.tip_timestamp() - window;
 
         // Prune blocks

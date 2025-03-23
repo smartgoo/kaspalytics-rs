@@ -82,7 +82,8 @@ impl DagListener {
             .rpc_client
             .get_block(self.cache.last_known_chain_block().await.unwrap(), false)
             .await
-            .unwrap();
+            .unwrap(); // TODO error handling
+
         self.cache.set_tip_timestamp(block.header.timestamp);
     }
 
@@ -96,6 +97,7 @@ impl DagListener {
     }
 
     pub async fn run(&mut self) {
+        // Determine starting hash to iterate up from
         if self.cache.last_known_chain_block().await.is_none() {
             let GetBlockDagInfoResponse {
                 pruning_point_hash, ..

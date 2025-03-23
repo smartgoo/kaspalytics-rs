@@ -47,7 +47,7 @@ pub struct SecondMetrics {
 
 impl SecondMetrics {
     pub fn add_block(&self, coinbase_tx_payload: Vec<u8>) {
-        self.block_count.fetch_add(1, Ordering::SeqCst);
+        self.block_count.fetch_add(1, Ordering::Relaxed);
 
         let node_version = parse_payload_node_version(coinbase_tx_payload).unwrap();
         self.mining_node_version_block_counts
