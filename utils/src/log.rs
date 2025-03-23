@@ -15,8 +15,10 @@ pub fn init_logger(
     config: &KaspalyticsConfig,
     log_file_base: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let pattern = "{d(%Y-%m-%d %H:%M:%S%.3f %Z)} - {h({l})} [{M}] - {m} (({f}:{L})){n}";
+
     let stdout = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} [{t}] {l} - {m}{n}")))
+        .encoder(Box::new(PatternEncoder::new(pattern)))
         .build();
 
     let base_path = config.kaspalytics_dirs.log_dir.join(log_file_base);
@@ -32,7 +34,7 @@ pub fn init_logger(
     let policy = CompoundPolicy::new(Box::new(trigger), Box::new(roller));
 
     let rolling_file = RollingFileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} [{t}] {l} - {m}{n}")))
+        .encoder(Box::new(PatternEncoder::new(pattern)))
         .build(log_file_path.to_str().unwrap(), Box::new(policy))?;
 
     let config = Config::builder()
