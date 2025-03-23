@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS address_balance_snapshot (
     address VARCHAR(100)
 );
 CREATE INDEX IF NOT EXISTS idx_address_balance_address 
-ON TABLE address_balance_snapshot(address);
+ON address_balance_snapshot(address);
 
 CREATE TABLE IF NOT EXISTS percentile_analysis (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
