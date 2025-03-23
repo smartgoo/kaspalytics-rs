@@ -40,8 +40,8 @@ impl Analyzer {
                 continue;
             }
 
-            let _ = tx_counter::run(self.cache.clone(), self.pg_pool.clone()).await;
-            let _ = mining::run(self.cache.clone(), self.pg_pool.clone()).await;
+            let _ = tx_counter::run(self.cache.clone(), &self.pg_pool).await;
+            let _ = mining::run(self.cache.clone(), &self.pg_pool).await;
 
             info!("Analyzer completed, sleeping");
             sleep(Duration::from_secs(30)).await;

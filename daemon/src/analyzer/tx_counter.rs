@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::cache::Cache;
 
-pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> {
+pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -40,7 +40,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
     )
     .bind(count as i64)
     .bind(Utc::now())
-    .execute(&pg_pool)
+    .execute(pg_pool)
     .await?;
 
     sqlx::query(
@@ -53,7 +53,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
     )
     .bind(effective_count as i64)
     .bind(Utc::now())
-    .execute(&pg_pool)
+    .execute(pg_pool)
     .await?;
 
     let current_hour = now - (now % 3600);
@@ -89,7 +89,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
     )
     .bind(serde_json::to_string(&effective_count_per_hour).unwrap())
     .bind(Utc::now())
-    .execute(&pg_pool)
+    .execute(pg_pool)
     .await?;
 
     debug!("txs: {} | effective txs: {}", count, effective_count);

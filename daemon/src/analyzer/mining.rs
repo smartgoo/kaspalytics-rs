@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> {
+pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
     // TODO store mining by address
     let mut version_counts = HashMap::<String, u64>::new();
     // let mut miner_counts = HashMap::<String, u64>::new();
@@ -73,7 +73,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: PgPool) -> Result<(), sqlx::Error> 
     )
     .bind(serde_json::to_string(&version_share).unwrap())
     .bind(Utc::now())
-    .execute(&pg_pool)
+    .execute(pg_pool)
     .await?;
 
     // sqlx::query(
