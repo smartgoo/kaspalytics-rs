@@ -1,13 +1,18 @@
 pub mod coingecko;
 pub mod config;
 pub mod database;
+pub mod dirs;
 pub mod email;
 pub mod granularity;
 pub mod kaspad;
+pub mod log;
 
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
+use kaspad::db::KASPAD_RDB_FD_ALLOCATION;
 use std::sync::Arc;
+
+pub const TARGET_FD_LIMIT: i32 = KASPAD_RDB_FD_ALLOCATION * 2;
 
 pub async fn check_rpc_node_status(config: &config::Config, rpc_client: Arc<KaspaRpcClient>) {
     let server_info = rpc_client.get_server_info().await.unwrap();

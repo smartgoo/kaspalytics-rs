@@ -15,8 +15,8 @@ Lints:
 - `cargo clippy --workspace --tests --benches --examples -- -D warnings`
 
 Roadmap:
-1. Fully migrate from existing Kaspalytics Python analytics before Crescendo HF
-2. Overhaul DB model
-3. Refine listener/analyzer services to better support real time data
-4. Add websocket or SSE and expose real time data on FE
-5. Add DAG visualizer to FE
+1. Fully migrate from Kaspalytics Python before Crescendo HF
+2. Prep for 10 BPS
+3. Overhaul DB model
+4. Refactor analyzer services to event driven?
+5. Add websocket and/or SSE and expose real time data to FE (DAG visualizer, dashboards, etc.)

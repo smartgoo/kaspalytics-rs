@@ -11,6 +11,7 @@ use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
+use kaspalytics_utils::kaspad::db::ConsensusStorageSecondary;
 use log::{debug, error};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -34,6 +35,7 @@ impl BlockAnalysis {
             .date_naive()
             .and_hms_opt(0, 0, 0)
             .unwrap();
+
         let start_of_yesterday = start_of_today - chrono::Duration::days(1);
         let end_of_yesterday = start_of_today - chrono::Duration::milliseconds(1);
 
@@ -69,14 +71,23 @@ impl BlockAnalysis {
 
 impl BlockAnalysis {
     fn load_chain_blocks(&mut self) -> Result<(), StoreError> {
-        for (key, hash) in self
+        for entry in self
             .storage
             .selected_chain_store
             .read()
             .access_hash_by_index
             .iterator()
-            .map(|p| p.unwrap())
         {
+            let (key, hash) = entry.map_err(|err| {
+                if let Some(rocksdb_err) = err.downcast_ref::<rocksdb::Error>() {
+                    StoreError::DbError(rocksdb_err.clone())
+                } else if let Ok(bincode_err) = err.downcast::<Box<bincode::ErrorKind>>() {
+                    StoreError::DeserializationError(*bincode_err)
+                } else {
+                    unreachable!()
+                }
+            })?;
+
             let key = u64::from_le_bytes((*key).try_into().unwrap());
             let header = self.storage.headers_store.get_header(hash)?;
 
@@ -102,6 +113,7 @@ impl BlockAnalysis {
         hash: Hash,
     ) -> Result<HashMap<TransactionOutpoint, UtxoEntry>, StoreError> {
         let utxo_diffs = self.storage.utxo_diffs_store.get(hash)?;
+
         let mut utxos = HashMap::<TransactionOutpoint, UtxoEntry>::new();
 
         utxo_diffs.removed().iter().for_each(|(outpoint, utxo)| {
@@ -261,11 +273,13 @@ impl BlockAnalysis {
 
                     for output in tx.outputs.iter() {
                         tx_fee -= output.value;
+
                         let address = extract_script_pub_key_address(
                             &output.script_public_key,
                             self.config.network_id.into(),
                         )
                         .unwrap();
+
                         self.stats.entry(block_time_s).and_modify(|stats| {
                             stats.unique_recipients.insert(address);
                         });
@@ -320,9 +334,9 @@ impl BlockAnalysis {
             }
 
             debug!("{:?}", stats);
-            stats.save(pool).await;
+            stats.save(pool).await.unwrap(); // TODO handle
 
-            kaspalytics_utils::email::send_email(
+            let _ = kaspalytics_utils::email::send_email(
                 &self.config,
                 "block-pipeline completed".to_string(),
                 format!("{:?}", stats),
@@ -334,33 +348,32 @@ impl BlockAnalysis {
 
     pub async fn run(config: Config, pool: PgPool) {
         // Sporadically, a RocksDB error will be raised about missing SST file
-        // The read_only conn creates a point in time view of database
-        // But I think SST files are still being deleted by primary
-        // This might be mostly(?) alleviated now by setting FD budget higher than SST file count
-        // The below loop is an attempt to catch this error and retry every X minutes for up to X retry attempts
+        // The readonly conn creates a point in time view of database
+        // But SST files are being deleted by primary
+        // New rdb connection uses a readonly over a checkpoint to attempt to address this
+        // If checkpoint fixes the issue, might be able to remove below retry loop
         let mut retries = 0;
         let max_retries = 120;
         let retry_delay = std::time::Duration::from_secs(60);
 
         loop {
-            let storage = kaspalytics_utils::kaspad::db::init_consensus_storage(
-                config.network_id,
-                &config.kaspad_dirs.active_consensus_db_dir,
-            );
+            let storage = ConsensusStorageSecondary::new(config.clone());
 
-            let mut process = BlockAnalysis::new_for_yesterday(config.clone(), storage.clone());
+            let mut process =
+                BlockAnalysis::new_for_yesterday(config.clone(), storage.inner.clone());
 
             match process.run_inner(&pool).await {
                 Ok(_) => break,
-                Err(StoreError::DbError(_)) if retries < max_retries => {
+                Err(StoreError::DbError(err)) if retries < max_retries => {
                     // Close database connection before sleeping
                     // Inside retries window. Sleep and try again
                     drop(process);
                     drop(storage);
 
                     retries += 1;
+                    error!("{}", err);
                     error!(
-                        "Database error on tx_analysis attempt {}/{}. Retrying in {:?}...",
+                        "Database error during tx_analysis attempt {}/{}. Retrying in {:?}...\n",
                         retries, max_retries, retry_delay
                     );
                     sleep(retry_delay).await;
@@ -371,7 +384,7 @@ impl BlockAnalysis {
                         "Analysis::tx_analysis failed after {} attempts. Exiting...",
                         retries
                     );
-                    kaspalytics_utils::email::send_email(
+                    let _ = kaspalytics_utils::email::send_email(
                         &config,
                         "block-pipeline alert".to_string(),
                         "Analysis::tx_analysis reached max retries due to database error."
@@ -382,7 +395,7 @@ impl BlockAnalysis {
                 Err(e) => {
                     // Handle other errors and exit
                     error!("Analysis::tx_analysis failed with error: {:?}", e);
-                    kaspalytics_utils::email::send_email(
+                    let _ = kaspalytics_utils::email::send_email(
                         &config,
                         "block-pipeline alert".to_string(),
                         format!("Analysis::tx_analysis failed with error: {:?}", e),

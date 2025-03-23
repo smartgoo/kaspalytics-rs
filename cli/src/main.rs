@@ -4,14 +4,12 @@ mod cmds;
 use clap::Parser;
 use cli::{Cli, Commands};
 use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
-use env_logger::{Builder, Env};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::database;
+use kaspalytics_utils::log::init_logger;
+use kaspalytics_utils::{database, TARGET_FD_LIMIT};
 use log::{debug, info};
 use std::sync::Arc;
 use std::time::Instant;
-
-const REQUIRED_CLI_SOFT_FD_LIMIT: u64 = 10 * 1024;
 
 #[tokio::main]
 async fn main() {
@@ -19,17 +17,22 @@ async fn main() {
 
     let config = kaspalytics_utils::config::Config::from_env();
 
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .filter(None, cli.global_args.log_level)
-        .init();
+    init_logger(&config, "cli").unwrap();
 
-    // TODO probably should move this to only the CLI commands that require it (block and utxo pipelines)
-    kaspa_utils::fd_budget::try_set_fd_limit(REQUIRED_CLI_SOFT_FD_LIMIT).unwrap_or_else(|_| {
+    let (soft, hard) = rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap();
+    debug!("fd limit before: soft = {}, hard = {}", soft, hard);
+
+    if rlimit::increase_nofile_limit(TARGET_FD_LIMIT as u64).unwrap() < TARGET_FD_LIMIT as u64 {
         panic!(
-            "kaspalytics-cli requires {} fd limit",
-            REQUIRED_CLI_SOFT_FD_LIMIT
-        )
-    });
+            "{:?}",
+            rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap().0
+        );
+    };
+
+    debug!(
+        "fd limit after: {}",
+        rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap().0
+    );
 
     // Open PG connection pool
     let db = database::Database::new(config.db_uri.clone());

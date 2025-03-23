@@ -1,8 +1,10 @@
+use crate::dirs::KaspalyticsDirs;
 use crate::kaspad::dirs::get_app_dir;
-use crate::kaspad::dirs::Dirs;
+use crate::kaspad::dirs::KaspadDirs;
 use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::network::NetworkType;
 use log::LevelFilter;
+use std::env::VarError;
 use std::{env, path::PathBuf, str::FromStr};
 use strum_macros::{Display, EnumString};
 
@@ -36,7 +38,8 @@ pub struct Config {
     pub smtp_from: String,
     pub smtp_to: String,
 
-    pub kaspad_dirs: Dirs,
+    pub kaspad_dirs: KaspadDirs,
+    pub kaspalytics_dirs: KaspalyticsDirs,
 }
 
 impl Config {
@@ -45,21 +48,21 @@ impl Config {
 
         let env = Env::from_str(&env::var("ENV").unwrap()).unwrap();
 
-        let log_level = LevelFilter::from_str(&env::var("LOG_LEVEL").unwrap()).unwrap();
+        let log_level = match env::var("LOG_LEVEL") {
+            Ok(v) => LevelFilter::from_str(&v).unwrap(),
+            Err(VarError::NotPresent) => LevelFilter::Warn,
+            Err(_) => panic!(),
+        };
 
         let network = NetworkType::from_str(&env::var("NETWORK").unwrap()).unwrap();
+
         let netsuffix = env::var("NETSUFFIX")
             .ok()
             .filter(|s| !s.is_empty())
             .and_then(|s| s.parse::<u32>().ok());
+
         let network_id = NetworkId::try_new(network)
             .unwrap_or_else(|_| NetworkId::with_suffix(network, netsuffix.unwrap()));
-
-        let app_dir = env::var("APP_DIR")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| get_app_dir(String::from(".rusty-kaspa")));
 
         let rpc_url = env::var("RPC_URL").unwrap();
 
@@ -74,7 +77,19 @@ impl Config {
         let smtp_from = env::var("SMTP_FROM").unwrap();
         let smtp_to = env::var("SMTP_TO").unwrap();
 
-        let kaspad_dirs = Dirs::new(app_dir.clone(), network_id);
+        let kaspad_app_dir = match env::var("KASPAD_APP_DIR") {
+            Ok(v) => PathBuf::from(v),
+            Err(VarError::NotPresent) => get_app_dir(".rusty-kaspa".to_string()),
+            Err(_) => panic!(),
+        };
+        let kaspad_dirs = KaspadDirs::new(kaspad_app_dir, network_id);
+
+        let kaspalytics_app_dir = match env::var("KASPALYTICS_APP_DIR") {
+            Ok(v) => PathBuf::from(v),
+            Err(VarError::NotPresent) => get_app_dir(".kaspalytics".to_string()),
+            Err(_) => panic!(),
+        };
+        let kaspalytics_dirs = KaspalyticsDirs::new(env, network_id, kaspalytics_app_dir);
 
         Config {
             env,
@@ -88,6 +103,7 @@ impl Config {
             smtp_from,
             smtp_to,
             kaspad_dirs,
+            kaspalytics_dirs,
         }
     }
 }

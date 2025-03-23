@@ -13,6 +13,7 @@ use kaspa_utxoindex::stores::indexed_utxos::{
 use kaspa_utxoindex::stores::store_manager::Store;
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
+use kaspalytics_utils::kaspad::db::UtxoIndexSecondary;
 use log::debug;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
@@ -322,20 +323,10 @@ impl UtxoBasedPipeline {
 
         // Get UTXO tips from utxoindex db
         debug!("Loading UTXO tips from RocksDB...");
-        let db = kaspa_database::prelude::ConnBuilder::default()
-            .with_db_path(
-                self.config
-                    .kaspad_dirs
-                    .utxo_index_db_dir
-                    .as_ref()
-                    .unwrap()
-                    .to_path_buf(),
-            )
-            .with_files_limit(kaspa_utils::fd_budget::limit()) // TODO files limit?
-            .build_readonly()
-            .unwrap();
-        let utxo_tip_block = self.get_utxo_tip(db.clone());
-        let utxo_tip_circulating_supply = self.get_circulating_supply(db.clone());
+        let db = UtxoIndexSecondary::new(self.config.clone());
+
+        let utxo_tip_block = self.get_utxo_tip(db.db.clone());
+        let utxo_tip_circulating_supply = self.get_circulating_supply(db.db.clone());
 
         // Get block timestamp
         debug!("Getting UTXO tip timestamp...");
@@ -371,7 +362,7 @@ impl UtxoBasedPipeline {
 
         // Iterate over UTXOs in utxoindex db, loading address balance data into memory
         debug!("Loading address balances from UTXO index...");
-        let utxo_set_results = self.load_from_utxo_set(db.clone());
+        let utxo_set_results = self.load_from_utxo_set(db.db.clone());
 
         let address_balances = Rc::new(utxo_set_results.address_balances.clone());
 
@@ -434,7 +425,7 @@ impl UtxoBasedPipeline {
         UtxoAgeAnalysis::new(
             self.pg_pool.clone(),
             utxo_snapshot_header.id,
-            db,
+            db.db.clone(),
             self.rpc_client.clone(),
             utxo_snapshot_header.circulating_supply,
         )
@@ -445,7 +436,7 @@ impl UtxoBasedPipeline {
             .set_kas_last_moved_by_age_bucket_complete(self.pg_pool.clone())
             .await;
 
-        kaspalytics_utils::email::send_email(
+        let _ = kaspalytics_utils::email::send_email(
             &self.config,
             "utxo-pipeline completed".to_string(),
             "".to_string(),
