@@ -1,8 +1,10 @@
 mod analyzer;
 mod cache;
-mod listener;
+mod db;
+mod ingest;
 
 use cache::Cache;
+use db::writer::DbWriter;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
@@ -75,39 +77,57 @@ async fn main() {
         Err(_) => Arc::new(Cache::default()),
     };
 
-    let shutdown_indicator = Arc::new(AtomicBool::new(false));
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
 
-    // Listener task
-    let listener_cache = cache.clone();
-    let mut listener = listener::DagListener::new(
+    let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+    // Ingest task
+    let ingest_cache = cache.clone();
+    let mut ingest = ingest::DagIngest::new(
         config.clone(),
-        listener_cache,
+        tx,
+        ingest_cache,
         rpc_client.clone(),
-        shutdown_indicator.clone(),
+        shutdown_flag.clone(),
     );
-    let listener_handle = tokio::spawn(async move {
-        listener.run().await;
+    let ingest_handle = tokio::spawn(async move {
+        ingest.run().await;
+    });
+
+    // DuckDB Writer task
+    let writer = DbWriter::try_new(&config.kaspalytics_dirs.db_dir, shutdown_flag.clone()).unwrap();
+    writer.scaffold().unwrap();
+    let writer_handle = tokio::spawn(async move {
+        db::writer::run(writer, rx).await;
     });
 
     // Analyzer task
     let analyzer_cache = cache.clone();
-    let analyzer = analyzer::Analyzer::new(analyzer_cache, pg_pool, shutdown_indicator.clone());
+    let analyzer = analyzer::Analyzer::new(
+        config.clone(),
+        analyzer_cache,
+        pg_pool,
+        shutdown_flag.clone(),
+    );
     let analyzer_handle = tokio::spawn(async move {
         analyzer.run().await;
     });
 
     // Handle interrupt
+    let iterrupt_shutdown_flag = shutdown_flag.clone();
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
         info!("Received interrupt, shutting down...");
-        shutdown_indicator.store(true, Ordering::Relaxed);
+        iterrupt_shutdown_flag.store(true, Ordering::Relaxed);
     });
 
-    match tokio::try_join!(listener_handle, analyzer_handle) {
+    match tokio::try_join!(ingest_handle, writer_handle, analyzer_handle) {
         Ok(_) => {
             info!("Shutdown complete");
         }
         Err(e) => {
+            shutdown_flag.store(true, Ordering::Relaxed);
+
             error!("{}", e);
 
             if config.env == KaspalyticsEnv::Prod {

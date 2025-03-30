@@ -10,6 +10,7 @@ edition.workspace = true
 bincode.workspace = true
 chrono.workspace = true
 dashmap.workspace = true
+duckdb.workspace = true
 env_logger.workspace = true
 kaspa-consensus-core.workspace = true
 kaspa-hashes.workspace = true

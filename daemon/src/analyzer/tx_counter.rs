@@ -1,34 +1,12 @@
+use crate::db::reader::DbReader;
 use chrono::Utc;
+use kaspalytics_utils::config::Config;
 use log::debug;
 use sqlx::PgPool;
-use std::collections::HashMap;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::cache::Cache;
-
-pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let threshold = now - 86400;
-
-    let effective_count: u64 = cache
-        .seconds
-        .iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.effective_transaction_count.load(Ordering::Relaxed))
-        .sum();
-
-    let count: u64 = cache
-        .seconds
-        .iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.transaction_count.load(Ordering::Relaxed))
-        .sum();
+async fn run_transaction_count_24h(db: &DbReader, pg_pool: &PgPool) {
+    let data = db.transaction_count_24h().unwrap(); // TODO handle error
+    debug!("transaction_count_24h: {}", data);
 
     sqlx::query(
         r#"
@@ -38,10 +16,15 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
             SET "value" = $1, updated_timestamp = $2
         "#,
     )
-    .bind(count as i64)
+    .bind(data)
     .bind(Utc::now())
     .execute(pg_pool)
-    .await?;
+    .await
+    .unwrap();
+}
+
+async fn run_effective_transaction_count_24h(db: &DbReader, pg_pool: &PgPool) {
+    let data = db.effective_transaction_count_24h().unwrap(); // TODO handle error
 
     sqlx::query(
         r#"
@@ -51,33 +34,16 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
             SET "value" = $1, updated_timestamp = $2
         "#,
     )
-    .bind(effective_count as i64)
+    .bind(data as i64)
     .bind(Utc::now())
     .execute(pg_pool)
-    .await?;
+    .await
+    .unwrap();
+}
 
-    let current_hour = now - (now % 3600);
-    let cutoff = current_hour - (23 * 3600);
-    let mut effective_count_per_hour = HashMap::<u64, u64>::new();
-
-    cache
-        .seconds
-        .iter()
-        .map(|entry| {
-            let second = *entry.key();
-            let hour = second - (second % 3600);
-            (
-                hour,
-                entry
-                    .value()
-                    .effective_transaction_count
-                    .load(Ordering::Relaxed),
-            )
-        })
-        .filter(|(hour, _)| *hour >= cutoff)
-        .for_each(|(hour, count)| {
-            *effective_count_per_hour.entry(hour).or_insert(0) += count;
-        });
+async fn run_effective_transaction_count_per_hour(db: &DbReader, pg_pool: &PgPool) {
+    let data = db.effective_transaction_count_per_hour().unwrap(); // TODO handle error
+    debug!("effective_count_per_hour: {:?}", data);
 
     sqlx::query(
         r#"
@@ -87,13 +53,19 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
             SET "value" = $1, updated_timestamp = $2
         "#,
     )
-    .bind(serde_json::to_string(&effective_count_per_hour).unwrap())
+    .bind(serde_json::to_string(&data).unwrap())
     .bind(Utc::now())
     .execute(pg_pool)
-    .await?;
+    .await
+    .unwrap();
+}
 
-    debug!("txs: {} | effective txs: {}", count, effective_count);
-    debug!("per hour effective tx count {:?}", effective_count_per_hour);
+pub async fn run(config: &Config, pg_pool: &PgPool) {
+    // TODO return errors for all functions
 
-    Ok(())
+    let db = DbReader::new(config.kaspalytics_dirs.db_dir.clone());
+
+    run_transaction_count_24h(&db, pg_pool).await;
+    // run_effective_transaction_count_24h(&db, pg_pool).await;
+    run_effective_transaction_count_per_hour(&db, pg_pool).await;
 }

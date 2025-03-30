@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 const LOG_DIR: &str = "logs";
 const CACHE_DIR: &str = "cache";
+const DB_DIR: &str = "db.duckdb";
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -13,6 +14,7 @@ pub struct KaspalyticsDirs {
     pub network_dir: PathBuf,
     pub log_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub db_dir: PathBuf,
 }
 
 impl KaspalyticsDirs {
@@ -25,6 +27,7 @@ impl KaspalyticsDirs {
         let _ = std::fs::create_dir(&log_dir);
 
         let cache_dir = network_dir.join(CACHE_DIR);
+        let db_dir = network_dir.join(DB_DIR);
 
         Self {
             app_dir,
@@ -32,6 +35,7 @@ impl KaspalyticsDirs {
             network_dir,
             log_dir,
             cache_dir,
+            db_dir,
         }
     }
 }

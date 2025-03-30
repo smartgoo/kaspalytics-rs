@@ -6,6 +6,40 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// #[allow(dead_code)]
+// #[derive(thiserror::Error, Debug)]
+// pub enum PayloadParseError {
+//     #[error("First byte 0xaa indicates address payload")]
+//     InvalidFirstByte,
+
+//     #[error("Payload split error")]
+//     SplitError,
+// }
+
+// #[allow(dead_code)]
+// fn parse_payload_node_version(payload: Vec<u8>) -> Result<String, PayloadParseError> {
+//     // let mut version = payload[16];
+//     let length = payload[18];
+//     let script = &payload[19_usize..(19 + length as usize)];
+
+//     if script[0] == 0xaa {
+//         return Err(PayloadParseError::InvalidFirstByte);
+//     }
+//     // if script[0] < 0x76 { ... }
+
+//     let payload_str = payload[19_usize + (length as usize)..]
+//         .iter()
+//         .map(|&b| b as char)
+//         .collect::<String>();
+
+//     let node_version = &payload_str
+//         .split("/")
+//         .next()
+//         .ok_or(PayloadParseError::SplitError)?;
+
+//     Ok(String::from(*node_version))
+// }
+
 pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
     // TODO store mining by address
     let mut version_counts = HashMap::<String, u64>::new();
