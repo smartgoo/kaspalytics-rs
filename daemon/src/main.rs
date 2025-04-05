@@ -1,10 +1,8 @@
 mod analyzer;
 mod cache;
-mod db;
 mod ingest;
 
 use cache::Cache;
-use db::writer::DbWriter;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
@@ -53,7 +51,7 @@ async fn main() {
 
     let cache = match Cache::load_cache_state(config.clone()).await {
         Ok(cache) => {
-            let last_known_chain_block = cache.last_known_chain_block().await.unwrap();
+            let last_known_chain_block = cache.last_known_chain_block().unwrap();
             match rpc_client.get_block(last_known_chain_block, false).await {
                 Ok(_) => {
                     info!(
@@ -79,39 +77,30 @@ async fn main() {
 
     let shutdown_flag = Arc::new(AtomicBool::new(false));
 
-    let (tx, rx) = tokio::sync::mpsc::channel(100);
-
     // Ingest task
     let ingest_cache = cache.clone();
-    let mut ingest = ingest::DagIngest::new(
+    let ingest = ingest::DagIngest::new(
         config.clone(),
-        tx,
         ingest_cache,
         rpc_client.clone(),
+        pg_pool.clone(),
         shutdown_flag.clone(),
     );
     let ingest_handle = tokio::spawn(async move {
         ingest.run().await;
     });
 
-    // DuckDB Writer task
-    let writer = DbWriter::try_new(&config.kaspalytics_dirs.db_dir, shutdown_flag.clone()).unwrap();
-    writer.scaffold().unwrap();
-    let writer_handle = tokio::spawn(async move {
-        db::writer::run(writer, rx).await;
-    });
-
     // Analyzer task
-    let analyzer_cache = cache.clone();
-    let analyzer = analyzer::Analyzer::new(
-        config.clone(),
-        analyzer_cache,
-        pg_pool,
-        shutdown_flag.clone(),
-    );
-    let analyzer_handle = tokio::spawn(async move {
-        analyzer.run().await;
-    });
+    // let analyzer_cache = cache.clone();
+    // let analyzer = analyzer::Analyzer::new(
+    //     config.clone(),
+    //     analyzer_cache,
+    //     pg_pool,
+    //     shutdown_flag.clone(),
+    // );
+    // let analyzer_handle = tokio::spawn(async move {
+    //     analyzer.run().await;
+    // });
 
     // Handle interrupt
     let iterrupt_shutdown_flag = shutdown_flag.clone();
@@ -121,7 +110,7 @@ async fn main() {
         iterrupt_shutdown_flag.store(true, Ordering::Relaxed);
     });
 
-    match tokio::try_join!(ingest_handle, writer_handle, analyzer_handle) {
+    match tokio::try_join!(ingest_handle) {
         Ok(_) => {
             info!("Shutdown complete");
         }

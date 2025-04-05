@@ -69,8 +69,7 @@ CREATE TABLE IF NOT EXISTS address_balance_snapshot (
     amount_sompi BIGINT NOT NULL,
     address VARCHAR(100)
 );
-CREATE INDEX IF NOT EXISTS idx_address_balance_address 
-ON TABLE address_balance_snapshot(address);
+CREATE INDEX ON address_balance_snapshot(address);
 
 CREATE TABLE IF NOT EXISTS percentile_analysis (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -213,7 +212,7 @@ CREATE TABLE IF NOT EXISTS hash_rate (
     difficulty NUMERIC(40,0) NOT NULL
 );
 
-CREATE INDEX idx_timestamp ON hash_rate ("timestamp");
+CREATE INDEX ON hash_rate ("timestamp");
 
 -- TODO add "granularity" field to this table (day, minute, etc.)
 -- TODO add constraint on granularity and timestmap
@@ -241,3 +240,52 @@ CREATE TABLE IF NOT EXISTS known_addresses (
     type CHARACTER VARYING NOT NULL,
     added_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE SCHEMA IF NOT EXISTS kaspad;
+
+CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.blocks (
+    block_hash BYTEA PRIMARY KEY,
+    block_time TIMESTAMP WITH TIME ZONE
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions (
+    transaction_id BYTEA PRIMARY KEY,
+    subnetwork_id BYTEA,
+    payload BYTEA,
+    block_time TIMESTAMP WITH TIME ZONE
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.blocks_transactions (
+    block_hash BYTEA,
+    transaction_id BYTEA,
+    PRIMARY KEY (block_hash, transaction_id)
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions_inputs (
+    transaction_id BYTEA,
+    index SMALLINT,
+    previous_outpoint_transaction_id BYTEA,
+    previous_outpoint_index SMALLINT,
+    signature_script BYTEA,
+    sig_op_count SMALLINT,
+    previous_outpoint_script_public_key BYTEA,
+    previous_outpoint_script_public_key_address VARCHAR,
+    previous_outpoint_amount BIGINT,
+    PRIMARY KEY (transaction_id, index)
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions_outputs (
+    transaction_id BYTEA,
+    "index" SMALLINT,
+    amount BIGINT,
+    script_public_key BYTEA,
+    -- script_public_key_type 
+    script_public_key_address VARCHAR,
+    PRIMARY KEY (transaction_id, index)
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions_accepting_block (
+    transaction_id BYTEA UNIQUE,
+    block_hash BYTEA
+);
+-- CREATE INDEX ON transactions_acceptances (block_hash);

@@ -1,4 +1,3 @@
-use crate::db::reader::DbReader;
 use chrono::Utc;
 use kaspalytics_utils::config::Config;
 use log::debug;
@@ -66,6 +65,6 @@ pub async fn run(config: &Config, pg_pool: &PgPool) {
     let db = DbReader::new(config.kaspalytics_dirs.db_dir.clone());
 
     run_transaction_count_24h(&db, pg_pool).await;
-    // run_effective_transaction_count_24h(&db, pg_pool).await;
+    run_effective_transaction_count_24h(&db, pg_pool).await;
     run_effective_transaction_count_per_hour(&db, pg_pool).await;
 }

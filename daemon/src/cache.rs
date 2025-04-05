@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use kaspa_consensus_core::blockhash::BlockHashExtensions;
 use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_hashes::Hash;
@@ -12,8 +13,8 @@ use log::{info, warn};
 use rocksdb::DB;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 pub type CacheTransactionId = TransactionId;
 pub type CacheScriptPublicKey = ScriptPublicKey;
@@ -95,12 +96,12 @@ pub type CacheSubnetworkId = SubnetworkId;
 
 // TODO clean up and standardize Rpc* vs. Cache*
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CacheTransaction {
     pub id: CacheTransactionId,
     pub inputs: Vec<CacheTransactionInput>,
     pub outputs: Vec<CacheTransactionOutput>,
-    lock_time: u64,
+    pub lock_time: u64,
     pub subnetwork_id: CacheSubnetworkId,
     pub gas: u64,
     pub payload: Vec<u8>,
@@ -144,22 +145,34 @@ pub struct Cache {
     // Synced to DAG tip
     synced: AtomicBool,
 
+    block_ingest_synced: AtomicBool,
+    vspc_ingest_synced: AtomicBool,
+
+    low_hash: Mutex<Option<Hash>>,
     last_known_chain_block: Mutex<Option<Hash>>,
 
     tip_timestamp: AtomicU64,
 
     pub blocks: DashMap<Hash, CacheBlock>,
     transactions: DashMap<CacheTransactionId, CacheTransaction>,
-    accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
+    pub accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
 }
 
 impl Cache {
-    pub async fn set_last_known_chain_block(&self, hash: Hash) {
-        *self.last_known_chain_block.lock().await = Some(hash)
+    pub fn set_low_hash(&self, hash: Hash) {
+        *self.low_hash.lock().unwrap() = Some(hash)
     }
 
-    pub async fn last_known_chain_block(&self) -> Option<Hash> {
-        *self.last_known_chain_block.lock().await
+    pub fn low_hash(&self) -> Option<Hash> {
+        *self.low_hash.lock().unwrap()
+    }
+
+    pub fn set_last_known_chain_block(&self, hash: Hash) {
+        *self.last_known_chain_block.lock().unwrap() = Some(hash)
+    }
+
+    pub fn last_known_chain_block(&self) -> Option<Hash> {
+        *self.last_known_chain_block.lock().unwrap()
     }
 
     pub fn set_synced(&self, state: bool) {
@@ -168,6 +181,22 @@ impl Cache {
 
     pub fn synced(&self) -> bool {
         self.synced.load(Ordering::Relaxed)
+    }
+
+    pub fn set_block_ingest_synced(&self, state: bool) {
+        self.block_ingest_synced.store(state, Ordering::Relaxed);
+    }
+
+    pub fn block_ingest_synced(&self) -> bool {
+        self.block_ingest_synced.load(Ordering::Relaxed)
+    }
+
+    pub fn set_vspc_ingest_synced(&self, state: bool) {
+        self.vspc_ingest_synced.store(state, Ordering::Relaxed);
+    }
+
+    pub fn vspc_ingest_synced(&self) -> bool {
+        self.vspc_ingest_synced.load(Ordering::Relaxed)
     }
 
     pub fn set_tip_timestamp(&self, timestamp: u64) {
@@ -190,13 +219,11 @@ impl Cache {
             .or_insert(CacheTransaction::from(transaction.clone()));
     }
 
-    pub fn add_block(&self, block: &RpcBlock) -> bool {
+    pub fn add_block(&self, block: &RpcBlock) {
         // Add block to map if it does not yet exist
         // Otherwise return, to prevent seconds map fields from increasing on duplicate data
         match self.blocks.entry(block.header.hash) {
-            dashmap::Entry::Occupied(_) => {
-                return false;
-            }
+            dashmap::Entry::Occupied(_) => return,
             dashmap::Entry::Vacant(e) => {
                 e.insert(CacheBlock::from(block.clone()));
             }
@@ -206,8 +233,6 @@ impl Cache {
         for tx in block.transactions.iter() {
             self.add_transaction(tx);
         }
-
-        true
     }
 
     fn remove_transaction_acceptance(&self, transaction_id: Hash) {
@@ -217,41 +242,39 @@ impl Cache {
             .and_modify(|v| v.accepting_block_hash = None);
     }
 
-    pub fn remove_chain_block(&self, removed_chain_block: Hash) -> bool {
+    pub fn remove_chain_block(&self, removed_chain_block: &Hash) {
         // Temporary while working thru bug...
         {
-            let removed_chain_block_data = match self.blocks.get(&removed_chain_block) {
-                Some(block) => block,
-                None => {
-                    warn!(
-                        "Removed chain block {} not found in blocks cache",
-                        removed_chain_block
-                    );
-                    return false;
-                }
-            };
+            let removed_chain_block_data = self.blocks.get(removed_chain_block);
+
+            if removed_chain_block.is_none() {
+                warn!(
+                    "Removed chain block {} not found in blocks cache",
+                    removed_chain_block
+                );
+                return;
+            }
 
             // TODO I think since removed_chain_blocks are returned in high to low order,
             // there are situations where removed_chain_block is not in
             // accepting_block_transactions map yet
-            if removed_chain_block_data.timestamp > self.tip_timestamp() {
+            if removed_chain_block_data.unwrap().timestamp > self.tip_timestamp() {
                 info!(
                     "Removed chain block {} timestamp greater than tip_timestamp",
                     removed_chain_block
                 );
-                return false;
             }
         }
 
         // Set block's chain block status to false
         self.blocks
-            .entry(removed_chain_block)
+            .entry(*removed_chain_block)
             .and_modify(|v| v.is_chain_block = false);
 
         // Remove former chain blocks accepted transactions from accepting_block_transactions map
         if let Some((_, removed_transactions)) = self
             .accepting_block_transactions
-            .remove(&removed_chain_block)
+            .remove(removed_chain_block)
         {
             for tx_id in removed_transactions {
                 self.remove_transaction_acceptance(tx_id);
@@ -262,8 +285,6 @@ impl Cache {
                 removed_chain_block
             );
         }
-
-        true
     }
 
     fn add_transaction_acceptance(&self, transaction_id: Hash, accepting_block_hash: Hash) {
@@ -292,15 +313,17 @@ impl Cache {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
+pub struct DenormalizedBlock {
+    pub hash: Hash,
+    pub timestamp: u64,
+    pub daa_score: u64,
+    pub transactions: Vec<CacheTransaction>,
+}
+
 impl Cache {
-    pub fn prune(&self) {
-        // TODO refactor this
-
-        // TODO better handling of window size
-        // Currently 1 min of DAG data
-        let window = 60 * 1000;
-        let pruning_timestamp = self.tip_timestamp() - window;
-
+    pub fn prune(&self, pruning_timestamp: u64) {
         // Prune blocks
         let mut candidate_blocks: Vec<Hash> = vec![];
         for block in self.blocks.iter() {
@@ -397,6 +420,9 @@ impl Cache {
 
         Ok(Cache {
             synced: AtomicBool::new(false),
+            block_ingest_synced: AtomicBool::new(false),
+            vspc_ingest_synced: AtomicBool::new(false),
+            low_hash: Mutex::new(None),
             last_known_chain_block: Mutex::new(Some(last_known_chain_block)),
             tip_timestamp: AtomicU64::new(tip_timestamp as u64),
             blocks,
@@ -413,7 +439,7 @@ impl Cache {
         // Store vspc_low_hash
         db.put(
             b"last_known_chain_block",
-            bincode::serialize(&self.last_known_chain_block().await.unwrap())?,
+            bincode::serialize(&self.last_known_chain_block().unwrap())?,
         )?;
 
         // Insert tip_timestamp to db

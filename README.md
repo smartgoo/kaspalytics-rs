@@ -2,11 +2,11 @@ Work In Progress - Prototyping Kaspalytics analytics services in Rust.
 
 Short term, thinking of these components:
 - `cli` app for misc/ad-hoc analysis and utility functions
-- `daemon` that runs a `listener` (listens to DAG, indexes select block & transaction data to an in process cache) and `analyzer` (runs over in process cache, analyzes, saves to DB)
+- `daemon` that runs `ingest` (queries DAG, writes to DB) and `analyzer`
 
 Longer term:
+- `ingest` -> `bus` -> `plugins` 
 - `webapi` that provides real time data to front end via websockets/SSE
-- Might need some communication between `indexer` and `webapi` (pub/sub, broadcast, etc)
 
 `sqlx-cli` for db migrations ([sqlx-cli README](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md))
 
