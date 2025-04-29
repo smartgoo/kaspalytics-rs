@@ -1,6 +1,7 @@
 mod analyzer;
 mod cache;
 mod ingest;
+mod writer;
 
 use cache::Cache;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
@@ -77,30 +78,22 @@ async fn main() {
 
     let shutdown_flag = Arc::new(AtomicBool::new(false));
 
+    let (writer_tx, writer_rx) = tokio::sync::mpsc::channel(100);
+
     // Ingest task
-    let ingest_cache = cache.clone();
     let ingest = ingest::DagIngest::new(
         config.clone(),
-        ingest_cache,
-        rpc_client.clone(),
-        pg_pool.clone(),
         shutdown_flag.clone(),
+        writer_tx,
+        rpc_client.clone(),
+        cache.clone(),
     );
-    let ingest_handle = tokio::spawn(async move {
-        ingest.run().await;
-    });
+
+    // Writer task
+    let mut writer = writer::Writer::new(pg_pool.clone(), writer_rx);
 
     // Analyzer task
-    // let analyzer_cache = cache.clone();
-    // let analyzer = analyzer::Analyzer::new(
-    //     config.clone(),
-    //     analyzer_cache,
-    //     pg_pool,
-    //     shutdown_flag.clone(),
-    // );
-    // let analyzer_handle = tokio::spawn(async move {
-    //     analyzer.run().await;
-    // });
+    let analyzer = analyzer::Analyzer::new(cache.clone(), pg_pool, shutdown_flag.clone());
 
     // Handle interrupt
     let iterrupt_shutdown_flag = shutdown_flag.clone();
@@ -110,7 +103,19 @@ async fn main() {
         iterrupt_shutdown_flag.store(true, Ordering::Relaxed);
     });
 
-    match tokio::try_join!(ingest_handle) {
+    let run_result = tokio::try_join!(
+        tokio::spawn(async move {
+            ingest.run().await;
+        }),
+        tokio::spawn(async move {
+            writer.run().await;
+        }),
+        tokio::spawn(async move {
+            analyzer.run().await;
+        })
+    );
+
+    match run_result {
         Ok(_) => {
             info!("Shutdown complete");
         }

@@ -15,7 +15,8 @@ pub fn init_logger(
     config: &KaspalyticsConfig,
     log_file_base: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let pattern = "{d(%Y-%m-%d %H:%M:%S%.3f %Z)} - {h({l})} [{M}] - {m} (({f}:{L})){n}";
+    // let pattern = "{d(%Y-%m-%d %H:%M:%S%.3f %Z)} - {h({l})} [{M}] - {m} (({f}:{L})){n}";
+    let pattern = "{d(%Y-%m-%d %H:%M:%S%.3f %Z)} - {h({l})} - {m} (({f}:{L})){n}";
 
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(PatternEncoder::new(pattern)))

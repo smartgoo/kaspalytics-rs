@@ -6,7 +6,6 @@ use std::fmt;
 
 use kaspalytics_utils::granularity::Granularity;
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Stats {
     // Second, Minute, Hour, Day

@@ -241,51 +241,83 @@ CREATE TABLE IF NOT EXISTS known_addresses (
     added_timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
+------------------------------------------------
+-- kaspad schema
+------------------------------------------------
 CREATE SCHEMA IF NOT EXISTS kaspad;
+CREATE EXTENSION IF NOT EXISTS timescaledb;
 
-CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.blocks (
-    block_hash BYTEA PRIMARY KEY,
-    block_time TIMESTAMP WITH TIME ZONE
+CREATE TABLE IF NOT EXISTS kaspad.blocks (
+    block_time TIMESTAMPTZ NOT NULL,
+    block_hash BYTEA NOT NULL,
+    -- version SMALLINT NOT NULL,
+    -- hash_merkle_root BYTEA NOT NULL,
+    -- accepted_id_merkle_root BYTEA NOT NULL,
+    -- utxo_commitment BYTEA NOT NULL,
+    -- bits INTEGER NOT NULL,
+    -- nonce BIGINT NOT NULL,
+    daa_score BIGINT NOT NULL
+    -- blue_work BYTEA NOT NULL,
+    -- blue_score BIGINT NOT NULL,
+    -- pruning_point BYTEA NOT NULL,
+    -- selected_parent_hash BYTEA,
+    -- children_hashes BYTEA[],
+    -- merge_set_blues_hashes BYTEA[],
+    -- merge_set_reds_hashes BYTEA[],
+    -- is_chain_block BOOLEAN
 );
+SELECT create_hypertable('kaspad.blocks', 'block_time', chunk_time_interval => INTERVAL '1 hour');
+CREATE INDEX ON kaspad.blocks (block_hash);
+SELECT add_retention_policy('kaspad.blocks', INTERVAL '48 hours');
 
-CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions (
-    transaction_id BYTEA PRIMARY KEY,
-    subnetwork_id BYTEA,
-    payload BYTEA,
-    block_time TIMESTAMP WITH TIME ZONE
+CREATE TABLE IF NOT EXISTS kaspad.transactions (
+    block_time TIMESTAMPTZ NOT NULL,
+    block_hash BYTEA NOT NULL,
+    transaction_id BYTEA NOT NULL,
+    -- version SMALLINT NOT NULL,
+    -- lock_time BIGINT NOT NULL,
+    subnetwork_id TEXT NOT NULL,
+    -- gas BIGINT NOT NULL,
+    payload BYTEA NOT NULL,
+    mass BIGINT NOT NULL,
+    compute_mass BIGINT NOT NULL,
+    accepting_block_hash BYTEA
 );
+SELECT create_hypertable('kaspad.transactions', 'block_time', chunk_time_interval => INTERVAL '1 hour');
+CREATE INDEX ON kaspad.transactions (block_hash);
+CREATE INDEX ON kaspad.transactions (transaction_id);
+SELECT add_retention_policy('kaspad.transactions', INTERVAL '48 hours');
 
-CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.blocks_transactions (
-    block_hash BYTEA,
-    transaction_id BYTEA,
-    PRIMARY KEY (block_hash, transaction_id)
-);
-
-CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions_inputs (
-    transaction_id BYTEA,
-    index SMALLINT,
-    previous_outpoint_transaction_id BYTEA,
-    previous_outpoint_index SMALLINT,
-    signature_script BYTEA,
-    sig_op_count SMALLINT,
+CREATE TABLE IF NOT EXISTS kaspad.transactions_inputs (
+    block_time TIMESTAMPTZ NOT NULL,
+    block_hash BYTEA NOT NULL,
+    transaction_id BYTEA NOT NULL,
+    index SMALLINT NOT NULL,
+    previous_outpoint_transaction_id BYTEA NOT NULL,
+    previous_outpoint_index SMALLINT NOT NULL,
+    signature_script BYTEA NOT NULL,
+    -- sequence BIGINT NOT NULL,
+    sig_op_count SMALLINT NOT NULL,
     previous_outpoint_script_public_key BYTEA,
     previous_outpoint_script_public_key_address VARCHAR,
-    previous_outpoint_amount BIGINT,
-    PRIMARY KEY (transaction_id, index)
+    previous_outpoint_amount BIGINT
 );
+CREATE INDEX ON kaspad.transactions_inputs (block_hash);
+CREATE INDEX ON kaspad.transactions_inputs (transaction_id);
+SELECT create_hypertable('kaspad.transactions_inputs', 'block_time', chunk_time_interval => INTERVAL '1 hour');
+SELECT add_retention_policy('kaspad.transactions_inputs', INTERVAL '48 hours');
 
-CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions_outputs (
-    transaction_id BYTEA,
-    "index" SMALLINT,
-    amount BIGINT,
-    script_public_key BYTEA,
-    -- script_public_key_type 
-    script_public_key_address VARCHAR,
-    PRIMARY KEY (transaction_id, index)
+CREATE TABLE IF NOT EXISTS kaspad.transactions_outputs (
+    block_time TIMESTAMPTZ NOT NULL,
+    block_hash BYTEA NOT NULL,
+    transaction_id BYTEA NOT NULL,
+    index SMALLINT NOT NULL,
+    amount BIGINT NOT NULL,
+    script_public_key BYTEA NOT NULL,
+    -- script_public_key_type SMALLINT NOT NULL,
+    script_public_key_address VARCHAR NOT NULL
 );
-
-CREATE UNLOGGED TABLE IF NOT EXISTS kaspad.transactions_accepting_block (
-    transaction_id BYTEA UNIQUE,
-    block_hash BYTEA
-);
--- CREATE INDEX ON transactions_acceptances (block_hash);
+CREATE INDEX ON kaspad.transactions_inputs (block_hash);
+CREATE INDEX ON kaspad.transactions_outputs (transaction_id);
+SELECT create_hypertable('kaspad.transactions_outputs', 'block_time', chunk_time_interval => INTERVAL '1 hour');
+SELECT add_retention_policy('kaspad.transactions_outputs', INTERVAL '48 hours');

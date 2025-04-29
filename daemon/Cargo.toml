@@ -13,6 +13,7 @@ dashmap.workspace = true
 env_logger.workspace = true
 kaspa-addresses.workspace = true
 kaspa-consensus-core.workspace = true
+kaspa-grpc-client.workspace = true
 kaspa-hashes.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-txscript.workspace = true

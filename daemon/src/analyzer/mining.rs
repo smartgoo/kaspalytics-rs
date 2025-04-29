@@ -1,49 +1,12 @@
 use crate::cache::Cache;
 use chrono::Utc;
-use log::debug;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// #[allow(dead_code)]
-// #[derive(thiserror::Error, Debug)]
-// pub enum PayloadParseError {
-//     #[error("First byte 0xaa indicates address payload")]
-//     InvalidFirstByte,
-
-//     #[error("Payload split error")]
-//     SplitError,
-// }
-
-// #[allow(dead_code)]
-// fn parse_payload_node_version(payload: Vec<u8>) -> Result<String, PayloadParseError> {
-//     // let mut version = payload[16];
-//     let length = payload[18];
-//     let script = &payload[19_usize..(19 + length as usize)];
-
-//     if script[0] == 0xaa {
-//         return Err(PayloadParseError::InvalidFirstByte);
-//     }
-//     // if script[0] < 0x76 { ... }
-
-//     let payload_str = payload[19_usize + (length as usize)..]
-//         .iter()
-//         .map(|&b| b as char)
-//         .collect::<String>();
-
-//     let node_version = &payload_str
-//         .split("/")
-//         .next()
-//         .ok_or(PayloadParseError::SplitError)?;
-
-//     Ok(String::from(*node_version))
-// }
-
 pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
-    // TODO store mining by address
     let mut version_counts = HashMap::<String, u64>::new();
-    // let mut miner_counts = HashMap::<String, u64>::new();
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -68,26 +31,6 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
             });
         });
 
-    // for block in &cache.blocks {
-    //     let coinbase_tx_id = block.transactions.first().unwrap();
-    //     let coinbase_tx = cache.transactions.get(coinbase_tx_id).ok_or(
-    //         MiningAnalyzerError::MissingCoinbaseTransaction(
-    //             coinbase_tx_id.to_string(),
-    //             block.key().to_string(),
-    //         ),
-    //     )?;
-
-    //     let block_miner = BlockMiner::try_new(
-    //         *block.key(),
-    //         block.timestamp,
-    //         coinbase_tx.payload.clone(),
-    //         coinbase_tx.outputs[0].script_public_key_address.clone(),
-    //     )?;
-
-    //     *version_counts.entry(block_miner.node_version).or_insert(0) += 1;
-    //     *miner_counts.entry(block_miner.address).or_insert(0) += 1;
-    // }
-
     let total_blocks = version_counts.values().sum::<u64>();
 
     let version_share: HashMap<String, f64> = version_counts
@@ -109,21 +52,6 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     .bind(Utc::now())
     .execute(pg_pool)
     .await?;
-
-    // sqlx::query(
-    //     r#"INSERT INTO key_value ("key", "value", updated_timestamp)
-    //     VALUES('miner_block_counts_1h', $1, $2)
-    //     ON CONFLICT ("key") DO UPDATE
-    //         SET "value" = $1, updated_timestamp = $2
-    //     "#,
-    // )
-    // .bind(serde_json::to_string(&miner_counts).unwrap())
-    // .bind(Utc::now())
-    // .execute(&pg_pool)
-    // .await?;
-
-    debug!("Version share: {:?}", version_share);
-    // debug!("Miner block counts: {:?}", miner_counts);
 
     Ok(())
 }
