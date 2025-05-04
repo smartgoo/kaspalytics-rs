@@ -66,14 +66,24 @@ impl Cache {
         self.transactions
             .entry(tx_id)
             .and_modify(|entry| entry.blocks.push(block_hash))
-            .or_insert(CacheTransaction::from(transaction.clone()));
+            .or_insert({
+                if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
+                    self.seconds
+                        .entry(block_time / 1000)
+                        .and_modify(|v| v.increment_coinbase_transaction_count());
+                } else {
+                    self.seconds
+                        .entry(block_time / 1000)
+                        .and_modify(|v| v.increment_unique_transaction_count());
+                }
 
-        // Add to seconds map
-        // Always increase transaction count even if tx already in map
-        // Since effective tx count handled elsewhere
+                CacheTransaction::from(transaction.clone())
+            });
+
+        // Increase transaction count (non-coinbase, non-unique)
         self.seconds
             .entry(block_time / 1000)
-            .and_modify(|v| v.increment_trnasaction_count());
+            .and_modify(|v| v.increment_transaction_count());
     }
 
     pub fn add_block(&self, block: &RpcBlock) {
@@ -108,16 +118,16 @@ impl Cache {
 
         let tx_timestamp = tx.block_time;
 
-        // Decrement effective transaction counts
+        // Increment transaction counts
         if tx.subnetwork_id == SUBNETWORK_ID_COINBASE {
             self.seconds
                 .entry(tx_timestamp / 1000)
-                .and_modify(|v| v.decrement_effective_coinbase_transaction());
+                .and_modify(|v| v.decrement_coinbase_accepted_transaction_count());
         } else {
             self.seconds
                 .entry(tx_timestamp / 1000)
-                .and_modify(|v| v.decrement_effective_non_coinbase_transaction());
-        };
+                .and_modify(|v| v.decrement_unique_transaction_accepted_count());
+        }
     }
 
     pub fn remove_chain_block(&self, removed_chain_block: &Hash) {
@@ -174,16 +184,16 @@ impl Cache {
         let tx = self.transactions.get(&transaction_id).unwrap();
         let tx_timestamp = tx.block_time;
 
-        // Increment effective transaction counts
+        // Increment transaction counts
         if tx.subnetwork_id == SUBNETWORK_ID_COINBASE {
             self.seconds
                 .entry(tx_timestamp / 1000)
-                .and_modify(|v| v.increment_effective_coinbase_transaction());
+                .and_modify(|v| v.increment_coinbase_accepted_transaction_count());
         } else {
             self.seconds
                 .entry(tx_timestamp / 1000)
-                .and_modify(|v| v.increment_effective_non_coinbase_transaction());
-        };
+                .and_modify(|v| v.increment_unique_transaction_accepted_count());
+        }
     }
 
     pub fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds) {

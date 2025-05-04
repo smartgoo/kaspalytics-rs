@@ -44,7 +44,7 @@ impl Analyzer {
             let _ = mining::run(self.cache.clone(), &self.pg_pool).await;
 
             info!("Analyzer completed, sleeping");
-            sleep(Duration::from_secs(30)).await;
+            sleep(Duration::from_secs(15)).await;
         }
 
         self.shutdown().await;

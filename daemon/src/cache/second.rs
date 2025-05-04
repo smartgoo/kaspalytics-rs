@@ -51,12 +51,21 @@ fn parse_payload_node_version(payload: Vec<u8>) -> Result<(String, String), Payl
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SecondMetrics {
     pub block_count: AtomicU64,
+    // blu_block_count TODO
     // red_block_count TODO
     pub mining_node_version_block_counts: DashMap<String, u64>, // TODO Atomic?
-    // pub miner_block_counts: DashMap<Hash, u64>,
+
+    // pub transaction_count: u64,
+    // pub accepted_transaction_count: u64,
+    // pub coinbase_transaction_count: u64,
+    // pub accepted_coinbase_transaction_count: u64,
+    // pub unique_transaction_count: u64,
+    // pub unique_accepted_transaction_count: u64,
+    pub coinbase_transaction_count: u64,
+    pub coinbase_accepted_transaction_count: u64,
     pub transaction_count: u64,
-    pub effective_coinbase_transaction_count: u64,
-    pub effective_non_coinbase_transaction_count: u64,
+    pub unique_transaction_count: u64,
+    pub unique_transaction_accepted_count: u64,
 }
 
 impl SecondMetrics {
@@ -70,23 +79,31 @@ impl SecondMetrics {
             .or_insert(1);
     }
 
-    pub fn increment_trnasaction_count(&mut self) {
+    pub fn increment_coinbase_transaction_count(&mut self) {
+        self.coinbase_transaction_count += 1;
+    }
+
+    pub fn increment_coinbase_accepted_transaction_count(&mut self) {
+        self.coinbase_accepted_transaction_count += 1;
+    }
+
+    pub fn decrement_coinbase_accepted_transaction_count(&mut self) {
+        self.coinbase_accepted_transaction_count -= 1;
+    }
+
+    pub fn increment_transaction_count(&mut self) {
         self.transaction_count += 1;
     }
 
-    pub fn increment_effective_coinbase_transaction(&mut self) {
-        self.effective_coinbase_transaction_count += 1;
+    pub fn increment_unique_transaction_count(&mut self) {
+        self.unique_transaction_count += 1;
     }
 
-    pub fn decrement_effective_coinbase_transaction(&mut self) {
-        self.effective_coinbase_transaction_count -= 1;
+    pub fn increment_unique_transaction_accepted_count(&mut self) {
+        self.unique_transaction_accepted_count += 1;
     }
 
-    pub fn increment_effective_non_coinbase_transaction(&mut self) {
-        self.effective_non_coinbase_transaction_count += 1;
-    }
-
-    pub fn decrement_effective_non_coinbase_transaction(&mut self) {
-        self.effective_non_coinbase_transaction_count -= 1;
+    pub fn decrement_unique_transaction_accepted_count(&mut self) {
+        self.unique_transaction_accepted_count -= 1;
     }
 }
