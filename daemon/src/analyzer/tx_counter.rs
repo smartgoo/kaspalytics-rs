@@ -225,7 +225,7 @@ async fn accepted_count_per_minute_60m(
             let minute = second - (second % 60);
             (
                 minute,
-                entry.value().coinbase_transaction_count
+                entry.value().coinbase_accepted_transaction_count
                     + entry.value().unique_transaction_accepted_count,
             )
         })
@@ -268,7 +268,7 @@ async fn accepted_count_per_second_60s(
             let second = *entry.key();
             (
                 second,
-                entry.value().coinbase_transaction_count
+                entry.value().coinbase_accepted_transaction_count
                     + entry.value().unique_transaction_accepted_count,
             )
         })
