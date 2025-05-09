@@ -1,6 +1,7 @@
 pub mod model;
 pub mod second;
 
+use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use kaspa_consensus_core::blockhash::BlockHashExtensions;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
@@ -17,43 +18,70 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 #[derive(Default)]
-pub struct Cache {
-    synced: AtomicBool,
-
-    last_known_chain_block: Mutex<Option<Hash>>,
-
-    tip_timestamp: AtomicU64,
-
-    pub blocks: DashMap<Hash, CacheBlock>,
-    transactions: DashMap<CacheTransactionId, CacheTransaction>,
-    accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
-
-    pub seconds: DashMap<u64, SecondMetrics>,
+struct CacheField<T> {
+    data: T,
+    updated: u64
 }
 
-impl Cache {
-    pub fn set_last_known_chain_block(&self, hash: Hash) {
+#[derive(Default)]
+pub struct Cache {
+    // DAG Fields
+    synced: AtomicBool,
+    last_known_chain_block: Mutex<Option<Hash>>,
+    tip_timestamp: AtomicU64,
+    blocks: DashMap<Hash, CacheBlock>,
+    transactions: DashMap<CacheTransactionId, CacheTransaction>,
+    accepting_block_transactions: DashMap<Hash, Vec<CacheTransactionId>>,
+    seconds: DashMap<u64, SecondMetrics>,
+
+    // Analytics Fields
+    // price_usd: CacheField<f64>,
+    // price_btc: f64,
+    // market_cap: u64,
+    // volume_usd_24h: u64,
+    // daa_score: u64,
+    // pruning_point: Hash,
+    // sompi_issued: u64,
+    // difficulty: u64,
+    // hash_rate: u64,
+    // hash_rate_change_7d: f64,
+    // hash_rate_change_30d: f64,
+    // hash_rate_change_90d: f64,
+}
+
+pub trait CacheWriter {
+    fn set_last_known_chain_block(&self, hash: Hash);
+
+    fn set_synced(&self, state: bool);
+
+    fn set_tip_timestamp(&self, timestamp: u64);
+
+    fn add_transaction(&self, transaction: &RpcTransaction);
+
+    fn add_block(&self, block: &RpcBlock);
+
+    fn remove_transaction_acceptance(&self, transaction_id: Hash);
+
+    fn remove_chain_block(&self, removed_chain_block: &Hash);
+
+    fn add_transaction_acceptance(&self, transaction_id: Hash, accepting_block_hash: Hash);
+
+    fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds);
+
+    fn prune(&self) -> Vec<PrunedBlock>;
+}
+
+impl CacheWriter for Cache {
+    fn set_last_known_chain_block(&self, hash: Hash) {
         *self.last_known_chain_block.lock().unwrap() = Some(hash)
     }
 
-    pub fn last_known_chain_block(&self) -> Option<Hash> {
-        *self.last_known_chain_block.lock().unwrap()
-    }
-
-    pub fn set_synced(&self, state: bool) {
+    fn set_synced(&self, state: bool) {
         self.synced.store(state, Ordering::Relaxed);
     }
 
-    pub fn synced(&self) -> bool {
-        self.synced.load(Ordering::Relaxed)
-    }
-
-    pub fn set_tip_timestamp(&self, timestamp: u64) {
+    fn set_tip_timestamp(&self, timestamp: u64) {
         self.tip_timestamp.store(timestamp, Ordering::Relaxed);
-    }
-
-    pub fn tip_timestamp(&self) -> u64 {
-        self.tip_timestamp.load(Ordering::Relaxed)
     }
 
     fn add_transaction(&self, transaction: &RpcTransaction) {
@@ -86,7 +114,7 @@ impl Cache {
             .and_modify(|v| v.increment_transaction_count());
     }
 
-    pub fn add_block(&self, block: &RpcBlock) {
+    fn add_block(&self, block: &RpcBlock) {
         // Add block to map if it does not yet exist
         // Otherwise return, to prevent seconds map fields from increasing on duplicate data
         match self.blocks.entry(block.header.hash) {
@@ -130,7 +158,7 @@ impl Cache {
         }
     }
 
-    pub fn remove_chain_block(&self, removed_chain_block: &Hash) {
+    fn remove_chain_block(&self, removed_chain_block: &Hash) {
         // Temporary while working thru bug...
         {
             let removed_chain_block_data = self.blocks.get(removed_chain_block);
@@ -196,7 +224,7 @@ impl Cache {
         }
     }
 
-    pub fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds) {
+    fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds) {
         // Set block's chain block status to true
         self.blocks
             .entry(acceptance_data.accepting_block_hash)
@@ -213,10 +241,8 @@ impl Cache {
             self.add_transaction_acceptance(tx_id, acceptance_data.accepting_block_hash);
         }
     }
-}
 
-impl Cache {
-    pub fn prune(&self) -> Vec<PrunedBlock> {
+    fn prune(&self) -> Vec<PrunedBlock> {
         let prune_timestamp = self.tip_timestamp() - 30 * 1000;
 
         // Identify blocks older than pruning timestamp
@@ -279,6 +305,40 @@ impl Cache {
         self.seconds.retain(|second, _| *second > threshold);
 
         pruned_blocks
+    }
+}
+
+pub trait CacheReader {
+    fn last_known_chain_block(&self) -> Option<Hash>;
+
+    fn synced(&self) -> bool;
+
+    fn tip_timestamp(&self) -> u64;
+
+    fn contains_block_hash(&self, block_hash: &Hash) -> bool;
+
+    fn seconds_iter<'a>(&'a self) -> impl Iterator<Item = RefMulti<'a, u64, SecondMetrics>>;
+}
+
+impl CacheReader for Cache {
+    fn last_known_chain_block(&self) -> Option<Hash> {
+        *self.last_known_chain_block.lock().unwrap()
+    }
+
+    fn synced(&self) -> bool {
+        self.synced.load(Ordering::Relaxed)
+    }
+
+    fn tip_timestamp(&self) -> u64 {
+        self.tip_timestamp.load(Ordering::Relaxed)
+    }
+
+    fn contains_block_hash(&self, block_hash: &Hash) -> bool {
+        self.blocks.contains_key(block_hash)
+    }
+
+    fn seconds_iter<'a>(&'a self) -> impl Iterator<Item = RefMulti<'a, u64, SecondMetrics>> {
+        self.seconds.iter().map(|entry| entry)
     }
 }
 

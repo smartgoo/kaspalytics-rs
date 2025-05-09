@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
 
-use crate::cache::{model::PrunedBlock, Cache};
+use crate::cache::{model::PrunedBlock, Cache, CacheReader, CacheWriter};
 
 pub struct DagIngest {
     config: Config,
@@ -102,8 +102,7 @@ impl DagIngest {
             for acceptance in vspc.accepted_transaction_ids {
                 if !self
                     .cache
-                    .blocks
-                    .contains_key(&acceptance.accepting_block_hash)
+                    .contains_block_hash(&acceptance.accepting_block_hash)
                 {
                     break;
                 }
@@ -117,8 +116,7 @@ impl DagIngest {
             // Check if synced
             if self
                 .cache
-                .blocks
-                .contains_key(&block_dag_response.tip_hashes[0])
+                .contains_block_hash(&block_dag_response.tip_hashes[0])
             {
                 self.cache.set_synced(true);
             }

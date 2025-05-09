@@ -1,9 +1,10 @@
 mod analyzer;
 mod cache;
 mod ingest;
+mod web;
 mod writer;
 
-use cache::Cache;
+use cache::{Cache, CacheReader};
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
@@ -95,6 +96,9 @@ async fn main() {
     // Analyzer task
     let analyzer = analyzer::Analyzer::new(cache.clone(), pg_pool, shutdown_flag.clone());
 
+    // Web Server task
+    let web_server = web::WebServer::new(config.clone(), shutdown_flag.clone(), cache.clone());
+
     // Handle interrupt
     let iterrupt_shutdown_flag = shutdown_flag.clone();
     tokio::spawn(async move {
@@ -112,7 +116,10 @@ async fn main() {
         }),
         tokio::spawn(async move {
             analyzer.run().await;
-        })
+        }),
+        tokio::spawn(async move {
+            web_server.run().await;
+        }),
     );
 
     match run_result {

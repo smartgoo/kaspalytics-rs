@@ -1,4 +1,4 @@
-use crate::cache::Cache;
+use crate::cache::{Cache, CacheReader};
 use chrono::Utc;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -12,8 +12,7 @@ async fn coinbase_transaction_count(
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.coinbase_transaction_count)
         .sum();
@@ -44,8 +43,7 @@ async fn coinbase_accepted_transaction_count(
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.coinbase_accepted_transaction_count)
         .sum();
@@ -76,8 +74,7 @@ async fn transaction_count(
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.transaction_count)
         .sum();
@@ -108,8 +105,7 @@ async fn unique_transaction_count(
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.unique_transaction_count)
         .sum();
@@ -140,8 +136,7 @@ async fn unique_transaction_accepted_count(
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.unique_transaction_accepted_count)
         .sum();
@@ -179,14 +174,13 @@ async fn accepted_count_per_hour_24h(
     let mut effective_count_per_hour = HashMap::<u64, u64>::new();
 
     cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .map(|entry| {
             let second = *entry.key();
             let hour = second - (second % 3600);
             (
                 hour,
-                entry.value().coinbase_transaction_count
+                entry.value().coinbase_accepted_transaction_count
                     + entry.value().unique_transaction_accepted_count,
             )
         })
@@ -225,8 +219,7 @@ async fn accepted_count_per_minute_60m(
     let mut effective_count_per_minute = HashMap::<u64, u64>::new();
 
     cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .map(|entry| {
             let second = *entry.key();
             let minute = second - (second % 60);
@@ -270,8 +263,7 @@ async fn accepted_count_per_second_60s(
     let mut effective_count_per_second = HashMap::<u64, u64>::new();
 
     cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .map(|entry| {
             let second = *entry.key();
             (

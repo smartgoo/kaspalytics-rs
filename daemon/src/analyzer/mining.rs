@@ -1,4 +1,4 @@
-use crate::cache::Cache;
+use crate::cache::{Cache, CacheReader};
 use chrono::Utc;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -15,8 +15,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     let cutoff = now - 3600;
 
     cache
-        .seconds
-        .iter()
+        .seconds_iter()
         .filter(|entry| *entry.key() >= cutoff)
         .map(|entry| entry.mining_node_version_block_counts.clone())
         .for_each(|second_map| {

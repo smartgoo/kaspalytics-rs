@@ -40,6 +40,8 @@ pub struct Config {
 
     pub kaspad_dirs: KaspadDirs,
     pub kaspalytics_dirs: KaspalyticsDirs,
+
+    pub web_port: u16,
 }
 
 impl Config {
@@ -91,6 +93,8 @@ impl Config {
         };
         let kaspalytics_dirs = KaspalyticsDirs::new(env, network_id, kaspalytics_app_dir);
 
+        let web_port = env::var("WEB_PORT").unwrap().parse::<u16>().unwrap_or(3000);
+
         Config {
             env,
             log_level,
@@ -104,6 +108,7 @@ impl Config {
             smtp_to,
             kaspad_dirs,
             kaspalytics_dirs,
+            web_port,
         }
     }
 }
