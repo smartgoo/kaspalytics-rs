@@ -1,5 +1,6 @@
 mod analyzer;
 mod cache;
+mod collector;
 mod ingest;
 mod writer;
 
@@ -93,7 +94,11 @@ async fn main() {
     let mut writer = writer::Writer::new(pg_pool.clone(), writer_rx);
 
     // Analyzer task
-    let analyzer = analyzer::Analyzer::new(cache.clone(), pg_pool, shutdown_flag.clone());
+    let analyzer = analyzer::Analyzer::new(cache.clone(), pg_pool.clone(), shutdown_flag.clone());
+
+    // Collector task
+    let collector =
+        collector::Collector::new(shutdown_flag.clone(), pg_pool.clone(), rpc_client.clone());
 
     // Handle interrupt
     let iterrupt_shutdown_flag = shutdown_flag.clone();
@@ -112,6 +117,9 @@ async fn main() {
         }),
         tokio::spawn(async move {
             analyzer.run().await;
+        }),
+        tokio::spawn(async move {
+            collector.run().await;
         })
     );
 

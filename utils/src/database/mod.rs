@@ -1,5 +1,6 @@
 pub mod initialize;
 mod pg;
+pub mod sql;
 
 pub use pg::Database;
 
