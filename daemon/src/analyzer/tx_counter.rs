@@ -241,7 +241,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     )
     .await?;
 
-    transaction_count(&cache, pg_pool, KeyRegistry::TransactionCount, threshold).await?;
+    transaction_count(&cache, pg_pool, KeyRegistry::TransactionCount86400s, threshold).await?;
 
     unique_transaction_count(
         &cache,

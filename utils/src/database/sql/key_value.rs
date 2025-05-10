@@ -9,7 +9,7 @@ pub enum KeyRegistry {
     DaaScore,
     PruningPoint,
     CsSompi,
-    TransactionCount,
+    TransactionCount86400s,
     CoinbaseTransactionCount86400s,
     CoinbaseAcceptedTransactionCount86400s,
     UniqueTransactionCount86400s,
@@ -30,7 +30,7 @@ impl KeyRegistry {
             KeyRegistry::DaaScore => "daa_score",
             KeyRegistry::PruningPoint => "pruning_point",
             KeyRegistry::CsSompi => "cs_sompi",
-            KeyRegistry::TransactionCount => "transaction_count",
+            KeyRegistry::TransactionCount86400s => "transaction_count_86400s",
             KeyRegistry::CoinbaseTransactionCount86400s => "coinbase_transaction_count_86400s",
             KeyRegistry::CoinbaseAcceptedTransactionCount86400s => {
                 "coinbase_accepted_transaction_count_86400s"
