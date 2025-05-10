@@ -1,5 +1,6 @@
 use crate::cache::{Cache, CacheReader};
 use chrono::Utc;
+use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,17 +41,14 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
         })
         .collect();
 
-    sqlx::query(
-        r#"INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('miner_node_versions_1h', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::MinerNodeVersions1h,
+        serde_json::to_string(&version_share).unwrap(),
+        Utc::now(),
     )
-    .bind(serde_json::to_string(&version_share).unwrap())
-    .bind(Utc::now())
-    .execute(pg_pool)
-    .await?;
+    .await
+    .unwrap();
 
     Ok(())
 }

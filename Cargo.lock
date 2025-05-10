@@ -2852,6 +2852,7 @@ dependencies = [
  "kaspa-wrpc-client",
  "kaspalytics-utils",
  "log",
+ "reqwest",
  "rocksdb",
  "serde",
  "serde_json",

@@ -1,5 +1,6 @@
 use crate::cache::{Cache, CacheReader};
 use chrono::Utc;
+use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 async fn coinbase_transaction_count(
     cache: &Arc<Cache>,
     pg_pool: &PgPool,
-    key: &str,
+    key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
@@ -17,21 +18,7 @@ async fn coinbase_transaction_count(
         .map(|entry| entry.coinbase_transaction_count)
         .sum();
 
-    let sql = format!(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('{}', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-        key
-    );
-
-    sqlx::query(&sql)
-        .bind(count as i64)
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
 
     Ok(())
 }
@@ -39,7 +26,7 @@ async fn coinbase_transaction_count(
 async fn coinbase_accepted_transaction_count(
     cache: &Arc<Cache>,
     pg_pool: &PgPool,
-    key: &str,
+    key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
@@ -48,21 +35,7 @@ async fn coinbase_accepted_transaction_count(
         .map(|entry| entry.coinbase_accepted_transaction_count)
         .sum();
 
-    let sql = format!(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('{}', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-        key
-    );
-
-    sqlx::query(&sql)
-        .bind(count as i64)
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
 
     Ok(())
 }
@@ -70,7 +43,7 @@ async fn coinbase_accepted_transaction_count(
 async fn transaction_count(
     cache: &Arc<Cache>,
     pg_pool: &PgPool,
-    key: &str,
+    key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
@@ -79,21 +52,7 @@ async fn transaction_count(
         .map(|entry| entry.transaction_count)
         .sum();
 
-    let sql = format!(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('{}', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-        key
-    );
-
-    sqlx::query(&sql)
-        .bind(count as i64)
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
 
     Ok(())
 }
@@ -101,7 +60,7 @@ async fn transaction_count(
 async fn unique_transaction_count(
     cache: &Arc<Cache>,
     pg_pool: &PgPool,
-    key: &str,
+    key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
@@ -110,21 +69,7 @@ async fn unique_transaction_count(
         .map(|entry| entry.unique_transaction_count)
         .sum();
 
-    let sql = format!(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('{}', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-        key
-    );
-
-    sqlx::query(&sql)
-        .bind(count as i64)
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
 
     Ok(())
 }
@@ -132,7 +77,7 @@ async fn unique_transaction_count(
 async fn unique_transaction_accepted_count(
     cache: &Arc<Cache>,
     pg_pool: &PgPool,
-    key: &str,
+    key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
     let count: u64 = cache
@@ -141,21 +86,7 @@ async fn unique_transaction_accepted_count(
         .map(|entry| entry.unique_transaction_accepted_count)
         .sum();
 
-    let sql = format!(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('{}', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-        key
-    );
-
-    sqlx::query(&sql)
-        .bind(count as i64)
-        .bind(Utc::now())
-        .execute(pg_pool)
-        .await?;
+    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
 
     Ok(())
 }
@@ -189,17 +120,12 @@ async fn accepted_count_per_hour_24h(
             *effective_count_per_hour.entry(hour).or_insert(0) += count;
         });
 
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('effective_transaction_count_per_hour_24h', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::AcceptedTransactionCountPerHour24h,
+        serde_json::to_string(&effective_count_per_hour).unwrap(),
+        Utc::now(),
     )
-    .bind(serde_json::to_string(&effective_count_per_hour).unwrap())
-    .bind(Utc::now())
-    .execute(pg_pool)
     .await?;
 
     Ok(())
@@ -234,17 +160,12 @@ async fn accepted_count_per_minute_60m(
             *effective_count_per_minute.entry(minute).or_insert(0) += count;
         });
 
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('effective_transaction_count_per_minute_60m', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::AcceptedTransactionCountPerMinute60m,
+        serde_json::to_string(&effective_count_per_minute).unwrap(),
+        Utc::now(),
     )
-    .bind(serde_json::to_string(&effective_count_per_minute).unwrap())
-    .bind(Utc::now())
-    .execute(pg_pool)
     .await?;
 
     Ok(())
@@ -277,17 +198,12 @@ async fn accepted_count_per_second_60s(
             *effective_count_per_second.entry(second).or_insert(0) += count;
         });
 
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('effective_transaction_count_per_second_60s', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::AcceptedTransactionCountPerSecond60s,
+        serde_json::to_string(&effective_count_per_second).unwrap(),
+        Utc::now(),
     )
-    .bind(serde_json::to_string(&effective_count_per_second).unwrap())
-    .bind(Utc::now())
-    .execute(pg_pool)
     .await?;
 
     Ok(())
@@ -304,7 +220,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     coinbase_transaction_count(
         &cache,
         pg_pool,
-        "coinbase_transaction_count_86400s",
+        KeyRegistry::CoinbaseTransactionCount86400s,
         threshold,
     )
     .await?;
@@ -312,17 +228,17 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     coinbase_accepted_transaction_count(
         &cache,
         pg_pool,
-        "coinbase_accepted_transaction_count_86400s",
+        KeyRegistry::CoinbaseAcceptedTransactionCount86400s,
         threshold,
     )
     .await?;
 
-    transaction_count(&cache, pg_pool, "transaction_count_86400s", threshold).await?;
+    transaction_count(&cache, pg_pool, KeyRegistry::TransactionCount86400s, threshold).await?;
 
     unique_transaction_count(
         &cache,
         pg_pool,
-        "unique_transaction_count_86400s",
+        KeyRegistry::UniqueTransactionCount86400s,
         threshold,
     )
     .await?;
@@ -330,7 +246,7 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     unique_transaction_accepted_count(
         &cache,
         pg_pool,
-        "unique_transaction_accepted_count_86400s",
+        KeyRegistry::UniqueTransactionAcceptedCount86400s,
         threshold,
     )
     .await?;
