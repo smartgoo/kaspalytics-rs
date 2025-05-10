@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use kaspa_rpc_core::{api::rpc::RpcApi, GetBlockDagInfoResponse};
 use kaspa_wrpc_client::KaspaRpcClient;
 use sqlx::PgPool;
