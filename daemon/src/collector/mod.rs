@@ -1,7 +1,7 @@
 use chrono::Utc;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::database;
+use kaspalytics_utils::database::sql::{hash_rate, key_value, key_value::KeyRegistry};
 use log::error;
 use sqlx::PgPool;
 use std::sync::{
@@ -72,17 +72,37 @@ async fn update_markets_data(pg_pool: &PgPool) -> Result<(), Error> {
 
     let data = kaspalytics_utils::coingecko::get_coin_data().await?;
 
-    database::sql::key_value::upsert_price_usd(pg_pool, data.market_data.current_price.usd, date)
-        .await?;
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::PriceUsd,
+        data.market_data.current_price.usd,
+        date,
+    )
+    .await?;
 
-    database::sql::key_value::upsert_price_btc(pg_pool, data.market_data.current_price.btc, date)
-        .await?;
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::PriceBtc,
+        data.market_data.current_price.btc,
+        date,
+    )
+    .await?;
 
-    database::sql::key_value::upsert_market_cap(pg_pool, data.market_data.market_cap.usd, date)
-        .await?;
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::MarketCap,
+        data.market_data.market_cap.usd,
+        date,
+    )
+    .await?;
 
-    database::sql::key_value::upsert_volume(pg_pool, data.market_data.total_volume.usd, date)
-        .await?;
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::Volume,
+        data.market_data.total_volume.usd,
+        date,
+    )
+    .await?;
 
     Ok(())
 }
@@ -93,8 +113,16 @@ async fn update_block_dag_info(
 ) -> Result<(), Error> {
     let date = Utc::now();
     let data = rpc_client.get_block_dag_info().await?;
-    database::sql::key_value::upsert_daa_score(pg_pool, data.virtual_daa_score, date).await?;
-    database::sql::key_value::upsert_pruning_point(pg_pool, data.pruning_point_hash, date).await?;
+
+    key_value::upsert(pg_pool, KeyRegistry::DaaScore, data.virtual_daa_score, date).await?;
+
+    key_value::upsert(
+        pg_pool,
+        KeyRegistry::PruningPoint,
+        data.pruning_point_hash,
+        date,
+    )
+    .await?;
 
     Ok(())
 }
@@ -105,7 +133,7 @@ async fn update_coin_supply_info(
 ) -> Result<(), Error> {
     let date = Utc::now();
     let data = rpc_client.get_coin_supply().await?;
-    database::sql::key_value::upsert_cs_sompi(pg_pool, data.circulating_sompi, date).await?;
+    key_value::upsert(pg_pool, KeyRegistry::CsSompi, data.circulating_sompi, date).await?;
 
     Ok(())
 }
@@ -122,8 +150,7 @@ async fn snapshot_hash_rate(
     let hash_rate = (data.difficulty * 2f64) as u64;
     let hash_rate_10bps = hash_rate * 10u64;
 
-    database::sql::hash_rate::insert(pg_pool, timestamp, hash_rate_10bps, data.difficulty as u64)
-        .await?;
+    hash_rate::insert(pg_pool, timestamp, hash_rate_10bps, data.difficulty as u64).await?;
 
     Ok(())
 }

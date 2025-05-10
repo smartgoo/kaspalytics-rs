@@ -1,147 +1,77 @@
 use chrono::{DateTime, Utc};
-use kaspa_consensus_core::Hash;
 use sqlx::PgPool;
 
-pub async fn upsert_price_usd(
-    pg_pool: &PgPool,
-    price: f64,
-    updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('price_usd', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-    )
-    .bind(price)
-    .bind(updated_at)
-    .execute(pg_pool)
-    .await?;
-
-    Ok(())
+pub enum KeyRegistry {
+    PriceUsd,
+    PriceBtc,
+    MarketCap,
+    Volume,
+    DaaScore,
+    PruningPoint,
+    CsSompi,
+    TransactionCount,
+    CoinbaseTransactionCount86400s,
+    CoinbaseAcceptedTransactionCount86400s,
+    UniqueTransactionCount86400s,
+    UniqueTransactionAcceptedCount86400s,
+    AcceptedTransactionCountPerHour24h,
+    AcceptedTransactionCountPerMinute60m,
+    AcceptedTransactionCountPerSecond60s,
+    MinerNodeVersions1h,
 }
 
-pub async fn upsert_price_btc(
-    pg_pool: &PgPool,
-    price: f64,
-    updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('price_btc', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-    )
-    .bind(price)
-    .bind(updated_at)
-    .execute(pg_pool)
-    .await?;
-
-    Ok(())
+impl KeyRegistry {
+    fn as_str(&self) -> &str {
+        match self {
+            KeyRegistry::PriceUsd => "price_usd",
+            KeyRegistry::PriceBtc => "price_btc",
+            KeyRegistry::MarketCap => "market_cap",
+            KeyRegistry::Volume => "volume",
+            KeyRegistry::DaaScore => "daa_score",
+            KeyRegistry::PruningPoint => "pruning_point",
+            KeyRegistry::CsSompi => "cs_sompi",
+            KeyRegistry::TransactionCount => "transaction_count",
+            KeyRegistry::CoinbaseTransactionCount86400s => "coinbase_transaction_count_86400s",
+            KeyRegistry::CoinbaseAcceptedTransactionCount86400s => {
+                "coinbase_accepted_transaction_count_86400s"
+            }
+            KeyRegistry::UniqueTransactionCount86400s => "unique_transaction_count_86400s",
+            KeyRegistry::UniqueTransactionAcceptedCount86400s => {
+                "unique_transaction_accepted_count_86400s"
+            }
+            KeyRegistry::AcceptedTransactionCountPerHour24h => {
+                "accepted_transaction_count_per_hour_24h"
+            }
+            KeyRegistry::AcceptedTransactionCountPerMinute60m => {
+                "accepted_transaction_count_per_minute_60m"
+            }
+            KeyRegistry::AcceptedTransactionCountPerSecond60s => {
+                "accpeted_transaction_count_per_second_60s"
+            }
+            KeyRegistry::MinerNodeVersions1h => "miner_node_versions_1h",
+        }
+    }
 }
 
-pub async fn upsert_market_cap(
+pub async fn upsert<T>(
     pg_pool: &PgPool,
-    market_cap: f64,
+    key: KeyRegistry,
+    value: T,
     updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), sqlx::Error>
+where
+    T: ToString,
+{
     sqlx::query(
         r#"
         INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('market_cap', $1, $2)
+        VALUES($1, $2, $3)
         ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
+            SET "value" = $2, updated_timestamp = $3
         "#,
     )
-    .bind(market_cap)
-    .bind(updated_at)
-    .execute(pg_pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn upsert_volume(
-    pg_pool: &PgPool,
-    volume: f64,
-    updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('volume', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-    )
-    .bind(volume)
-    .bind(updated_at)
-    .execute(pg_pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn upsert_daa_score(
-    pg_pool: &PgPool,
-    daa_score: u64,
-    updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('daa_score', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-    )
-    .bind(daa_score as i64)
-    .bind(updated_at)
-    .execute(pg_pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn upsert_pruning_point(
-    pg_pool: &PgPool,
-    pruning_point: Hash,
-    updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('pruning_point', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-    )
-    .bind(pruning_point.to_string())
-    .bind(updated_at)
-    .execute(pg_pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn upsert_cs_sompi(
-    pg_pool: &PgPool,
-    cs_sompi: u64,
-    updated_at: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO key_value ("key", "value", updated_timestamp)
-        VALUES('cs_sompi', $1, $2)
-        ON CONFLICT ("key") DO UPDATE
-            SET "value" = $1, updated_timestamp = $2
-        "#,
-    )
-    .bind(cs_sompi as i64)
+    .bind(key.as_str())
+    .bind(value.to_string())
     .bind(updated_at)
     .execute(pg_pool)
     .await?;
