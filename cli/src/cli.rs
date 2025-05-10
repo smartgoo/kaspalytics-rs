@@ -24,10 +24,6 @@ pub enum Commands {
     /// Query CoinGecko market_history endpoint
     CoinMarketHistory,
 
-    /// Home page data refresh
-    /// temporary until time to write better solution
-    HomePageRefresh,
-
     /// Save current DAA score and timestamp to DB
     SnapshotDaa,
 
