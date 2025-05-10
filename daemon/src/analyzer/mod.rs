@@ -1,7 +1,7 @@
 mod mining;
 mod tx_counter;
 
-use crate::cache::{Cache, CacheReader};
+use crate::cache::dag::{DagCache, Reader};
 use log::info;
 use sqlx::{self, PgPool};
 use std::sync::atomic::AtomicBool;
@@ -10,13 +10,13 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 pub struct Analyzer {
-    cache: Arc<Cache>,
+    cache: Arc<DagCache>,
     pg_pool: PgPool,
     shutdown_indicator: Arc<AtomicBool>,
 }
 
 impl Analyzer {
-    pub fn new(cache: Arc<Cache>, pg_pool: PgPool, shutdown_indicator: Arc<AtomicBool>) -> Self {
+    pub fn new(cache: Arc<DagCache>, pg_pool: PgPool, shutdown_indicator: Arc<AtomicBool>) -> Self {
         Analyzer {
             cache,
             pg_pool,

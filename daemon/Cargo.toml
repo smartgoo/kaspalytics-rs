@@ -21,6 +21,7 @@ kaspa-txscript.workspace = true
 kaspa-wrpc-client.workspace = true
 kaspalytics-utils.workspace = true
 log.workspace = true
+moka.workspace = true
 reqwest.workspace = true
 rocksdb.workspace = true
 serde.workspace = true

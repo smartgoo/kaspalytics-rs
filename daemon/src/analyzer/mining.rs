@@ -1,4 +1,4 @@
-use crate::cache::{Cache, CacheReader};
+use crate::cache::dag::{DagCache, Reader};
 use chrono::Utc;
 use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
 use sqlx::PgPool;
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
+pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
     let mut version_counts = HashMap::<String, u64>::new();
 
     let now = SystemTime::now()

@@ -1,4 +1,4 @@
-use crate::cache::{Cache, CacheReader};
+use crate::cache::dag::{DagCache, Reader};
 use chrono::Utc;
 use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
 use sqlx::PgPool;
@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 async fn coinbase_transaction_count(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
@@ -24,7 +24,7 @@ async fn coinbase_transaction_count(
 }
 
 async fn coinbase_accepted_transaction_count(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
@@ -41,7 +41,7 @@ async fn coinbase_accepted_transaction_count(
 }
 
 async fn transaction_count(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
@@ -58,7 +58,7 @@ async fn transaction_count(
 }
 
 async fn unique_transaction_count(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
@@ -75,7 +75,7 @@ async fn unique_transaction_count(
 }
 
 async fn unique_transaction_accepted_count(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
@@ -92,7 +92,7 @@ async fn unique_transaction_accepted_count(
 }
 
 async fn accepted_count_per_hour_24h(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
@@ -132,7 +132,7 @@ async fn accepted_count_per_hour_24h(
 }
 
 async fn accepted_count_per_minute_60m(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
@@ -172,7 +172,7 @@ async fn accepted_count_per_minute_60m(
 }
 
 async fn accepted_count_per_second_60s(
-    cache: &Arc<Cache>,
+    cache: &Arc<DagCache>,
     pg_pool: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
@@ -209,7 +209,7 @@ async fn accepted_count_per_second_60s(
     Ok(())
 }
 
-pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
+pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -233,7 +233,13 @@ pub async fn run(cache: Arc<Cache>, pg_pool: &PgPool) -> Result<(), sqlx::Error>
     )
     .await?;
 
-    transaction_count(&cache, pg_pool, KeyRegistry::TransactionCount86400s, threshold).await?;
+    transaction_count(
+        &cache,
+        pg_pool,
+        KeyRegistry::TransactionCount86400s,
+        threshold,
+    )
+    .await?;
 
     unique_transaction_count(
         &cache,

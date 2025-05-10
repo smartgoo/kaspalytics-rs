@@ -1,3 +1,7 @@
+use crate::cache::{
+    dag::{DagCache, Reader, Writer},
+    model::PrunedBlock,
+};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
 use kaspalytics_utils::config::Config;
@@ -8,14 +12,12 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
 
-use crate::cache::{model::PrunedBlock, Cache, CacheReader, CacheWriter};
-
 pub struct DagIngest {
     config: Config,
     shutdown_flag: Arc<AtomicBool>,
     writer_tx: Sender<Vec<PrunedBlock>>,
     rpc_client: Arc<dyn RpcApi>,
-    cache: Arc<Cache>,
+    cache: Arc<DagCache>,
 }
 
 impl DagIngest {
@@ -24,7 +26,7 @@ impl DagIngest {
         shutdown_flag: Arc<AtomicBool>,
         writer_tx: Sender<Vec<PrunedBlock>>,
         rpc_client: Arc<dyn RpcApi>,
-        cache: Arc<Cache>,
+        cache: Arc<DagCache>,
     ) -> Self {
         DagIngest {
             config,

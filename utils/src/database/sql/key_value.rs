@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum KeyRegistry {
     PriceUsd,
     PriceBtc,
@@ -53,14 +54,14 @@ impl KeyRegistry {
     }
 }
 
-pub async fn upsert<T>(
+pub async fn upsert<V>(
     pg_pool: &PgPool,
     key: KeyRegistry,
-    value: T,
+    value: V,
     updated_at: DateTime<Utc>,
 ) -> Result<(), sqlx::Error>
 where
-    T: ToString,
+    V: ToString,
 {
     sqlx::query(
         r#"
@@ -78,3 +79,18 @@ where
 
     Ok(())
 }
+
+// TODO move Postgres key_value to a typed field structure
+// pub async fn get(
+//     pg_pool: &PgPool,
+//     key: KeyRegistry,
+// ) -> Result<Option<V>, sqlx::Error> {
+//     sqlx::query(
+//         "SELECT \"value\", updated_timestamp FROM key_value WHERE \"key\" = $1;",
+//     )
+//     .bind(key.as_str())
+//     .execute(pg_pool)
+//     .await?;
+
+//     Ok(())
+// }

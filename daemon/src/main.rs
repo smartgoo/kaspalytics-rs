@@ -5,7 +5,7 @@ mod ingest;
 mod web;
 mod writer;
 
-use cache::{Cache, CacheReader};
+use cache::dag::{DagCache, Reader};
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
@@ -52,7 +52,7 @@ async fn main() {
 
     check_rpc_node_status(&config, rpc_client.clone()).await;
 
-    let cache = match Cache::load_cache_state(config.clone()).await {
+    let cache = match DagCache::load_cache_state(config.clone()).await {
         Ok(cache) => {
             let last_known_chain_block = cache.last_known_chain_block().unwrap();
             match rpc_client.get_block(last_known_chain_block, false).await {
@@ -68,14 +68,14 @@ async fn main() {
                         "Cache last_known_chain_block {} no longer held by Kaspa node. Resetting cache",
                         last_known_chain_block
                     );
-                    Arc::new(Cache::default())
+                    Arc::new(DagCache::default())
                 }
                 Err(err) => {
                     panic!("Unhandled RPC error during cache initialization: {}", err);
                 }
             }
         }
-        Err(_) => Arc::new(Cache::default()),
+        Err(_) => Arc::new(DagCache::default()),
     };
 
     let shutdown_flag = Arc::new(AtomicBool::new(false));
@@ -102,7 +102,7 @@ async fn main() {
         collector::Collector::new(shutdown_flag.clone(), pg_pool.clone(), rpc_client.clone());
 
     // Web Server task
-    let web_server = web::WebServer::new(config.clone(), shutdown_flag.clone(), cache.clone());
+    let web_server = web::WebServer::new(config.clone(), shutdown_flag.clone(), pg_pool.clone());
 
     // Handle interrupt
     let iterrupt_shutdown_flag = shutdown_flag.clone();
