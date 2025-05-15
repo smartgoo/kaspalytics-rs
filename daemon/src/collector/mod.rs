@@ -1,4 +1,5 @@
 use chrono::Utc;
+use futures::future::BoxFuture;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::database::sql::{hash_rate, key_value, key_value::KeyRegistry};
@@ -34,7 +35,7 @@ impl Collector {
         pg_pool: PgPool,
         rpc_client: Arc<KaspaRpcClient>,
     ) -> Self {
-        Collector {
+        Self {
             shutdown_flag,
             pg_pool,
             rpc_client,
@@ -42,65 +43,62 @@ impl Collector {
     }
 
     pub async fn run(&self) {
-        // Spawn task for update_markets_data
-        let pg_pool = self.pg_pool.clone();
-        let shutdown_flag = self.shutdown_flag.clone();
-        tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(60));
-            while !shutdown_flag.load(Ordering::Relaxed) {
-                interval.tick().await;
-                if let Err(e) = update_markets_data(&pg_pool).await {
-                    error!("Error during market data update: {}", e);
-                }
+        self.spawn_task(Duration::from_secs(60), "market data update", {
+            let pg_pool = self.pg_pool.clone();
+            move || {
+                let pg_pool = pg_pool.clone(); // cloned fresh each time
+                Box::pin(async move {
+                    update_markets_data(&pg_pool).await
+                })
             }
         });
 
-        // Spawn task for update_block_dag_info
-        let pg_pool = self.pg_pool.clone();
-        let rpc_client = self.rpc_client.clone();
-        let shutdown_flag = self.shutdown_flag.clone();
-        tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(1));
-            while !shutdown_flag.load(Ordering::Relaxed) {
-                interval.tick().await;
-                if let Err(e) = update_block_dag_info(&rpc_client, &pg_pool).await {
-                    error!("Error during block dag info update: {}", e);
-                }
+        self.spawn_task(Duration::from_secs(1), "block dag info update", {
+            let pg_pool = self.pg_pool.clone();
+            let rpc_client = self.rpc_client.clone();
+            move || {
+                let pg_pool = pg_pool.clone();
+                let rpc_client = rpc_client.clone();
+                Box::pin(async move {
+                    update_block_dag_info(&rpc_client, &pg_pool).await
+                })
             }
         });
 
-        // Spawn task for update_coin_supply_info
-        let pg_pool = self.pg_pool.clone();
-        let rpc_client = self.rpc_client.clone();
-        let shutdown_flag = self.shutdown_flag.clone();
-        tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(1));
-            while !shutdown_flag.load(Ordering::Relaxed) {
-                interval.tick().await;
-                if let Err(e) = update_coin_supply_info(&rpc_client, &pg_pool).await {
-                    error!("Error during coin supply info update: {}", e);
-                }
+        self.spawn_task(Duration::from_secs(1), "coin supply info update", {
+            let pg_pool = self.pg_pool.clone();
+            let rpc_client = self.rpc_client.clone();
+            move || {
+                let pg_pool = pg_pool.clone();
+                let rpc_client = rpc_client.clone();
+                Box::pin(async move {
+                    update_coin_supply_info(&rpc_client, &pg_pool).await
+                })
             }
         });
 
-        // Spawn task for snapshot_hash_rate
-        // let pg_pool = self.pg_pool.clone();
-        // let rpc_client = self.rpc_client.clone();
-        // let shutdown_flag = self.shutdown_flag.clone();
-        // tokio::spawn(async move {
-        //     let mut interval = interval(Duration::from_secs(60));
-        //     while !shutdown_flag.load(Ordering::Relaxed) {
-        //         interval.tick().await;
-        //         if let Err(e) = snapshot_hash_rate(&rpc_client, &pg_pool).await {
-        //             error!("Error during snapshot hash rate: {}", e);
-        //         }
-        //     }
-        // });
+        // self.spawn_task(Duration::from_secs(60), "snapshot hash rate", {
 
-        // Keep the main task alive until shutdown
         while !self.shutdown_flag.load(Ordering::Relaxed) {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    fn spawn_task<F>(&self, interval_duration: Duration, task_name: &'static str, mut task_fn: F)
+    where
+        F: FnMut() -> BoxFuture<'static, Result<(), Error>> + Send + 'static,
+    {
+        let shutdown_flag = self.shutdown_flag.clone();
+
+        tokio::spawn(async move {
+            let mut ticker = interval(interval_duration);
+            while !shutdown_flag.load(Ordering::Relaxed) {
+                ticker.tick().await;
+                if let Err(e) = task_fn().await {
+                    error!("Error during {}: {}", task_name, e);
+                }
+            }
+        });
     }
 }
 

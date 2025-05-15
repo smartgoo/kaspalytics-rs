@@ -56,7 +56,7 @@ impl WebServer {
 impl WebServer {
     pub async fn run(&self) {
         let app = Router::new()
-            .route("/home/stream", get(handlers::home_page_sse))
+            .route("/home/stream", get(handlers::home::stream))
             .with_state(self.state.clone())
             .layer(self.configure_cors());
 

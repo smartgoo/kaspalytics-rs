@@ -2,7 +2,7 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use kaspa_database::db::DB;
 use kaspa_utxoindex::model::CompactUtxoEntry;
 use kaspa_utxoindex::stores::store_manager::Store;
-use kaspa_wrpc_client::prelude::RpcApi;
+use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::debug;
 use rust_decimal::prelude::FromPrimitive;

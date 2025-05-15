@@ -15,7 +15,6 @@ kaspa-consensus-core.workspace = true
 kaspa-database.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-utils.workspace = true
-kaspa-wrpc-client.workspace = true
 lettre.workspace = true
 log.workspace = true
 log4rs.workspace = true

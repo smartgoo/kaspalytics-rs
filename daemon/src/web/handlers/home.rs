@@ -1,3 +1,4 @@
+use super::super::AppState;
 use axum::{
     extract::State,
     response::sse::{Event, Sse},
@@ -11,8 +12,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{watch, Mutex};
 use tokio_stream::{wrappers::WatchStream, Stream, StreamExt};
-
-use super::AppState;
 
 #[derive(Clone, Serialize)]
 struct SseField {
@@ -38,6 +37,17 @@ struct SseData {
     accepted_transaction_count_per_minute_60m: Option<SseField>,
     accepted_transaction_count_per_second_60s: Option<SseField>,
     miner_node_versions_1h: Option<SseField>,
+
+    // TODO
+    csAging: Option<SseField>,
+    addressByKASBalance: Option<SseField>,
+    hash_rate: Option<SseField>,
+    hash_rate_unit: Option<SseField>,
+    hash_rate_7d_change: Option<SseField>,
+    hash_rate_30d_change: Option<SseField>,
+    hash_rate_90d_change: Option<SseField>,
+    difficulty: Option<SseField>,
+    percent_issued: Option<SseField>,
 }
 
 impl SseData {
@@ -59,6 +69,17 @@ impl SseData {
             accepted_transaction_count_per_minute_60m: None,
             accepted_transaction_count_per_second_60s: None,
             miner_node_versions_1h: None,
+
+            // TODO
+            csAging: None,
+            addressByKASBalance: None,
+            hash_rate: None,
+            hash_rate_unit: None,
+            hash_rate_7d_change: None,
+            hash_rate_30d_change: None,
+            hash_rate_90d_change: None,
+            difficulty: None,
+            percent_issued: None,
         }
     }
 
@@ -142,66 +163,100 @@ impl SseData {
                 self.accepted_transaction_count_per_second_60s = Some(value)
             }
             "miner_node_versions_1h" => self.miner_node_versions_1h = Some(value),
-            _ => {} // Ignore unknown keys
+            _ => {}
         }
     }
+
+    fn diff(&self, b: &SseData) -> HashMap<String, SseField> {
+        let mut differences = HashMap::new();
+    
+        macro_rules! compare_field {
+            ($field:ident, $key:expr) => {
+                if let (Some(self_field), Some(b_field)) = (self.$field.as_ref(), b.$field.as_ref()) {
+                    if self_field.data != b_field.data {
+                        differences.insert($key.to_string(), b_field.clone());
+                    }
+                }
+            };
+        }
+    
+        compare_field!(price_usd, "price_usd");
+        compare_field!(price_btc, "price_btc");
+        compare_field!(pruning_point, "pruning_point");
+        compare_field!(market_cap, "market_cap");
+        compare_field!(volume, "volume");
+        compare_field!(daa_score, "daa_score");
+        compare_field!(cs_sompi, "cs_sompi");
+        compare_field!(
+            coinbase_transaction_count_86400s,
+            "coinbase_transaction_count_86400s"
+        );
+        compare_field!(
+            coinbase_accepted_transaction_count_86400s,
+            "coinbase_accepted_transaction_count_86400s"
+        );
+        compare_field!(transaction_count_86400s, "transaction_count_86400s");
+        compare_field!(
+            unique_transaction_count_86400s,
+            "unique_transaction_count_86400s"
+        );
+        compare_field!(
+            unique_transaction_accepted_count_86400s,
+            "unique_transaction_accepted_count_86400s"
+        );
+        compare_field!(
+            accepted_transaction_count_per_hour_24h,
+            "accepted_transaction_count_per_hour_24h"
+        );
+        compare_field!(
+            accepted_transaction_count_per_minute_60m,
+            "accepted_transaction_count_per_minute_60m"
+        );
+        compare_field!(
+            accepted_transaction_count_per_second_60s,
+            "accepted_transaction_count_per_second_60s"
+        );
+        compare_field!(miner_node_versions_1h, "miner_node_versions_1h");
+    
+        differences
+    }
 }
 
-fn diff(old: &SseData, new: &SseData) -> HashMap<String, SseField> {
-    let mut differences = HashMap::new();
+struct SseState {
+    pg_pool: PgPool,
+    last_query_time: Mutex<DateTime<Utc>>,
+    data: Mutex<SseData>
+}
 
-    macro_rules! compare_field {
-        ($field:ident, $key:expr) => {
-            if let (Some(old_field), Some(new_field)) = (old.$field.as_ref(), new.$field.as_ref()) {
-                if old_field.data != new_field.data {
-                    differences.insert($key.to_string(), new_field.clone());
-                }
-            }
-        };
+impl SseState {
+    fn new(pg_pool: PgPool) -> Self {
+        Self {
+            pg_pool,
+            last_query_time: Mutex::new(Utc::now()),
+            data: Mutex::new(SseData::new()),
+        }
     }
 
-    compare_field!(price_usd, "price_usd");
-    compare_field!(price_btc, "price_btc");
-    compare_field!(pruning_point, "pruning_point");
-    compare_field!(market_cap, "market_cap");
-    compare_field!(volume, "volume");
-    compare_field!(daa_score, "daa_score");
-    compare_field!(cs_sompi, "cs_sompi");
-    compare_field!(
-        coinbase_transaction_count_86400s,
-        "coinbase_transaction_count_86400s"
-    );
-    compare_field!(
-        coinbase_accepted_transaction_count_86400s,
-        "coinbase_accepted_transaction_count_86400s"
-    );
-    compare_field!(transaction_count_86400s, "transaction_count_86400s");
-    compare_field!(
-        unique_transaction_count_86400s,
-        "unique_transaction_count_86400s"
-    );
-    compare_field!(
-        unique_transaction_accepted_count_86400s,
-        "unique_transaction_accepted_count_86400s"
-    );
-    compare_field!(
-        accepted_transaction_count_per_hour_24h,
-        "accepted_transaction_count_per_hour_24h"
-    );
-    compare_field!(
-        accepted_transaction_count_per_minute_60m,
-        "accepted_transaction_count_per_minute_60m"
-    );
-    compare_field!(
-        accepted_transaction_count_per_second_60s,
-        "accepted_transaction_count_per_second_60s"
-    );
-    compare_field!(miner_node_versions_1h, "miner_node_versions_1h");
+    async fn create_event(&self) -> Result<Event, Infallible> {
+        let last_query_time = *self.last_query_time.lock().await;
+        let last_data = self.data.lock().await.clone();
 
-    differences
+        let new_data = match SseData::from_db(&self.pg_pool, Some(last_query_time)).await {
+            Ok(data) => data,
+            Err(_) => return Ok(Event::default().event("error").data("db_error")),
+        };
+
+        let deltas = last_data.diff(&new_data);
+
+        *self.last_query_time.lock().await = Utc::now();
+        *self.data.lock().await = new_data;
+
+        let json = serde_json::to_string(&deltas).unwrap();
+        Ok(Event::default().data(json))
+    }
 }
 
-pub async fn home_page_sse(
+pub async fn stream(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let (tx, rx) = watch::channel(());
@@ -214,28 +269,13 @@ pub async fn home_page_sse(
         }
     });
 
-    let last_query_time_store = Arc::new(Mutex::new(Utc::now()));
-    let data_store = Arc::new(Mutex::new(SseData::new()));
+    let stream_state = Arc::new(SseState::new(state.pg_pool));
 
-    let stream = WatchStream::new(rx).then(move |_| {
-        let pg_pool = state.pg_pool.clone();
-        let last_query_time_store = last_query_time_store.clone();
-        let data_store = data_store.clone();
-
-        async move {
-            let last_query_time = *last_query_time_store.lock().await;
-            let old_data = data_store.lock().await.clone();
-
-            let new_data = SseData::from_db(&pg_pool, Some(last_query_time))
-                .await
-                .unwrap();
-
-            let deltas = diff(&old_data, &new_data);
-
-            *last_query_time_store.lock().await = Utc::now();
-            *data_store.lock().await = new_data;
-
-            Ok(Event::default().data(serde_json::to_string(&deltas).unwrap()))
+    let stream = WatchStream::new(rx).then({
+        let stream_state = stream_state.clone();
+        move |_| {
+            let stream_state = stream_state.clone();
+            async move { stream_state.create_event().await }
         }
     });
 
