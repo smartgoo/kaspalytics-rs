@@ -42,6 +42,7 @@ pub struct Config {
     pub kaspalytics_dirs: KaspalyticsDirs,
 
     pub web_port: u16,
+    pub allowed_origins: Vec<String>,
 }
 
 impl Config {
@@ -94,6 +95,11 @@ impl Config {
         let kaspalytics_dirs = KaspalyticsDirs::new(env, network_id, kaspalytics_app_dir);
 
         let web_port = env::var("WEB_PORT").unwrap().parse::<u16>().unwrap_or(3000);
+        let allowed_origins = env::var("ALLOWED_ORIGINS")
+            .unwrap()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
 
         Config {
             env,
@@ -109,6 +115,7 @@ impl Config {
             kaspad_dirs,
             kaspalytics_dirs,
             web_port,
+            allowed_origins,
         }
     }
 }

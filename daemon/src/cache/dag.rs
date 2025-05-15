@@ -422,6 +422,8 @@ impl DagCache {
         // Insert seconds to db
         db.put(b"seconds", bincode::serialize(&self.seconds)?)?;
 
+        info!("Storing cache state complete");
+
         Ok(())
     }
 }

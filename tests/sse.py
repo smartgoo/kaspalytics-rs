@@ -19,5 +19,5 @@ def connect_sse(url):
                 #         print("Non-JSON data:", data)
 
 if __name__ == "__main__":
-    url = "http://localhost:3000/sse"
+    url = "http://localhost:3000/sse/home/stream"
     connect_sse(url)

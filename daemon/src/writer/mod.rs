@@ -160,5 +160,7 @@ impl Writer {
         log_handle.abort();
 
         self.shutdown();
+
+        info!("Writer shut down complete");
     }
 }

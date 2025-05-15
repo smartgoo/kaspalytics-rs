@@ -48,5 +48,7 @@ impl Analyzer {
         }
 
         self.shutdown().await;
+
+        info!("Analyzer shut down complete");
     }
 }

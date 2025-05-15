@@ -42,27 +42,64 @@ impl Collector {
     }
 
     pub async fn run(&self) {
-        // TODO error
-        let mut interval = interval(Duration::from_secs(60));
+        // Spawn task for update_markets_data
+        let pg_pool = self.pg_pool.clone();
+        let shutdown_flag = self.shutdown_flag.clone();
+        tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs(60));
+            while !shutdown_flag.load(Ordering::Relaxed) {
+                interval.tick().await;
+                if let Err(e) = update_markets_data(&pg_pool).await {
+                    error!("Error during market data update: {}", e);
+                }
+            }
+        });
 
+        // Spawn task for update_block_dag_info
+        let pg_pool = self.pg_pool.clone();
+        let rpc_client = self.rpc_client.clone();
+        let shutdown_flag = self.shutdown_flag.clone();
+        tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs(1));
+            while !shutdown_flag.load(Ordering::Relaxed) {
+                interval.tick().await;
+                if let Err(e) = update_block_dag_info(&rpc_client, &pg_pool).await {
+                    error!("Error during block dag info update: {}", e);
+                }
+            }
+        });
+
+        // Spawn task for update_coin_supply_info
+        let pg_pool = self.pg_pool.clone();
+        let rpc_client = self.rpc_client.clone();
+        let shutdown_flag = self.shutdown_flag.clone();
+        tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs(1));
+            while !shutdown_flag.load(Ordering::Relaxed) {
+                interval.tick().await;
+                if let Err(e) = update_coin_supply_info(&rpc_client, &pg_pool).await {
+                    error!("Error during coin supply info update: {}", e);
+                }
+            }
+        });
+
+        // Spawn task for snapshot_hash_rate
+        // let pg_pool = self.pg_pool.clone();
+        // let rpc_client = self.rpc_client.clone();
+        // let shutdown_flag = self.shutdown_flag.clone();
+        // tokio::spawn(async move {
+        //     let mut interval = interval(Duration::from_secs(60));
+        //     while !shutdown_flag.load(Ordering::Relaxed) {
+        //         interval.tick().await;
+        //         if let Err(e) = snapshot_hash_rate(&rpc_client, &pg_pool).await {
+        //             error!("Error during snapshot hash rate: {}", e);
+        //         }
+        //     }
+        // });
+
+        // Keep the main task alive until shutdown
         while !self.shutdown_flag.load(Ordering::Relaxed) {
-            interval.tick().await;
-
-            if let Err(e) = update_markets_data(&self.pg_pool).await {
-                error!("Error during market data update: {}", e);
-            }
-
-            if let Err(e) = update_block_dag_info(&self.rpc_client, &self.pg_pool).await {
-                error!("Error during block dag info update: {}", e);
-            }
-
-            if let Err(e) = update_coin_supply_info(&self.rpc_client, &self.pg_pool).await {
-                error!("Error during coin supply info update: {}", e);
-            }
-
-            if let Err(e) = snapshot_hash_rate(&self.rpc_client, &self.pg_pool).await {
-                error!("Error during snapshot hash rate: {}", e);
-            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 }
