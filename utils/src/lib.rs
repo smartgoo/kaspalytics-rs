@@ -4,8 +4,10 @@ pub mod database;
 pub mod dirs;
 pub mod email;
 pub mod granularity;
+pub mod formatters;
 pub mod kaspad;
 pub mod log;
+pub mod math;
 
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspad::db::KASPAD_RDB_FD_ALLOCATION;

@@ -43,10 +43,10 @@ impl Collector {
     }
 
     pub async fn run(&self) {
-        self.spawn_task(Duration::from_secs(60), "market data update", {
+        self.spawn_task(Duration::from_secs(30), "market data update", {
             let pg_pool = self.pg_pool.clone();
             move || {
-                let pg_pool = pg_pool.clone(); // cloned fresh each time
+                let pg_pool = pg_pool.clone();
                 Box::pin(async move {
                     update_markets_data(&pg_pool).await
                 })
@@ -77,7 +77,17 @@ impl Collector {
             }
         });
 
-        // self.spawn_task(Duration::from_secs(60), "snapshot hash rate", {
+        self.spawn_task(Duration::from_secs(1), "snapshot hash rate", {
+            let pg_pool = self.pg_pool.clone();
+            let rpc_client = self.rpc_client.clone();
+            move || {
+                let pg_pool = pg_pool.clone();
+                let rpc_client = rpc_client.clone();
+                Box::pin(async move {
+                    snapshot_hash_rate(&rpc_client, &pg_pool).await
+                })
+            }
+        });
 
         while !self.shutdown_flag.load(Ordering::Relaxed) {
             tokio::time::sleep(Duration::from_millis(100)).await;
