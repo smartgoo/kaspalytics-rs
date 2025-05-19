@@ -1,4 +1,4 @@
-use crate::cache::model::{
+use crate::ingest::model::{
     CacheTransaction, CacheTransactionInput, CacheTransactionOutput, PrunedBlock,
 };
 use chrono::{DateTime, Utc};

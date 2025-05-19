@@ -1,7 +1,7 @@
 mod mining;
 mod tx_counter;
 
-use crate::cache::dag::{DagCache, Reader};
+use crate::ingest::cache::{DagCache, Reader};
 use log::info;
 use sqlx::{self, PgPool};
 use std::sync::atomic::AtomicBool;

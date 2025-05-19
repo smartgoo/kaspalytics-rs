@@ -1,7 +1,3 @@
-use rust_decimal::{Decimal, MathematicalOps};
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal_macros::dec;
-
 pub fn hash_rate_with_unit(hash_rates: &[u64]) -> (Vec<f64>, String) {
     let units = [
         ("YH/s", 1e24),

@@ -1,11 +1,10 @@
 mod analyzer;
-mod cache;
 mod collector;
 mod ingest;
 mod web;
 mod writer;
 
-use cache::dag::{DagCache, Reader};
+use ingest::cache::{DagCache, Reader};
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};

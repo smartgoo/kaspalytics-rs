@@ -1,4 +1,4 @@
-use crate::cache::dag::{DagCache, Reader};
+use crate::ingest::cache::{DagCache, Reader};
 use chrono::Utc;
 use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
 use sqlx::PgPool;

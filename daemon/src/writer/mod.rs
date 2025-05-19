@@ -1,7 +1,7 @@
 mod insert;
 mod model;
 
-use crate::cache::model::PrunedBlock;
+use crate::ingest::model::PrunedBlock;
 use log::{debug, info};
 use model::*;
 use sqlx::PgPool;

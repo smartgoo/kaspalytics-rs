@@ -1,11 +1,13 @@
-use crate::cache::{
-    dag::{DagCache, Reader, Writer},
-    model::PrunedBlock,
-};
+pub mod cache;
+pub mod model;
+mod second;
+
+use cache::{DagCache, Reader, Writer};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
 use kaspalytics_utils::config::Config;
 use log::info;
+use model::PrunedBlock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
