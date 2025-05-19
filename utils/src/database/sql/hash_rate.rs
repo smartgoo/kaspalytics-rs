@@ -46,16 +46,16 @@ pub async fn get(pg_pool: &PgPool) -> Result<HashRate, sqlx::Error> {
     Ok(hash_rate)
 }
 
-pub async fn get_x_days_ago(pg_pool: &PgPool, days: u64) -> Result<HashRate, sqlx::Error> {
+pub async fn get_x_days_ago(pg_pool: &PgPool, days: u32) -> Result<HashRate, sqlx::Error> {
     let hash_rate = sqlx::query_as(
         r#"
             SELECT hash_rate, difficulty, timestamp
             FROM hash_rate
-            ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - (CURRENT_TIMESTAMP - INTERVAL '$1 days'))))
+            ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - (CURRENT_TIMESTAMP - make_interval(days => $1)))))
             LIMIT 1;
         "#,
     )
-    .bind(days as i64)
+    .bind(days as i32)
     .fetch_one(pg_pool)
     .await?;
 

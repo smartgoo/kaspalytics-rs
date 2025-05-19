@@ -77,7 +77,7 @@ impl Collector {
             }
         });
 
-        self.spawn_task(Duration::from_secs(1), "snapshot hash rate", {
+        self.spawn_task(Duration::from_secs(15), "snapshot hash rate", {
             let pg_pool = self.pg_pool.clone();
             let rpc_client = self.rpc_client.clone();
             move || {

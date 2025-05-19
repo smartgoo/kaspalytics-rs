@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use kaspalytics_utils::database::sql::hash_rate;
 use kaspalytics_utils::formatters::hash_rate_with_unit;
 use kaspalytics_utils::math::percent_change;
+use log::info;
 use rust_decimal::{prelude::{FromPrimitive, ToPrimitive}, Decimal};
 use serde::Serialize;
 use sqlx::{PgPool, Row};
@@ -218,7 +219,7 @@ impl SseData {
             timestamp: hash_rate.timestamp,
         });
 
-        for &days in &[7, 30, 90] {
+        for days in [7, 30, 90] {
             let past = hash_rate::get_x_days_ago(pg_pool, days).await?;
             if let Some(change) = percent_change(hash_rate.hash_rate, past.hash_rate, 2) {
                 let key = match days {
@@ -275,7 +276,7 @@ pub async fn stream(
     let (tx, rx) = watch::channel(());
 
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        let mut interval = tokio::time::interval(Duration::from_secs(2));
         loop {
             interval.tick().await;
             let _ = tx.send(());
