@@ -18,7 +18,7 @@ pub enum KeyRegistry {
     AcceptedTransactionCountPerHour24h,
     AcceptedTransactionCountPerMinute60m,
     AcceptedTransactionCountPerSecond60s,
-    MinerNodeVersions1h
+    MinerNodeVersions1h,
 }
 
 impl KeyRegistry {

@@ -7,12 +7,12 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 async fn coinbase_transaction_count(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
-    let count: u64 = cache
+    let count: u64 = dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.coinbase_transaction_count)
@@ -24,12 +24,12 @@ async fn coinbase_transaction_count(
 }
 
 async fn coinbase_accepted_transaction_count(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
-    let count: u64 = cache
+    let count: u64 = dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.coinbase_accepted_transaction_count)
@@ -41,12 +41,12 @@ async fn coinbase_accepted_transaction_count(
 }
 
 async fn transaction_count(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
-    let count: u64 = cache
+    let count: u64 = dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.transaction_count)
@@ -58,12 +58,12 @@ async fn transaction_count(
 }
 
 async fn unique_transaction_count(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
-    let count: u64 = cache
+    let count: u64 = dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.unique_transaction_count)
@@ -75,12 +75,12 @@ async fn unique_transaction_count(
 }
 
 async fn unique_transaction_accepted_count(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
     key: KeyRegistry,
     threshold: u64,
 ) -> Result<(), sqlx::Error> {
-    let count: u64 = cache
+    let count: u64 = dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.unique_transaction_accepted_count)
@@ -92,7 +92,7 @@ async fn unique_transaction_accepted_count(
 }
 
 async fn accepted_count_per_hour_24h(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
@@ -104,7 +104,7 @@ async fn accepted_count_per_hour_24h(
     let cutoff = current_hour - (23 * 3600);
     let mut effective_count_per_hour = HashMap::<u64, u64>::new();
 
-    cache
+    dag_cache
         .seconds_iter()
         .map(|entry| {
             let second = *entry.key();
@@ -132,7 +132,7 @@ async fn accepted_count_per_hour_24h(
 }
 
 async fn accepted_count_per_minute_60m(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
@@ -144,7 +144,7 @@ async fn accepted_count_per_minute_60m(
     let cutoff = current_minute - (59 * 60);
     let mut effective_count_per_minute = HashMap::<u64, u64>::new();
 
-    cache
+    dag_cache
         .seconds_iter()
         .map(|entry| {
             let second = *entry.key();
@@ -172,7 +172,7 @@ async fn accepted_count_per_minute_60m(
 }
 
 async fn accepted_count_per_second_60s(
-    cache: &Arc<DagCache>,
+    dag_cache: &Arc<DagCache>,
     pg_pool: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
@@ -183,7 +183,7 @@ async fn accepted_count_per_second_60s(
     let threshold = now - 60;
     let mut effective_count_per_second = HashMap::<u64, u64>::new();
 
-    cache
+    dag_cache
         .seconds_iter()
         .map(|entry| {
             let second = *entry.key();
@@ -209,7 +209,7 @@ async fn accepted_count_per_second_60s(
     Ok(())
 }
 
-pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
+pub async fn run(dag_cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -218,7 +218,7 @@ pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Err
     let threshold = now - 86400;
 
     coinbase_transaction_count(
-        &cache,
+        &dag_cache,
         pg_pool,
         KeyRegistry::CoinbaseTransactionCount86400s,
         threshold,
@@ -226,7 +226,7 @@ pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Err
     .await?;
 
     coinbase_accepted_transaction_count(
-        &cache,
+        &dag_cache,
         pg_pool,
         KeyRegistry::CoinbaseAcceptedTransactionCount86400s,
         threshold,
@@ -234,7 +234,7 @@ pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Err
     .await?;
 
     transaction_count(
-        &cache,
+        &dag_cache,
         pg_pool,
         KeyRegistry::TransactionCount86400s,
         threshold,
@@ -242,7 +242,7 @@ pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Err
     .await?;
 
     unique_transaction_count(
-        &cache,
+        &dag_cache,
         pg_pool,
         KeyRegistry::UniqueTransactionCount86400s,
         threshold,
@@ -250,18 +250,20 @@ pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Err
     .await?;
 
     unique_transaction_accepted_count(
-        &cache,
+        &dag_cache,
         pg_pool,
         KeyRegistry::UniqueTransactionAcceptedCount86400s,
         threshold,
     )
     .await?;
 
-    accepted_count_per_hour_24h(&cache, pg_pool).await.unwrap();
-    accepted_count_per_minute_60m(&cache, pg_pool)
+    accepted_count_per_hour_24h(&dag_cache, pg_pool)
         .await
         .unwrap();
-    accepted_count_per_second_60s(&cache, pg_pool)
+    accepted_count_per_minute_60m(&dag_cache, pg_pool)
+        .await
+        .unwrap();
+    accepted_count_per_second_60s(&dag_cache, pg_pool)
         .await
         .unwrap();
 

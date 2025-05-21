@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -66,10 +67,12 @@ pub struct SecondMetrics {
     pub transaction_count: u64,
     pub unique_transaction_count: u64,
     pub unique_transaction_accepted_count: u64,
+
+    pub updated_at: DateTime<Utc>,
 }
 
 impl SecondMetrics {
-    pub fn add_block(&self, coinbase_tx_payload: Vec<u8>) {
+    pub fn add_block(&mut self, coinbase_tx_payload: Vec<u8>) {
         self.block_count.fetch_add(1, Ordering::Relaxed);
 
         let (node_version, _) = parse_payload_node_version(coinbase_tx_payload).unwrap();
@@ -77,33 +80,49 @@ impl SecondMetrics {
             .entry(node_version)
             .and_modify(|v| *v += 1)
             .or_insert(1);
+
+        self.updated_at = Utc::now();
     }
 
     pub fn increment_coinbase_transaction_count(&mut self) {
         self.coinbase_transaction_count += 1;
+
+        self.updated_at = Utc::now();
     }
 
     pub fn increment_coinbase_accepted_transaction_count(&mut self) {
         self.coinbase_accepted_transaction_count += 1;
+
+        self.updated_at = Utc::now();
     }
 
     pub fn decrement_coinbase_accepted_transaction_count(&mut self) {
         self.coinbase_accepted_transaction_count -= 1;
+
+        self.updated_at = Utc::now();
     }
 
     pub fn increment_transaction_count(&mut self) {
         self.transaction_count += 1;
+
+        self.updated_at = Utc::now();
     }
 
     pub fn increment_unique_transaction_count(&mut self) {
         self.unique_transaction_count += 1;
+
+        self.updated_at = Utc::now();
     }
 
     pub fn increment_unique_transaction_accepted_count(&mut self) {
         self.unique_transaction_accepted_count += 1;
+
+        self.updated_at = Utc::now();
     }
 
     pub fn decrement_unique_transaction_accepted_count(&mut self) {
         self.unique_transaction_accepted_count -= 1;
+
+        self.updated_at = Utc::now();
     }
 }

@@ -1,9 +1,10 @@
 use reqwest;
+use rust_decimal::Decimal;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Price {
-    pub usd: f64,
+    pub usd: Decimal,
 }
 
 #[derive(Deserialize)]
@@ -21,9 +22,9 @@ pub async fn get_simple_price() -> Result<PriceResponse, reqwest::Error> {
 
 #[derive(Deserialize)]
 pub struct MarketChartResponse {
-    pub prices: Vec<[f64; 2]>,
-    pub market_caps: Vec<[f64; 2]>,
-    pub total_volumes: Vec<[f64; 2]>,
+    pub prices: Vec<[Decimal; 2]>,
+    pub market_caps: Vec<[Decimal; 2]>,
+    pub total_volumes: Vec<[Decimal; 2]>,
 }
 
 pub async fn get_market_chart() -> Result<MarketChartResponse, reqwest::Error> {
@@ -37,18 +38,18 @@ pub async fn get_market_chart() -> Result<MarketChartResponse, reqwest::Error> {
 
 #[derive(Deserialize)]
 pub struct CurrentPrice {
-    pub usd: f64,
-    pub btc: f64,
+    pub usd: Decimal,
+    pub btc: Decimal,
 }
 
 #[derive(Deserialize)]
 pub struct MarketCap {
-    pub usd: f64,
+    pub usd: Decimal,
 }
 
 #[derive(Deserialize)]
 pub struct TotalVolume {
-    pub usd: f64,
+    pub usd: Decimal,
 }
 
 #[derive(Deserialize)]

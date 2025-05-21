@@ -1,6 +1,7 @@
 mod analyzer;
 mod collector;
 mod ingest;
+mod storage;
 mod web;
 mod writer;
 
@@ -12,8 +13,20 @@ use kaspalytics_utils::email::send_email;
 use kaspalytics_utils::log::init_logger;
 use kaspalytics_utils::{check_rpc_node_status, database};
 use log::{debug, error, info};
+use sqlx::PgPool;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use storage::cache::Cache;
+use storage::Storage;
+
+struct AppContext {
+    config: Config,
+    shutdown_flag: Arc<AtomicBool>,
+    pg_pool: PgPool,
+    rpc_client: Arc<KaspaRpcClient>,
+    dag_cache: Arc<DagCache>,
+    storage: Arc<Storage>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -51,20 +64,20 @@ async fn main() {
 
     check_rpc_node_status(&config, rpc_client.clone()).await;
 
-    let cache = match DagCache::load_cache_state(config.clone()).await {
-        Ok(cache) => {
-            let last_known_chain_block = cache.last_known_chain_block().unwrap();
+    let dag_cache = match DagCache::load_cache_state(config.clone()).await {
+        Ok(dag_cache) => {
+            let last_known_chain_block = dag_cache.last_known_chain_block().unwrap();
             match rpc_client.get_block(last_known_chain_block, false).await {
                 Ok(_) => {
                     info!(
-                        "Cache last_known_chain_block {} still held by Kaspa node",
+                        "DagCache last_known_chain_block {} still held by Kaspa node",
                         last_known_chain_block,
                     );
-                    Arc::new(cache)
+                    Arc::new(dag_cache)
                 }
                 Err(RpcError::RpcSubsystem(_)) => {
                     info!(
-                        "Cache last_known_chain_block {} no longer held by Kaspa node. Resetting cache",
+                        "DagCache last_known_chain_block {} no longer held by Kaspa node. Resetting cache",
                         last_known_chain_block
                     );
                     Arc::new(DagCache::default())
@@ -87,28 +100,38 @@ async fn main() {
         shutdown_flag.clone(),
         writer_tx,
         rpc_client.clone(),
-        cache.clone(),
+        dag_cache.clone(),
     );
 
     // Writer task
     let mut writer = writer::Writer::new(pg_pool.clone(), writer_rx);
 
+    let storage = Arc::new(Storage::new(Arc::new(Cache::default()), pg_pool.clone()));
+
+    let context = Arc::new(AppContext {
+        config: config.clone(),
+        shutdown_flag: shutdown_flag.clone(),
+        pg_pool: pg_pool,
+        rpc_client: rpc_client,
+        dag_cache: dag_cache,
+        storage: storage,
+    });
+
     // Analyzer task
-    let analyzer = analyzer::Analyzer::new(cache.clone(), pg_pool.clone(), shutdown_flag.clone());
+    let analyzer = analyzer::Analyzer::new(context.clone());
 
     // Collector task
-    let collector =
-        collector::Collector::new(shutdown_flag.clone(), pg_pool.clone(), rpc_client.clone());
+    let collector = collector::Collector::new(context.clone());
 
     // Web Server task
-    let web_server = web::WebServer::new(config.clone(), shutdown_flag.clone(), pg_pool.clone());
+    let web_server = web::WebServer::new(context.clone());
 
     // Handle interrupt
-    let iterrupt_shutdown_flag = shutdown_flag.clone();
+    let interrupt_shutdown_flag = shutdown_flag.clone();
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
         info!("Received interrupt, shutting down...");
-        iterrupt_shutdown_flag.store(true, Ordering::Relaxed);
+        interrupt_shutdown_flag.store(true, Ordering::Relaxed);
     });
 
     let run_result = tokio::try_join!(

@@ -2,6 +2,8 @@ mod mining;
 mod tx_counter;
 
 use crate::ingest::cache::{DagCache, Reader};
+use crate::storage::Storage;
+use crate::AppContext;
 use log::info;
 use sqlx::{self, PgPool};
 use std::sync::atomic::AtomicBool;
@@ -10,17 +12,19 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 pub struct Analyzer {
-    cache: Arc<DagCache>,
+    dag_cache: Arc<DagCache>,
+    storage: Arc<Storage>,
     pg_pool: PgPool,
-    shutdown_indicator: Arc<AtomicBool>,
+    shutdown_flag: Arc<AtomicBool>,
 }
 
 impl Analyzer {
-    pub fn new(cache: Arc<DagCache>, pg_pool: PgPool, shutdown_indicator: Arc<AtomicBool>) -> Self {
+    pub fn new(context: Arc<AppContext>) -> Self {
         Analyzer {
-            cache,
-            pg_pool,
-            shutdown_indicator,
+            dag_cache: context.dag_cache.clone(),
+            storage: context.storage.clone(),
+            pg_pool: context.pg_pool.clone(),
+            shutdown_flag: context.shutdown_flag.clone(),
         }
     }
 }
@@ -33,15 +37,15 @@ impl Analyzer {
     }
 
     pub async fn run(&self) {
-        while !self.shutdown_indicator.load(Ordering::Relaxed) {
+        while !self.shutdown_flag.load(Ordering::Relaxed) {
             // Skip until cache is at DAG tip
-            if !self.cache.synced() {
+            if !self.dag_cache.synced() {
                 sleep(Duration::from_secs(1)).await;
                 continue;
             }
 
-            let _ = tx_counter::run(self.cache.clone(), &self.pg_pool).await;
-            let _ = mining::run(self.cache.clone(), &self.pg_pool).await;
+            let _ = tx_counter::run(self.dag_cache.clone(), &self.pg_pool).await;
+            let _ = mining::run(self.dag_cache.clone(), &self.pg_pool).await;
 
             info!("Analyzer completed, sleeping");
             sleep(Duration::from_secs(15)).await;

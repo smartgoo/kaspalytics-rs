@@ -1,6 +1,9 @@
 use kaspa_addresses::Address;
 use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
 use log::debug;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use sqlx::Arguments;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -77,7 +80,7 @@ struct BucketData {
     percent_of_addresses: f64,
     sompi_total: u64,
     percent_of_sompi: f64,
-    usd_value: f64,
+    usd_value: Decimal,
 }
 
 impl BucketData {
@@ -89,7 +92,7 @@ impl BucketData {
             percent_of_addresses: 0.0,
             sompi_total: 0,
             percent_of_sompi: 0.0,
-            usd_value: 0.0,
+            usd_value: dec!(0),
         }
     }
 
@@ -101,8 +104,10 @@ impl BucketData {
         self.percent_of_sompi = self.sompi_total as f64 / circulating_supply as f64;
     }
 
-    fn set_usd_value(&mut self, price_usd: f64) {
-        self.usd_value = (self.sompi_total as f64 / SOMPI_PER_KAS as f64) * price_usd;
+    fn set_usd_value(&mut self, price_usd: Decimal) {
+        self.usd_value = (Decimal::from_u64(self.sompi_total).unwrap()
+            / Decimal::from_u64(SOMPI_PER_KAS).unwrap())
+            * price_usd;
     }
 }
 
@@ -113,7 +118,7 @@ pub struct DistributionByKASBucketAnalysis {
     dust_address_sompi_total: u64,
     dust_address_count: u64,
     circulating_supply: u64,
-    kas_price_usd: f64,
+    kas_price_usd: Decimal,
     buckets: Vec<BucketData>,
 }
 
@@ -125,7 +130,7 @@ impl DistributionByKASBucketAnalysis {
         dust_address_sompi_total: u64,
         dust_address_count: u64,
         circulating_supply: u64,
-        kas_price_usd: f64,
+        kas_price_usd: Decimal,
     ) -> Self {
         let buckets = Bucket::iter()
             .map(|bucket| BucketData::new(bucket.clone()))

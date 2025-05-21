@@ -1,5 +1,8 @@
 mod handlers;
 
+use crate::storage::cache::Cache;
+use crate::storage::Storage;
+use crate::AppContext;
 use axum::http::HeaderValue;
 use axum::{routing::get, Router};
 use http::Method;
@@ -14,20 +17,26 @@ use tower_http::cors::{Any, CorsLayer};
 #[derive(Clone)]
 struct AppState {
     pg_pool: PgPool,
+    storage: Arc<Storage>,
 }
 
 pub struct WebServer {
     config: Config,
     shutdown_flag: Arc<AtomicBool>,
     state: AppState,
+    storage: Arc<Storage>,
 }
 
 impl WebServer {
-    pub fn new(config: Config, shutdown_flag: Arc<AtomicBool>, pg_pool: PgPool) -> Self {
+    pub fn new(context: Arc<AppContext>) -> Self {
         WebServer {
-            config,
-            shutdown_flag,
-            state: AppState { pg_pool },
+            config: context.config.clone(),
+            shutdown_flag: context.shutdown_flag.clone(),
+            state: AppState {
+                pg_pool: context.pg_pool.clone(),
+                storage: context.storage.clone(),
+            },
+            storage: context.storage.clone(),
         }
     }
 

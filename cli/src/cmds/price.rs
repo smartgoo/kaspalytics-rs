@@ -1,5 +1,7 @@
 use chrono::DateTime;
 use kaspalytics_utils::config::Config;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal_macros::dec;
 use sqlx::PgPool;
 
 pub async fn get_coin_market_history(config: Config, pg_pool: PgPool) {
@@ -18,7 +20,7 @@ pub async fn get_coin_market_history(config: Config, pg_pool: PgPool) {
         let market_cap = market_cap_info[1];
         let volume = volume_info[1];
 
-        let seconds = (timestamp_ms / 1000.0) as i64;
+        let seconds = (timestamp_ms / dec!(1000)).to_i64().unwrap();
         let date = DateTime::from_timestamp(seconds, 0).expect("Invalid timestamp");
 
         sqlx::query(

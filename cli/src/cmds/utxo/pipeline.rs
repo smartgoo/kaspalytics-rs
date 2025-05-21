@@ -15,6 +15,7 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
 use kaspalytics_utils::kaspad::db::UtxoIndexSecondary;
 use log::debug;
+use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -42,7 +43,7 @@ struct UtxoSnapshotHeader {
     block: Hash,
     block_timestamp: u64,
     daa_score: u64,
-    kas_price_usd: f64,
+    kas_price_usd: Decimal,
     circulating_supply: u64,
     utxo_count: u64,
     unique_address_count: u64,
@@ -59,7 +60,7 @@ impl UtxoSnapshotHeader {
         block: Hash,
         block_timestamp: u64,
         daa_score: u64,
-        kas_price_usd: f64,
+        kas_price_usd: Decimal,
         circulating_supply: u64,
     ) -> Self {
         let dt = chrono::DateTime::from_timestamp_millis(block_timestamp as i64).unwrap();
