@@ -18,10 +18,12 @@ pub struct Cache {
     market_cap: RwLock<CacheEntry<Decimal>>,
     volume: RwLock<CacheEntry<Decimal>>,
 
-    // DAG Data
+    // Network Data
     pruning_point: RwLock<CacheEntry<Hash>>,
     daa_score: RwLock<CacheEntry<u64>>,
     circulating_supply: RwLock<CacheEntry<u64>>,
+    difficulty: RwLock<CacheEntry<Decimal>>,
+    hash_rate: RwLock<CacheEntry<u64>>,
 }
 
 impl Writer for Cache {
@@ -115,6 +117,25 @@ impl Writer for Cache {
 
         Ok(())
     }
+
+    async fn set_hash_rate(
+        &self,
+        difficulty: Decimal,
+        hash_rate: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        *self.difficulty.write().await = CacheEntry::<Decimal> {
+            value: difficulty,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        *self.hash_rate.write().await = CacheEntry::<u64> {
+            value: hash_rate,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
 }
 
 impl Reader for Cache {
@@ -144,5 +165,13 @@ impl Reader for Cache {
 
     async fn get_circulating_supply(&self) -> CacheEntry<u64> {
         self.circulating_supply.read().await.clone()
+    }
+
+    async fn get_difficulty(&self) -> CacheEntry<Decimal> {
+        self.difficulty.read().await.clone()
+    }
+
+    async fn get_hash_rate(&self) -> CacheEntry<u64> {
+        self.hash_rate.read().await.clone()
     }
 }

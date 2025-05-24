@@ -2,8 +2,11 @@ pub mod cache;
 use cache::{Cache, CacheEntry};
 use chrono::{DateTime, Utc};
 use kaspa_hashes::Hash;
-use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
-use rust_decimal::Decimal;
+use kaspalytics_utils::database::sql::{
+    hash_rate,
+    key_value::{self, KeyRegistry},
+};
+use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -64,6 +67,13 @@ pub trait Writer {
     async fn set_circulating_supply(
         &self,
         value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
+
+    async fn set_hash_rate(
+        &self,
+        difficulty: Decimal,
+        hash_rate: u64,
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
 }
@@ -194,6 +204,27 @@ impl Writer for Storage {
 
         Ok(())
     }
+
+    async fn set_hash_rate(
+        &self,
+        difficulty: Decimal,
+        hash_rate: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        self.cache
+            .set_hash_rate(difficulty, hash_rate, timestamp)
+            .await?;
+
+        hash_rate::insert(
+            &self.pg_pool,
+            timestamp.unwrap_or(Utc::now()),
+            hash_rate,
+            difficulty.to_u64().unwrap(),
+        )
+        .await?;
+
+        Ok(())
+    }
 }
 
 pub trait Reader {
@@ -205,6 +236,8 @@ pub trait Reader {
     async fn get_pruning_point(&self) -> CacheEntry<Hash>;
     async fn get_daa_score(&self) -> CacheEntry<u64>;
     async fn get_circulating_supply(&self) -> CacheEntry<u64>;
+    async fn get_difficulty(&self) -> CacheEntry<Decimal>;
+    async fn get_hash_rate(&self) -> CacheEntry<u64>;
 }
 
 impl Reader for Storage {
@@ -234,5 +267,13 @@ impl Reader for Storage {
 
     async fn get_circulating_supply(&self) -> CacheEntry<u64> {
         self.cache.get_circulating_supply().await
+    }
+
+    async fn get_difficulty(&self) -> CacheEntry<Decimal> {
+        self.cache.get_difficulty().await
+    }
+
+    async fn get_hash_rate(&self) -> CacheEntry<u64> {
+        self.cache.get_hash_rate().await
     }
 }

@@ -13,7 +13,7 @@ use kaspalytics_utils::database::sql::hash_rate;
 use kaspalytics_utils::formatters::hash_rate_with_unit;
 use kaspalytics_utils::math::percent_change;
 use rust_decimal::{
-    prelude::{FromPrimitive, ToPrimitive},
+    prelude::FromPrimitive,
     Decimal,
 };
 use serde::Serialize;
@@ -98,10 +98,6 @@ impl SseData {
         self.fields.get(key)
     }
 
-    fn is_empty(&self) -> bool {
-        self.fields.is_empty()
-    }
-
     fn data(&self) -> HashMap<String, SseField> {
         let mut data = HashMap::new();
         for key in SseKey::iter() {
@@ -138,7 +134,7 @@ impl SseData {
     ) -> Result<Self, sqlx::Error> {
         let mut data = Self::new();
 
-        Self::collect_hash_rate_data(&mut data, pg_pool).await?;
+        Self::collect_hash_rate_data(&mut data, &storage, pg_pool).await?;
         Self::collect_price_data(&mut data, &storage, cutoff).await;
         Self::collect_market_data(&mut data, &storage, cutoff).await;
         Self::collect_chain_data(&mut data, &storage, cutoff).await;
@@ -148,9 +144,13 @@ impl SseData {
         Ok(data)
     }
 
-    async fn collect_hash_rate_data(&mut self, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
-        let hash_rate = hash_rate::get(pg_pool).await?;
-        let hash_rate_c = hash_rate_with_unit(&[hash_rate.hash_rate.to_u64().unwrap()]);
+    async fn collect_hash_rate_data(
+        &mut self,
+        storage: &Arc<Storage>,
+        pg_pool: &PgPool,
+    ) -> Result<(), sqlx::Error> {
+        let hash_rate = storage.get_hash_rate().await;
+        let hash_rate_c = hash_rate_with_unit(&[hash_rate.value]);
         let hash_rate_str = format!(
             "{} {}",
             Decimal::from_f64(hash_rate_c.0[0]).unwrap().round_dp(2),
@@ -165,17 +165,22 @@ impl SseData {
             },
         );
 
+        let difficulty = storage.get_difficulty().await;
         self.set(
             SseKey::Difficulty,
             SseField {
-                data: hash_rate.difficulty.to_string(),
+                data: difficulty.value.to_string(),
                 timestamp: hash_rate.timestamp,
             },
         );
 
         for days in [7, 30, 90] {
             let past = hash_rate::get_x_days_ago(pg_pool, days).await?;
-            if let Some(change) = percent_change(hash_rate.hash_rate, past.hash_rate, 2) {
+            if let Some(change) = percent_change(
+                Decimal::from_u64(hash_rate.value).unwrap(),
+                past.hash_rate,
+                2,
+            ) {
                 let key = match days {
                     7 => SseKey::HashRate7dChange,
                     30 => SseKey::HashRate30dChange,
@@ -377,12 +382,8 @@ impl SseState {
         .unwrap();
 
         let event_data = match last_data {
-            Some(last) => {
-                last.diff(&new_data)
-            },
-            None => {
-                new_data.data()
-            }
+            Some(last) => last.diff(&new_data),
+            None => new_data.data(),
         };
 
         *self.deltas_since.lock().await = Some(Utc::now());

@@ -2,9 +2,9 @@ use chrono::Utc;
 use futures::future::BoxFuture;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::{database::sql::hash_rate, log::LogTarget};
+use kaspalytics_utils::log::LogTarget;
 use log::error;
-use sqlx::PgPool;
+use rust_decimal::{prelude::FromPrimitive, Decimal};
 use std::sync::{atomic::Ordering, Arc};
 use tokio::time::{interval, Duration};
 
@@ -67,9 +67,9 @@ impl Collector {
         self.spawn_task(Duration::from_secs(15), "snapshot hash rate", {
             let context = self.context.clone();
             move || {
-                let pg_pool = context.pg_pool.clone();
                 let rpc_client = context.rpc_client.clone();
-                Box::pin(async move { snapshot_hash_rate(&rpc_client, &pg_pool).await })
+                let storage = context.storage.clone();
+                Box::pin(async move { snapshot_hash_rate(&rpc_client, storage).await })
             }
         });
 
@@ -150,17 +150,20 @@ async fn update_coin_supply_info(
 
 async fn snapshot_hash_rate(
     rpc_client: &Arc<KaspaRpcClient>,
-    pg_pool: &PgPool,
+    storage: Arc<Storage>,
 ) -> Result<(), Error> {
     let data = rpc_client.get_block_dag_info().await?;
-
-    let timestamp =
-        chrono::DateTime::from_timestamp((data.past_median_time / 1000) as i64, 0).unwrap();
 
     let hash_rate = (data.difficulty * 2f64) as u64;
     let hash_rate_10bps = hash_rate * 10u64;
 
-    hash_rate::insert(pg_pool, timestamp, hash_rate_10bps, data.difficulty as u64).await?;
+    storage
+        .set_hash_rate(
+            Decimal::from_f64(data.difficulty).unwrap(),
+            hash_rate_10bps,
+            None,
+        )
+        .await?;
 
     Ok(())
 }

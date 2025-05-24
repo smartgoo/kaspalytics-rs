@@ -11,6 +11,8 @@ pub enum KeyRegistry {
     DaaScore,
     PruningPoint,
     CsSompi,
+    HashRate,
+    Difficulty,
     TransactionCount24h,
     CoinbaseTransactionCount24h,
     CoinbaseAcceptedTransactionCount24h,
