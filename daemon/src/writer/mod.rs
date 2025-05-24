@@ -2,6 +2,7 @@ mod insert;
 mod model;
 
 use crate::ingest::model::PrunedBlock;
+use kaspalytics_utils::log::LogTarget;
 use log::{debug, info};
 use model::*;
 use sqlx::PgPool;
@@ -109,13 +110,14 @@ impl Writer {
         stats.total_handle_duration_ms += duration_ms;
 
         debug!(
+            target: LogTarget::Daemon.as_str(),
             "Writer iter finished in {}ms (DB insert {}ms)",
             duration_ms, insert_end,
         );
     }
 
     fn shutdown(&self) {
-        info!("Writer shutting down...");
+        info!(target: LogTarget::Daemon.as_str(), "Writer shutting down...");
     }
 
     pub async fn run(&mut self) {
@@ -132,6 +134,7 @@ impl Writer {
                 let mut stats = stats.lock().await;
 
                 info!(
+                    target: LogTarget::Daemon.as_str(),
                     "Writer (last {}s): Inserted {} batch(s). Avg batch insert time {}ms",
                     interval_duration.as_secs(),
                     stats.batches_processed,
@@ -161,6 +164,6 @@ impl Writer {
 
         self.shutdown();
 
-        info!("Writer shut down complete");
+        info!(target: LogTarget::Daemon.as_str(), "Writer shut down complete");
     }
 }

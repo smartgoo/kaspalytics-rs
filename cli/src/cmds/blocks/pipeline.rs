@@ -12,6 +12,7 @@ use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
 use kaspalytics_utils::kaspad::db::ConsensusStorageSecondary;
+use kaspalytics_utils::log::LogTarget;
 use log::{debug, error};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -99,6 +100,7 @@ impl BlockAnalysis {
         }
 
         debug!(
+            target: LogTarget::Cli.as_str(),
             "{} chain blocks loaded from DbSelectedChainStore for target window",
             self.chain_blocks.len()
         );
@@ -138,7 +140,11 @@ impl BlockAnalysis {
             self.chain_blocks.iter().skip(1).enumerate()
         {
             if chain_block_index % 1000 == 0 {
-                debug!("tx_analysis processed {} chain blocks", chain_block_index);
+                debug!(
+                    target: LogTarget::Cli.as_str(),
+                    "tx_analysis processed {} chain blocks",
+                    chain_block_index
+                );
             }
 
             let mut this_chain_blocks_accepted_transactions = Vec::<TransactionId>::new();
@@ -319,10 +325,13 @@ impl BlockAnalysis {
     async fn run_inner(&mut self, pool: &PgPool) -> Result<(), StoreError> {
         // TODO custom error that wraps StoreError, other error types...
 
-        debug!("Loading chain blocks from DbSelectedChainStore for target window...");
+        debug!(
+            target: LogTarget::Cli.as_str(),
+            "Loading chain blocks from DbSelectedChainStore for target window..."
+        );
         self.load_chain_blocks()?;
 
-        debug!("Running tx_analysis...");
+        debug!(target: LogTarget::Cli.as_str(), "Running tx_analysis...");
         self.tx_analysis()?;
 
         let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);
@@ -333,7 +342,7 @@ impl BlockAnalysis {
                 continue;
             }
 
-            debug!("{:?}", stats);
+            debug!(target: LogTarget::Cli.as_str(), "{:?}", stats);
             stats.save(pool).await.unwrap(); // TODO handle
 
             let _ = kaspalytics_utils::email::send_email(
@@ -371,8 +380,9 @@ impl BlockAnalysis {
                     drop(storage);
 
                     retries += 1;
-                    error!("{}", err);
+                    error!(target: LogTarget::Cli.as_str(), "{}", err);
                     error!(
+                        target: LogTarget::Cli.as_str(),
                         "Database error during tx_analysis attempt {}/{}. Retrying in {:?}...\n",
                         retries, max_retries, retry_delay
                     );
@@ -381,6 +391,7 @@ impl BlockAnalysis {
                 Err(StoreError::DbError(_)) => {
                     // After max retries, send alert email and exit
                     error!(
+                        target: LogTarget::Cli.as_str(),
                         "Analysis::tx_analysis failed after {} attempts. Exiting...",
                         retries
                     );
@@ -394,7 +405,11 @@ impl BlockAnalysis {
                 }
                 Err(e) => {
                     // Handle other errors and exit
-                    error!("Analysis::tx_analysis failed with error: {:?}", e);
+                    error!(
+                        target: LogTarget::Cli.as_str(),
+                        "Analysis::tx_analysis failed with error: {:?}",
+                        e
+                    );
                     let _ = kaspalytics_utils::email::send_email(
                         &config,
                         "block-pipeline alert".to_string(),

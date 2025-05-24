@@ -2803,6 +2803,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tower_governor",
+ "tracing",
 ]
 
 [[package]]

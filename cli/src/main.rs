@@ -5,7 +5,7 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::log::init_logger;
+use kaspalytics_utils::{config::Config, log::LogTarget};
 use kaspalytics_utils::{database, TARGET_FD_LIMIT};
 use log::{debug, info};
 use std::sync::Arc;
@@ -17,10 +17,10 @@ async fn main() {
 
     let config = kaspalytics_utils::config::Config::from_env();
 
-    init_logger(&config, "cli").unwrap();
+    kaspalytics_utils::log::init_logger(&config, "cli").unwrap();
 
     let (soft, hard) = rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap();
-    debug!("fd limit before: soft = {}, hard = {}", soft, hard);
+    debug!(target: LogTarget::Cli.as_str(), "fd limit before: soft = {}, hard = {}", soft, hard);
 
     if rlimit::increase_nofile_limit(TARGET_FD_LIMIT as u64).unwrap() < TARGET_FD_LIMIT as u64 {
         panic!(
@@ -30,8 +30,9 @@ async fn main() {
     };
 
     debug!(
-        "fd limit after: {}",
-        rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap().0
+        target: LogTarget::Cli.as_str(),
+        "fd limit after: soft = {}, hard = {}",
+        soft, hard
     );
 
     // Open PG connection pool
@@ -59,7 +60,7 @@ async fn main() {
         .unwrap(),
     );
 
-    debug!("Connecting wRPC client...");
+    debug!(target: LogTarget::Cli.as_str(), "Connecting wRPC client...");
     rpc_client.connect(None).await.unwrap();
 
     // Ensure node is synced, is same network/suffix as supplied CLI args, is utxoindexed
@@ -71,7 +72,7 @@ async fn main() {
 
     // Run submitted CLI command
     let start = Instant::now();
-    info!("{:?} command starting...", cli.command);
+    info!(target: LogTarget::Cli.as_str(), "{:?} command starting...", cli.command);
     match cli.command {
         Commands::BlockPipeline {
             start_time: _,
@@ -92,8 +93,8 @@ async fn main() {
     }
 
     info!(
-        "{:?} command finished in {:.2}s",
-        cli.command,
-        start.elapsed().as_secs_f32()
+        target: LogTarget::Cli.as_str(),
+        "{:?} command completed",
+        cli.command
     );
 }

@@ -10,7 +10,7 @@ use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::config::{Config, Env as KaspalyticsEnv};
 use kaspalytics_utils::email::send_email;
-use kaspalytics_utils::log::init_logger;
+use kaspalytics_utils::log::{init_logger, LogTarget};
 use kaspalytics_utils::{check_rpc_node_status, database};
 use log::{debug, error, info};
 use sqlx::PgPool;
@@ -34,7 +34,7 @@ async fn main() {
 
     init_logger(&config, "daemon").unwrap();
 
-    info!("kaspalyticsd starting...");
+    info!(target: LogTarget::Daemon.as_str(), "kaspalyticsd starting...");
 
     let db = database::Database::new(config.db_uri.clone());
     let pg_pool = db
@@ -59,7 +59,7 @@ async fn main() {
         .unwrap(),
     );
 
-    debug!("Connecting wRPC client...");
+    debug!(target: LogTarget::Daemon.as_str(), "Connecting wRPC client...");
     rpc_client.connect(None).await.unwrap();
 
     check_rpc_node_status(&config, rpc_client.clone()).await;
@@ -70,6 +70,7 @@ async fn main() {
             match rpc_client.get_block(last_known_chain_block, false).await {
                 Ok(_) => {
                     info!(
+                        target: LogTarget::Daemon.as_str(),
                         "DagCache last_known_chain_block {} still held by Kaspa node",
                         last_known_chain_block,
                     );
@@ -77,6 +78,7 @@ async fn main() {
                 }
                 Err(RpcError::RpcSubsystem(_)) => {
                     info!(
+                        target: LogTarget::Daemon.as_str(),
                         "DagCache last_known_chain_block {} no longer held by Kaspa node. Resetting cache",
                         last_known_chain_block
                     );
@@ -126,7 +128,7 @@ async fn main() {
     let interrupt_shutdown_flag = context.shutdown_flag.clone();
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
-        info!("Received interrupt, shutting down...");
+        info!(target: LogTarget::Daemon.as_str(), "Received interrupt, shutting down...");
         interrupt_shutdown_flag.store(true, Ordering::Relaxed);
     });
 
@@ -150,12 +152,12 @@ async fn main() {
 
     match run_result {
         Ok(_) => {
-            info!("Shutdown complete");
+            info!(target: LogTarget::Daemon.as_str(), "Shutdown complete");
         }
         Err(e) => {
             context.shutdown_flag.store(true, Ordering::Relaxed);
 
-            error!("{}", e);
+            error!(target: LogTarget::Daemon.as_str(), "{}", e);
 
             if config.env == KaspalyticsEnv::Prod {
                 let _ = send_email(

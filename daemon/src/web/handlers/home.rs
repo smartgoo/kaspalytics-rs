@@ -122,7 +122,7 @@ impl SseData {
         cutoff: Option<DateTime<Utc>>,
     ) -> Result<Self, sqlx::Error> {
         let mut data = Self::new();
-        
+
         Self::collect_hash_rate_data(&mut data, pg_pool).await?;
         Self::collect_price_data(&mut data, &storage, cutoff).await;
         Self::collect_market_data(&mut data, &storage, cutoff).await;
@@ -259,9 +259,7 @@ impl SseData {
 
         self.set(
             SseKey::CoinbaseTransactionCount24h,
-            SseField::from(tx_counter::coinbase_transaction_count(
-                dag_cache, threshold,
-            )),
+            SseField::from(tx_counter::coinbase_transaction_count(dag_cache, threshold)),
         );
 
         self.set(
@@ -282,8 +280,7 @@ impl SseData {
         self.set(
             SseKey::AcceptedTransactionCountPerHour24h,
             SseField::from(
-                serde_json::to_string(&tx_counter::accepted_count_per_hour_24h(dag_cache))
-                    .unwrap(),
+                serde_json::to_string(&tx_counter::accepted_count_per_hour_24h(dag_cache)).unwrap(),
             ),
         );
 

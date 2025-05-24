@@ -6,7 +6,7 @@ use kaspa_consensus_core::blockhash::BlockHashExtensions;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcBlock, RpcTransaction};
-use kaspalytics_utils::config::Config;
+use kaspalytics_utils::{config::Config, log::LogTarget};
 use log::{info, warn};
 use rocksdb::DB;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -141,6 +141,7 @@ impl Writer for DagCache {
 
             if removed_chain_block.is_none() {
                 warn!(
+                    target: LogTarget::Daemon.as_str(),
                     "Removed chain block {} not found in blocks cache",
                     removed_chain_block
                 );
@@ -152,6 +153,7 @@ impl Writer for DagCache {
             // accepting_block_transactions map yet
             if removed_chain_block_data.unwrap().timestamp > self.tip_timestamp() {
                 info!(
+                    target: LogTarget::Daemon.as_str(),
                     "Removed chain block {} timestamp greater than tip_timestamp",
                     removed_chain_block
                 );
@@ -173,6 +175,7 @@ impl Writer for DagCache {
             }
         } else {
             warn!(
+                target: LogTarget::Daemon.as_str(),
                 "Removed chain block {} is below cache tip timestamp, and does not exist in cache accepting_block_transactions map",
                 removed_chain_block
             );
@@ -334,7 +337,7 @@ pub enum CacheStateError {
 impl DagCache {
     pub async fn load_cache_state(config: Config) -> Result<DagCache, CacheStateError> {
         // TODO refactor store and load function to better handle DB
-        info!("Loading cache state...");
+        info!(target: LogTarget::Daemon.as_str(), "Loading cache state...");
 
         let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;
 
@@ -394,7 +397,7 @@ impl DagCache {
     }
 
     pub async fn store_cache_state(&self, config: Config) -> Result<(), CacheStateError> {
-        info!("Storing cache state... ");
+        info!(target: LogTarget::Daemon.as_str(), "Storing cache state... ");
 
         let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;
 
@@ -422,7 +425,7 @@ impl DagCache {
         // Insert seconds to db
         db.put(b"seconds", bincode::serialize(&self.seconds)?)?;
 
-        info!("Storing cache state complete");
+        info!(target: LogTarget::Daemon.as_str(), "Storing cache state complete");
 
         Ok(())
     }

@@ -1,5 +1,6 @@
 use kaspa_addresses::Address;
 use kaspalytics_utils::kaspad::SOMPI_PER_KAS;
+use kaspalytics_utils::log::LogTarget;
 use log::debug;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;
@@ -282,7 +283,7 @@ impl DistributionByKASBucketAnalysis {
         self.insert_to_db().await;
 
         for bucket_data in &self.buckets {
-            debug!("{:?}", bucket_data);
+            debug!(target: LogTarget::Daemon.as_str(), "{:?}", bucket_data);
         }
     }
 }

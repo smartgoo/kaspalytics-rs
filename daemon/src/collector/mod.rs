@@ -2,7 +2,7 @@ use chrono::Utc;
 use futures::future::BoxFuture;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::database::sql::hash_rate;
+use kaspalytics_utils::{database::sql::hash_rate, log::LogTarget};
 use log::error;
 use sqlx::PgPool;
 use std::sync::{atomic::Ordering, Arc};
@@ -89,7 +89,7 @@ impl Collector {
             while !shutdown_flag.load(Ordering::Relaxed) {
                 ticker.tick().await;
                 if let Err(e) = task_fn().await {
-                    error!("Error during {}: {}", task_name, e);
+                    error!(target: LogTarget::Daemon.as_str(), "Error during {}: {}", task_name, e);
                 }
             }
         });

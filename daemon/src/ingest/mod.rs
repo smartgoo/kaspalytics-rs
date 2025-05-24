@@ -5,7 +5,7 @@ mod second;
 use cache::{DagCache, Reader, Writer};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
-use kaspalytics_utils::config::Config;
+use kaspalytics_utils::{config::Config, log::LogTarget};
 use log::info;
 use model::PrunedBlock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -58,11 +58,13 @@ impl DagIngest {
             self.cache.set_last_known_chain_block(pruning_point_hash);
 
             info!(
+                target: LogTarget::Daemon.as_str(),
                 "DagIngest starting from pruning point {:?}",
                 self.cache.last_known_chain_block(),
             );
         } else {
             info!(
+                target: LogTarget::Daemon.as_str(),
                 "DagIngest starting from cache last known chain block {:?}",
                 self.cache.last_known_chain_block(),
             );
@@ -130,7 +132,7 @@ impl DagIngest {
             self.writer_tx.send(pruned_blocks).await.unwrap();
 
             if self.cache.synced() {
-                info!("DagIngest at tip. Sleeping");
+                info!(target: LogTarget::Daemon.as_str(), "DagIngest at tip. Sleeping");
                 sleep(Duration::from_secs(10)).await;
             } else {
                 let tip_timestamp = self.cache.tip_timestamp() / 1000;
@@ -140,6 +142,7 @@ impl DagIngest {
                     .as_secs()
                     - tip_timestamp;
                 info!(
+                    target: LogTarget::Daemon.as_str(),
                     "DagIngest {}s behind | Iter time {}ms (RPC calls {}ms) | channel capacity: {}",
                     secs_behind,
                     rpc_end,
