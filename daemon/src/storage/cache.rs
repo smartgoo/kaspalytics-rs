@@ -4,7 +4,7 @@ use kaspa_hashes::Hash;
 use rust_decimal::Decimal;
 use tokio::sync::RwLock;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CacheEntry<T> {
     pub value: T,
     pub timestamp: DateTime<Utc>,

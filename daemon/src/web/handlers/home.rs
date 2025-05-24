@@ -98,6 +98,21 @@ impl SseData {
         self.fields.get(key)
     }
 
+    fn is_empty(&self) -> bool {
+        self.fields.is_empty()
+    }
+
+    fn data(&self) -> HashMap<String, SseField> {
+        let mut data = HashMap::new();
+        for key in SseKey::iter() {
+            if let Some(v) = self.get(&key) {
+                data.insert(key.to_string(), v.clone());
+            }
+        }
+
+        data
+    }
+
     fn diff(&self, other: &SseData) -> HashMap<String, SseField> {
         let mut changes = HashMap::new();
         for key in SseKey::iter() {
@@ -183,70 +198,91 @@ impl SseData {
 
     async fn collect_price_data(&mut self, storage: &Storage, cutoff: Option<DateTime<Utc>>) {
         let price_usd = storage.get_price_usd().await;
-        if let Some(cutoff) = cutoff {
-            if price_usd.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if price_usd.timestamp > cutoff {
+                    self.set(SseKey::PriceUsd, SseField::from(price_usd));
+                }
+            }
+            None => {
                 self.set(SseKey::PriceUsd, SseField::from(price_usd));
             }
-        } else {
-            self.set(SseKey::PriceUsd, SseField::from(price_usd));
         }
 
         let price_btc = storage.get_price_btc().await;
-        if let Some(cutoff) = cutoff {
-            if price_btc.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if price_btc.timestamp > cutoff {
+                    self.set(SseKey::PriceBtc, SseField::from(price_btc));
+                }
+            }
+            None => {
                 self.set(SseKey::PriceBtc, SseField::from(price_btc));
             }
-        } else {
-            self.set(SseKey::PriceBtc, SseField::from(price_btc));
         }
     }
 
     async fn collect_market_data(&mut self, storage: &Storage, cutoff: Option<DateTime<Utc>>) {
         let market_cap = storage.get_market_cap().await;
-        if let Some(cutoff) = cutoff {
-            if market_cap.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if market_cap.timestamp > cutoff {
+                    self.set(SseKey::MarketCap, SseField::from(market_cap));
+                }
+            }
+            None => {
                 self.set(SseKey::MarketCap, SseField::from(market_cap));
             }
-        } else {
-            self.set(SseKey::MarketCap, SseField::from(market_cap));
         }
 
         let volume = storage.get_volume().await;
-        if let Some(cutoff) = cutoff {
-            if volume.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if volume.timestamp > cutoff {
+                    self.set(SseKey::Volume, SseField::from(volume));
+                }
+            }
+            None => {
                 self.set(SseKey::Volume, SseField::from(volume));
             }
-        } else {
-            self.set(SseKey::Volume, SseField::from(volume));
         }
     }
 
     async fn collect_chain_data(&mut self, storage: &Storage, cutoff: Option<DateTime<Utc>>) {
         let pruning_point = storage.get_pruning_point().await;
-        if let Some(cutoff) = cutoff {
-            if pruning_point.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if pruning_point.timestamp > cutoff {
+                    self.set(SseKey::PruningPoint, SseField::from(pruning_point));
+                }
+            }
+            None => {
                 self.set(SseKey::PruningPoint, SseField::from(pruning_point));
             }
-        } else {
-            self.set(SseKey::PruningPoint, SseField::from(pruning_point));
         }
 
         let daa_score = storage.get_daa_score().await;
-        if let Some(cutoff) = cutoff {
-            if daa_score.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if daa_score.timestamp > cutoff {
+                    self.set(SseKey::DaaScore, SseField::from(daa_score));
+                }
+            }
+            None => {
                 self.set(SseKey::DaaScore, SseField::from(daa_score));
             }
-        } else {
-            self.set(SseKey::DaaScore, SseField::from(daa_score));
         }
 
         let circulating_supply = storage.get_circulating_supply().await;
-        if let Some(cutoff) = cutoff {
-            if circulating_supply.timestamp > cutoff {
+        match cutoff {
+            Some(cutoff) => {
+                if circulating_supply.timestamp > cutoff {
+                    self.set(SseKey::CsSompi, SseField::from(circulating_supply));
+                }
+            }
+            None => {
                 self.set(SseKey::CsSompi, SseField::from(circulating_supply));
             }
-        } else {
-            self.set(SseKey::CsSompi, SseField::from(circulating_supply));
         }
     }
 
@@ -314,37 +350,45 @@ impl SseData {
 
 struct SseState {
     context: Arc<AppContext>,
-    last_query_time: Mutex<DateTime<Utc>>,
-    data: Mutex<SseData>,
+    deltas_since: Mutex<Option<DateTime<Utc>>>,
+    data: Mutex<Option<SseData>>,
 }
 
 impl SseState {
     fn new(context: Arc<AppContext>) -> Self {
         Self {
             context,
-            last_query_time: Mutex::new(Utc::now()),
-            data: Mutex::new(SseData::new()),
+            deltas_since: Mutex::new(None),
+            data: Mutex::new(Some(SseData::new())),
         }
     }
 
     async fn create_event(&self) -> Result<Event, Infallible> {
-        let last_query_time = *self.last_query_time.lock().await;
+        let deltas_since = *self.deltas_since.lock().await;
 
         let last_data = self.data.lock().await.clone();
         let new_data = SseData::with_data(
             &self.context.pg_pool,
             self.context.storage.clone(),
             self.context.dag_cache.clone(),
-            Some(last_query_time),
+            deltas_since,
         )
         .await
         .unwrap();
-        let deltas = last_data.diff(&new_data);
 
-        *self.last_query_time.lock().await = Utc::now();
-        *self.data.lock().await = new_data;
+        let event_data = match last_data {
+            Some(last) => {
+                last.diff(&new_data)
+            },
+            None => {
+                new_data.data()
+            }
+        };
 
-        let json = serde_json::to_string(&deltas).unwrap();
+        *self.deltas_since.lock().await = Some(Utc::now());
+        *self.data.lock().await = Some(new_data);
+
+        let json = serde_json::to_string(&event_data).unwrap();
         Ok(Event::default().data(json))
     }
 }
