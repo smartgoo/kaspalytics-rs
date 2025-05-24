@@ -153,9 +153,9 @@ impl WebServer {
             .route("/home/stream", get(handlers::home::stream))
             .with_state(self.state.clone())
             .layer(self.cors_layer())
-            .layer(GovernorLayer {
-                config: Arc::new(governor_conf),
-            })
+            // .layer(GovernorLayer {
+            //     config: Arc::new(governor_conf),
+            // })
             .layer(RequestBodyLimitLayer::new(64 * 1024))
             .layer(self.trace_layer());
 
