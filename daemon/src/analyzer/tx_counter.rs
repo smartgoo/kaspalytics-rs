@@ -1,100 +1,49 @@
 use crate::ingest::cache::{DagCache, Reader};
-use chrono::Utc;
-use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
-use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-async fn coinbase_transaction_count(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-    key: KeyRegistry,
-    threshold: u64,
-) -> Result<(), sqlx::Error> {
-    let count: u64 = dag_cache
+pub fn coinbase_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.coinbase_transaction_count)
-        .sum();
-
-    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
-
-    Ok(())
+        .sum()
 }
 
-async fn coinbase_accepted_transaction_count(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-    key: KeyRegistry,
-    threshold: u64,
-) -> Result<(), sqlx::Error> {
-    let count: u64 = dag_cache
+pub fn coinbase_accepted_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.coinbase_accepted_transaction_count)
-        .sum();
-
-    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
-
-    Ok(())
+        .sum()
 }
 
-async fn transaction_count(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-    key: KeyRegistry,
-    threshold: u64,
-) -> Result<(), sqlx::Error> {
-    let count: u64 = dag_cache
+pub fn transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.transaction_count)
-        .sum();
-
-    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
-
-    Ok(())
+        .sum()
 }
 
-async fn unique_transaction_count(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-    key: KeyRegistry,
-    threshold: u64,
-) -> Result<(), sqlx::Error> {
-    let count: u64 = dag_cache
+pub fn unique_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.unique_transaction_count)
-        .sum();
-
-    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
-
-    Ok(())
+        .sum()
 }
 
-async fn unique_transaction_accepted_count(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-    key: KeyRegistry,
-    threshold: u64,
-) -> Result<(), sqlx::Error> {
-    let count: u64 = dag_cache
+pub fn unique_transaction_accepted_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.unique_transaction_accepted_count)
-        .sum();
-
-    key_value::upsert(pg_pool, key, count, Utc::now()).await?;
-
-    Ok(())
+        .sum()
 }
 
-async fn accepted_count_per_hour_24h(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-) -> Result<(), sqlx::Error> {
+pub fn accepted_count_per_hour_24h(dag_cache: &Arc<DagCache>) -> HashMap<u64, u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -120,21 +69,10 @@ async fn accepted_count_per_hour_24h(
             *effective_count_per_hour.entry(hour).or_insert(0) += count;
         });
 
-    key_value::upsert(
-        pg_pool,
-        KeyRegistry::AcceptedTransactionCountPerHour24h,
-        serde_json::to_string(&effective_count_per_hour).unwrap(),
-        Utc::now(),
-    )
-    .await?;
-
-    Ok(())
+    effective_count_per_hour
 }
 
-async fn accepted_count_per_minute_60m(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-) -> Result<(), sqlx::Error> {
+pub fn accepted_count_per_minute_60m(dag_cache: &Arc<DagCache>) -> HashMap<u64, u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -160,112 +98,65 @@ async fn accepted_count_per_minute_60m(
             *effective_count_per_minute.entry(minute).or_insert(0) += count;
         });
 
-    key_value::upsert(
-        pg_pool,
-        KeyRegistry::AcceptedTransactionCountPerMinute60m,
-        serde_json::to_string(&effective_count_per_minute).unwrap(),
-        Utc::now(),
-    )
-    .await?;
-
-    Ok(())
+    effective_count_per_minute
 }
 
-async fn accepted_count_per_second_60s(
-    dag_cache: &Arc<DagCache>,
-    pg_pool: &PgPool,
-) -> Result<(), sqlx::Error> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+// pub async fn run(dag_cache: Arc<DagCache>, storage: Arc<Storage>) -> Result<(), sqlx::Error> {
+//     let now = SystemTime::now()
+//         .duration_since(UNIX_EPOCH)
+//         .unwrap()
+//         .as_secs();
 
-    let threshold = now - 60;
-    let mut effective_count_per_second = HashMap::<u64, u64>::new();
+//     let threshold = now - 86400;
 
-    dag_cache
-        .seconds_iter()
-        .map(|entry| {
-            let second = *entry.key();
-            (
-                second,
-                entry.value().coinbase_accepted_transaction_count
-                    + entry.value().unique_transaction_accepted_count,
-            )
-        })
-        .filter(|(second, _)| *second >= threshold)
-        .for_each(|(second, count)| {
-            *effective_count_per_second.entry(second).or_insert(0) += count;
-        });
+//     storage.set_coinbase_transaction_count_24h(
+//         coinbase_transaction_count(&dag_cache, threshold),
+//         None,
+//     )
+//     .await
+//     .unwrap();
 
-    key_value::upsert(
-        pg_pool,
-        KeyRegistry::AcceptedTransactionCountPerSecond60s,
-        serde_json::to_string(&effective_count_per_second).unwrap(),
-        Utc::now(),
-    )
-    .await?;
+//     storage.set_coinbase_accepted_transaction_count_24h(
+//         coinbase_accepted_transaction_count(&dag_cache, threshold),
+//         None,
+//     )
+//     .await
+//     .unwrap();
 
-    Ok(())
-}
+//     storage.set_transaction_count_24h(
+//         transaction_count(&dag_cache, threshold),
+//         None
+//     )
+//     .await
+//     .unwrap();
 
-pub async fn run(dag_cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+//     storage.set_unique_transaction_count_24h(
+//         unique_transaction_count(&dag_cache, threshold),
+//         None
+//     )
+//     .await
+//     .unwrap();
 
-    let threshold = now - 86400;
+//     storage.set_unique_transaction_accepted_count_24h(
+//         unique_transaction_accepted_count(&dag_cache, threshold),
+//         None
+//     )
+//     .await
+//     .unwrap();
 
-    coinbase_transaction_count(
-        &dag_cache,
-        pg_pool,
-        KeyRegistry::CoinbaseTransactionCount86400s,
-        threshold,
-    )
-    .await?;
+//     storage.set_transaction_count_per_hour_24h(
+//         accepted_count_per_hour_24h(&dag_cache),
+//         None,
+//     )
+//     .await
+//     .unwrap();
 
-    coinbase_accepted_transaction_count(
-        &dag_cache,
-        pg_pool,
-        KeyRegistry::CoinbaseAcceptedTransactionCount86400s,
-        threshold,
-    )
-    .await?;
+//     storage.set_transaction_count_per_minute_1h(
+//         accepted_count_per_minute_60m(&dag_cache),
+//         None,
+//     )
+//     .await
+//     .unwrap();
 
-    transaction_count(
-        &dag_cache,
-        pg_pool,
-        KeyRegistry::TransactionCount86400s,
-        threshold,
-    )
-    .await?;
-
-    unique_transaction_count(
-        &dag_cache,
-        pg_pool,
-        KeyRegistry::UniqueTransactionCount86400s,
-        threshold,
-    )
-    .await?;
-
-    unique_transaction_accepted_count(
-        &dag_cache,
-        pg_pool,
-        KeyRegistry::UniqueTransactionAcceptedCount86400s,
-        threshold,
-    )
-    .await?;
-
-    accepted_count_per_hour_24h(&dag_cache, pg_pool)
-        .await
-        .unwrap();
-    accepted_count_per_minute_60m(&dag_cache, pg_pool)
-        .await
-        .unwrap();
-    accepted_count_per_second_60s(&dag_cache, pg_pool)
-        .await
-        .unwrap();
-
-    Ok(())
-}
+//     Ok(())
+// }

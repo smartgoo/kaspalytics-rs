@@ -2,17 +2,14 @@ use chrono::Utc;
 use futures::future::BoxFuture;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::database::sql::{hash_rate, key_value, key_value::KeyRegistry};
+use kaspalytics_utils::database::sql::hash_rate;
 use log::error;
 use sqlx::PgPool;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::{atomic::Ordering, Arc};
 use tokio::time::{interval, Duration};
 
 use crate::{
-    storage::{self, cache::Cache, Storage, Writer},
+    storage::{self, Storage, Writer},
     AppContext,
 };
 

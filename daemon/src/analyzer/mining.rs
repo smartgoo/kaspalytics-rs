@@ -1,21 +1,18 @@
 use crate::ingest::cache::{DagCache, Reader};
-use chrono::Utc;
-use kaspalytics_utils::database::sql::{key_value, key_value::KeyRegistry};
-use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
-    let mut version_counts = HashMap::<String, u64>::new();
-
+pub fn mining_node_version_share_60m(dag_cache: &Arc<DagCache>) -> HashMap<String, f64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
     let cutoff = now - 3600;
 
-    cache
+    let mut version_counts = HashMap::<String, u64>::new();
+
+    dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= cutoff)
         .map(|entry| entry.mining_node_version_block_counts.clone())
@@ -33,22 +30,11 @@ pub async fn run(cache: Arc<DagCache>, pg_pool: &PgPool) -> Result<(), sqlx::Err
 
     let total_blocks = version_counts.values().sum::<u64>();
 
-    let version_share: HashMap<String, f64> = version_counts
+    version_counts
         .into_iter()
         .map(|(version, count)| {
             let share = (count as f64 / total_blocks as f64) * 100.0;
             (version, share)
         })
-        .collect();
-
-    key_value::upsert(
-        pg_pool,
-        KeyRegistry::MinerNodeVersions1h,
-        serde_json::to_string(&version_share).unwrap(),
-        Utc::now(),
-    )
-    .await
-    .unwrap();
-
-    Ok(())
+        .collect()
 }

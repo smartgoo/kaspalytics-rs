@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use strum_macros::Display;
 
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum KeyRegistry {
     PriceUsd,
     PriceBtc,
@@ -10,48 +11,15 @@ pub enum KeyRegistry {
     DaaScore,
     PruningPoint,
     CsSompi,
-    TransactionCount86400s,
-    CoinbaseTransactionCount86400s,
-    CoinbaseAcceptedTransactionCount86400s,
-    UniqueTransactionCount86400s,
-    UniqueTransactionAcceptedCount86400s,
+    TransactionCount24h,
+    CoinbaseTransactionCount24h,
+    CoinbaseAcceptedTransactionCount24h,
+    UniqueTransactionCount24h,
+    UniqueTransactionAcceptedCount24h,
     AcceptedTransactionCountPerHour24h,
-    AcceptedTransactionCountPerMinute60m,
-    AcceptedTransactionCountPerSecond60s,
-    MinerNodeVersions1h,
-}
-
-impl KeyRegistry {
-    fn as_str(&self) -> &str {
-        match self {
-            KeyRegistry::PriceUsd => "price_usd",
-            KeyRegistry::PriceBtc => "price_btc",
-            KeyRegistry::MarketCap => "market_cap",
-            KeyRegistry::Volume => "volume",
-            KeyRegistry::DaaScore => "daa_score",
-            KeyRegistry::PruningPoint => "pruning_point",
-            KeyRegistry::CsSompi => "cs_sompi",
-            KeyRegistry::TransactionCount86400s => "transaction_count_86400s",
-            KeyRegistry::CoinbaseTransactionCount86400s => "coinbase_transaction_count_86400s",
-            KeyRegistry::CoinbaseAcceptedTransactionCount86400s => {
-                "coinbase_accepted_transaction_count_86400s"
-            }
-            KeyRegistry::UniqueTransactionCount86400s => "unique_transaction_count_86400s",
-            KeyRegistry::UniqueTransactionAcceptedCount86400s => {
-                "unique_transaction_accepted_count_86400s"
-            }
-            KeyRegistry::AcceptedTransactionCountPerHour24h => {
-                "accepted_transaction_count_per_hour_24h"
-            }
-            KeyRegistry::AcceptedTransactionCountPerMinute60m => {
-                "accepted_transaction_count_per_minute_60m"
-            }
-            KeyRegistry::AcceptedTransactionCountPerSecond60s => {
-                "accpeted_transaction_count_per_second_60s"
-            }
-            KeyRegistry::MinerNodeVersions1h => "miner_node_versions_1h",
-        }
-    }
+    AcceptedTransactionCountPerMinute1h,
+    AcceptedTransactionCountPerSecond1m,
+    MinerNodeVersionCount1h,
 }
 
 pub async fn upsert<V>(
@@ -71,7 +39,7 @@ where
             SET "value" = $2, updated_timestamp = $3
         "#,
     )
-    .bind(key.as_str())
+    .bind(key.to_string())
     .bind(value.to_string())
     .bind(updated_at)
     .execute(pg_pool)

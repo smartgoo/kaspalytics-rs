@@ -22,16 +22,6 @@ pub struct Cache {
     pruning_point: RwLock<CacheEntry<Hash>>,
     daa_score: RwLock<CacheEntry<u64>>,
     circulating_supply: RwLock<CacheEntry<u64>>,
-    // Transaction
-    // coinbase_transaction_count_86400s
-    // 'coinbase_accepted_transaction_count_86400s',
-    // 'transaction_count_86400s',
-    // 'unique_transaction_count_86400s',
-    // 'unique_transaction_accepted_count_86400s',
-    // 'accepted_transaction_count_per_hour_24h',
-    // 'accepted_transaction_count_per_minute_60m',
-    // 'accepted_transaction_count_per_second_60s',
-    // 'miner_node_versions_1h'
 }
 
 impl Writer for Cache {
@@ -41,7 +31,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.price_usd.write().await = CacheEntry::<Decimal> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 
@@ -54,7 +44,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.price_btc.write().await = CacheEntry::<Decimal> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 
@@ -67,7 +57,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.market_cap.write().await = CacheEntry::<Decimal> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 
@@ -80,7 +70,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.volume.write().await = CacheEntry::<Decimal> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 
@@ -93,7 +83,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.pruning_point.write().await = CacheEntry::<Hash> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 
@@ -106,7 +96,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.daa_score.write().await = CacheEntry::<u64> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 
@@ -119,7 +109,7 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.circulating_supply.write().await = CacheEntry::<u64> {
-            value: value,
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 

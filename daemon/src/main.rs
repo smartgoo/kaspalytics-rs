@@ -90,35 +90,31 @@ async fn main() {
         Err(_) => Arc::new(DagCache::default()),
     };
 
-    let shutdown_flag = Arc::new(AtomicBool::new(false));
+    let context = Arc::new(AppContext {
+        config: config.clone(),
+        shutdown_flag: Arc::new(AtomicBool::new(false)),
+        pg_pool: pg_pool.clone(),
+        rpc_client,
+        dag_cache,
+        storage: Arc::new(Storage::new(Arc::new(Cache::default()), pg_pool)),
+    });
 
     let (writer_tx, writer_rx) = tokio::sync::mpsc::channel(100);
 
     // Ingest task
     let ingest = ingest::DagIngest::new(
         config.clone(),
-        shutdown_flag.clone(),
+        context.shutdown_flag.clone(),
         writer_tx,
-        rpc_client.clone(),
-        dag_cache.clone(),
+        context.rpc_client.clone(),
+        context.dag_cache.clone(),
     );
 
     // Writer task
-    let mut writer = writer::Writer::new(pg_pool.clone(), writer_rx);
-
-    let storage = Arc::new(Storage::new(Arc::new(Cache::default()), pg_pool.clone()));
-
-    let context = Arc::new(AppContext {
-        config: config.clone(),
-        shutdown_flag: shutdown_flag.clone(),
-        pg_pool: pg_pool,
-        rpc_client: rpc_client,
-        dag_cache: dag_cache,
-        storage: storage,
-    });
+    let mut writer = writer::Writer::new(context.pg_pool.clone(), writer_rx);
 
     // Analyzer task
-    let analyzer = analyzer::Analyzer::new(context.clone());
+    // let analyzer = analyzer::Analyzer::new(context.clone());
 
     // Collector task
     let collector = collector::Collector::new(context.clone());
@@ -127,7 +123,7 @@ async fn main() {
     let web_server = web::WebServer::new(context.clone());
 
     // Handle interrupt
-    let interrupt_shutdown_flag = shutdown_flag.clone();
+    let interrupt_shutdown_flag = context.shutdown_flag.clone();
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
         info!("Received interrupt, shutting down...");
@@ -141,9 +137,9 @@ async fn main() {
         tokio::spawn(async move {
             writer.run().await;
         }),
-        tokio::spawn(async move {
-            analyzer.run().await;
-        }),
+        // tokio::spawn(async move {
+        //     analyzer.run().await;
+        // }),
         tokio::spawn(async move {
             collector.run().await;
         }),
@@ -157,7 +153,7 @@ async fn main() {
             info!("Shutdown complete");
         }
         Err(e) => {
-            shutdown_flag.store(true, Ordering::Relaxed);
+            context.shutdown_flag.store(true, Ordering::Relaxed);
 
             error!("{}", e);
 
