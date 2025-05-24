@@ -5,7 +5,7 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspalytics_utils::{config::Config, log::LogTarget};
+use kaspalytics_utils::log::LogTarget;
 use kaspalytics_utils::{database, TARGET_FD_LIMIT};
 use log::{debug, info};
 use std::sync::Arc;
@@ -94,7 +94,7 @@ async fn main() {
 
     info!(
         target: LogTarget::Cli.as_str(),
-        "{:?} command completed",
-        cli.command
+        "{:?} command completed in {}",
+        cli.command, start.elapsed().as_secs(),
     );
 }

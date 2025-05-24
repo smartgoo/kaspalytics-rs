@@ -139,8 +139,7 @@ pub fn init_logger(
         .additive(false)
         .build("cli", log::LevelFilter::Info);
 
-    let tower_http_logger = Logger::builder()
-        .build("tower_http", log::LevelFilter::Warn);
+    let tower_http_logger = Logger::builder().build("tower_http", log::LevelFilter::Warn);
 
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
@@ -153,10 +152,7 @@ pub fn init_logger(
         .logger(daemon_logger)
         .logger(cli_logger)
         .logger(tower_http_logger)
-        .build(
-            Root::builder()
-                .build(config.log_level),
-        )?;
+        .build(Root::builder().build(config.log_level))?;
 
     log4rs::init_config(config)?;
 

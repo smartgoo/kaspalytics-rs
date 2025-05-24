@@ -28,7 +28,7 @@ impl KaspalyticsDirs {
 
         let cache_dir = network_dir.join(CACHE_DIR);
         std::fs::create_dir_all(&cache_dir).unwrap();
-        
+
         let db_dir = network_dir.join(DB_DIR);
 
         Self {
