@@ -76,6 +76,10 @@ pub trait Writer {
         hash_rate: u64,
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
+
+    async fn set_hash_rate_7d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error>;
+    async fn set_hash_rate_30d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error>;
+    async fn set_hash_rate_90d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error>;
 }
 
 impl Writer for Storage {
@@ -225,6 +229,48 @@ impl Writer for Storage {
 
         Ok(())
     }
+
+    async fn set_hash_rate_7d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+        self.cache.set_hash_rate_7d_change(value, timestamp).await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::HashRate7dChange,
+            value,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn set_hash_rate_30d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+        self.cache.set_hash_rate_30d_change(value, timestamp).await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::HashRate30dChange,
+            value,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn set_hash_rate_90d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+        self.cache.set_hash_rate_90d_change(value, timestamp).await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::HashRate90dChange,
+            value,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        Ok(())
+    }
 }
 
 pub trait Reader {
@@ -238,6 +284,9 @@ pub trait Reader {
     async fn get_circulating_supply(&self) -> CacheEntry<u64>;
     async fn get_difficulty(&self) -> CacheEntry<Decimal>;
     async fn get_hash_rate(&self) -> CacheEntry<u64>;
+    async fn get_hash_rate_7d_change(&self) -> CacheEntry<Decimal>;
+    async fn get_hash_rate_30d_change(&self) -> CacheEntry<Decimal>;
+    async fn get_hash_rate_90d_change(&self) -> CacheEntry<Decimal>;
 }
 
 impl Reader for Storage {
@@ -275,5 +324,17 @@ impl Reader for Storage {
 
     async fn get_hash_rate(&self) -> CacheEntry<u64> {
         self.cache.get_hash_rate().await
+    }
+
+    async fn get_hash_rate_7d_change(&self) -> CacheEntry<Decimal> {
+        self.cache.get_hash_rate_7d_change().await
+    }
+
+    async fn get_hash_rate_30d_change(&self) -> CacheEntry<Decimal> {
+        self.cache.get_hash_rate_30d_change().await
+    }
+
+    async fn get_hash_rate_90d_change(&self) -> CacheEntry<Decimal> {
+        self.cache.get_hash_rate_90d_change().await
     }
 }

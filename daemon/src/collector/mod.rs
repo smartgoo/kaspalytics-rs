@@ -1,12 +1,14 @@
+use crate::storage::Reader;
 use chrono::Utc;
-use futures::future::BoxFuture;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::log::LogTarget;
+use kaspalytics_utils::database::sql::hash_rate;
 use log::error;
 use rust_decimal::{prelude::FromPrimitive, Decimal};
+use sqlx::PgPool;
 use std::sync::{atomic::Ordering, Arc};
-use tokio::time::{interval, Duration};
+use tokio::time::Duration;
 
 use crate::{
     storage::{self, Storage, Writer},
@@ -38,61 +40,85 @@ impl Collector {
     }
 
     pub async fn run(&self) {
-        self.spawn_task(Duration::from_secs(30), "market data update", {
+        // Markets data update task
+        {
             let context = self.context.clone();
-            move || {
-                let storage = context.storage.clone();
-                Box::pin(async move { update_markets_data(storage).await })
-            }
-        });
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) = update_markets_data(context.storage.clone()).await {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_markets_data: {}", e);
+                    }
+                }
+            });
+        }
 
-        self.spawn_task(Duration::from_secs(1), "block dag info update", {
+        // Block DAG info update task
+        {
             let context = self.context.clone();
-            move || {
-                let rpc_client = context.rpc_client.clone();
-                let storage = context.storage.clone();
-                Box::pin(async move { update_block_dag_info(&rpc_client, storage).await })
-            }
-        });
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) = update_block_dag_info(&context.rpc_client, context.storage.clone()).await {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_block_dag_info: {}", e);
+                    }
+                }
+            });
+        }
 
-        self.spawn_task(Duration::from_secs(1), "coin supply info update", {
+        // Coin supply info update task
+        {
             let context = self.context.clone();
-            move || {
-                let rpc_client = context.rpc_client.clone();
-                let storage = context.storage.clone();
-                Box::pin(async move { update_coin_supply_info(&rpc_client, storage).await })
-            }
-        });
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) = update_coin_supply_info(&context.rpc_client, context.storage.clone()).await {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_coin_supply_info: {}", e);
+                    }
+                }
+            });
+        }
 
-        self.spawn_task(Duration::from_secs(15), "snapshot hash rate", {
+        // Hash rate snapshot task
+        {
             let context = self.context.clone();
-            move || {
-                let rpc_client = context.rpc_client.clone();
-                let storage = context.storage.clone();
-                Box::pin(async move { snapshot_hash_rate(&rpc_client, storage).await })
-            }
-        });
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(15));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) = snapshot_hash_rate(&context.rpc_client, context.storage.clone()).await {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during snapshot_hash_rate: {}", e);
+                    }
+                }
+            });
+        }
+
+        // Hash rate changes update task
+        {
+            let context = self.context.clone();
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(60));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) = update_hash_rate_changes(&context.pg_pool, context.storage.clone()).await {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_hash_rate_changes: {}", e);
+                    }
+                }
+            });
+        }
+
 
         while !self.context.shutdown_flag.load(Ordering::Relaxed) {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-    }
-
-    fn spawn_task<F>(&self, interval_duration: Duration, task_name: &'static str, mut task_fn: F)
-    where
-        F: FnMut() -> BoxFuture<'static, Result<(), Error>> + Send + 'static,
-    {
-        let shutdown_flag = self.context.shutdown_flag.clone();
-
-        tokio::spawn(async move {
-            let mut ticker = interval(interval_duration);
-            while !shutdown_flag.load(Ordering::Relaxed) {
-                ticker.tick().await;
-                if let Err(e) = task_fn().await {
-                    error!(target: LogTarget::Daemon.as_str(), "Error during {}: {}", task_name, e);
-                }
-            }
-        });
     }
 }
 
@@ -164,6 +190,25 @@ async fn snapshot_hash_rate(
             None,
         )
         .await?;
+
+    Ok(())
+}
+
+async fn update_hash_rate_changes(pg_pool: &PgPool, storage: Arc<Storage>) -> Result<(), Error> {
+    let hash_rate = storage.get_hash_rate().await;
+    let current_hash_rate = Decimal::from_u64(hash_rate.value).unwrap();
+
+    for days in [7, 30, 90] {
+        let past = hash_rate::get_x_days_ago(pg_pool, days).await?;
+        if let Some(change) = kaspalytics_utils::math::percent_change(current_hash_rate, past.hash_rate, 2) {
+            match days {
+                7 => storage.set_hash_rate_7d_change(change, Some(past.timestamp)).await?,
+                30 => storage.set_hash_rate_30d_change(change, Some(past.timestamp)).await?,
+                90 => storage.set_hash_rate_90d_change(change, Some(past.timestamp)).await?,
+                _ => continue,
+            };
+        }
+    }
 
     Ok(())
 }

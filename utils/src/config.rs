@@ -41,6 +41,7 @@ pub struct Config {
     pub kaspad_dirs: KaspadDirs,
     pub kaspalytics_dirs: KaspalyticsDirs,
 
+    pub web_listen_ip: String,
     pub web_port: u16,
     pub allowed_origins: Vec<String>,
 }
@@ -94,6 +95,7 @@ impl Config {
         };
         let kaspalytics_dirs = KaspalyticsDirs::new(env, network_id, kaspalytics_app_dir);
 
+        let web_listen_ip = env::var("WEB_LISTEN_IP").unwrap_or(String::from("127.0.0.1"));
         let web_port = env::var("WEB_PORT").unwrap().parse::<u16>().unwrap_or(3000);
         let allowed_origins = env::var("ALLOWED_ORIGINS")
             .unwrap()
@@ -114,6 +116,7 @@ impl Config {
             smtp_to,
             kaspad_dirs,
             kaspalytics_dirs,
+            web_listen_ip,
             web_port,
             allowed_origins,
         }

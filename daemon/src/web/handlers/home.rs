@@ -1,5 +1,5 @@
 use super::super::AppState;
-use crate::analyzer::{mining, tx_counter};
+use crate::analysis::{mining, tx_counter};
 use crate::ingest::cache::DagCache;
 use crate::storage::cache::CacheEntry;
 use crate::storage::{Reader, Storage};
@@ -9,15 +9,9 @@ use axum::{
     response::sse::{Event, Sse},
 };
 use chrono::{DateTime, Utc};
-use kaspalytics_utils::database::sql::hash_rate;
 use kaspalytics_utils::formatters::hash_rate_with_unit;
-use kaspalytics_utils::math::percent_change;
-use rust_decimal::{
-    prelude::FromPrimitive,
-    Decimal,
-};
+use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::Serialize;
-use sqlx::PgPool;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -127,14 +121,13 @@ impl SseData {
 
 impl SseData {
     pub async fn with_data(
-        pg_pool: &PgPool,
         storage: Arc<Storage>,
         dag_cache: Arc<DagCache>,
         cutoff: Option<DateTime<Utc>>,
     ) -> Result<Self, sqlx::Error> {
         let mut data = Self::new();
 
-        Self::collect_hash_rate_data(&mut data, &storage, pg_pool).await?;
+        Self::collect_hash_rate_data(&mut data, &storage).await?;
         Self::collect_price_data(&mut data, &storage, cutoff).await;
         Self::collect_market_data(&mut data, &storage, cutoff).await;
         Self::collect_chain_data(&mut data, &storage, cutoff).await;
@@ -147,7 +140,6 @@ impl SseData {
     async fn collect_hash_rate_data(
         &mut self,
         storage: &Arc<Storage>,
-        pg_pool: &PgPool,
     ) -> Result<(), sqlx::Error> {
         let hash_rate = storage.get_hash_rate().await;
         let hash_rate_c = hash_rate_with_unit(&[hash_rate.value]);
@@ -174,29 +166,33 @@ impl SseData {
             },
         );
 
-        for days in [7, 30, 90] {
-            let past = hash_rate::get_x_days_ago(pg_pool, days).await?;
-            if let Some(change) = percent_change(
-                Decimal::from_u64(hash_rate.value).unwrap(),
-                past.hash_rate,
-                2,
-            ) {
-                let key = match days {
-                    7 => SseKey::HashRate7dChange,
-                    30 => SseKey::HashRate30dChange,
-                    90 => SseKey::HashRate90dChange,
-                    _ => continue,
-                };
+        // Get cached hash rate changes
+        let hash_rate_7d = storage.get_hash_rate_7d_change().await;
+        self.set(
+            SseKey::HashRate7dChange,
+            SseField {
+                data: hash_rate_7d.value.to_string(),
+                timestamp: hash_rate_7d.timestamp,
+            },
+        );
 
-                self.set(
-                    key,
-                    SseField {
-                        data: change.to_string(),
-                        timestamp: past.timestamp,
-                    },
-                );
-            }
-        }
+        let hash_rate_30d = storage.get_hash_rate_30d_change().await;
+        self.set(
+            SseKey::HashRate30dChange,
+            SseField {
+                data: hash_rate_30d.value.to_string(),
+                timestamp: hash_rate_30d.timestamp,
+            },
+        );
+
+        let hash_rate_90d = storage.get_hash_rate_90d_change().await;
+        self.set(
+            SseKey::HashRate90dChange,
+            SseField {
+                data: hash_rate_90d.value.to_string(),
+                timestamp: hash_rate_90d.timestamp,
+            },
+        );
 
         Ok(())
     }
@@ -373,7 +369,6 @@ impl SseState {
 
         let last_data = self.data.lock().await.clone();
         let new_data = SseData::with_data(
-            &self.context.pg_pool,
             self.context.storage.clone(),
             self.context.dag_cache.clone(),
             deltas_since,

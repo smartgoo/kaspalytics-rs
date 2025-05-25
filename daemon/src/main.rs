@@ -1,4 +1,4 @@
-mod analyzer;
+mod analysis;
 mod collector;
 mod ingest;
 mod storage;
@@ -115,9 +115,6 @@ async fn main() {
     // Writer task
     let mut writer = writer::Writer::new(context.pg_pool.clone(), writer_rx);
 
-    // Analyzer task
-    // let analyzer = analyzer::Analyzer::new(context.clone());
-
     // Collector task
     let collector = collector::Collector::new(context.clone());
 
@@ -139,9 +136,6 @@ async fn main() {
         tokio::spawn(async move {
             writer.run().await;
         }),
-        // tokio::spawn(async move {
-        //     analyzer.run().await;
-        // }),
         tokio::spawn(async move {
             collector.run().await;
         }),

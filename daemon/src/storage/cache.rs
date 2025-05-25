@@ -24,6 +24,9 @@ pub struct Cache {
     circulating_supply: RwLock<CacheEntry<u64>>,
     difficulty: RwLock<CacheEntry<Decimal>>,
     hash_rate: RwLock<CacheEntry<u64>>,
+    hash_rate_7d_change: RwLock<CacheEntry<Decimal>>,
+    hash_rate_30d_change: RwLock<CacheEntry<Decimal>>,
+    hash_rate_90d_change: RwLock<CacheEntry<Decimal>>,
 }
 
 impl Writer for Cache {
@@ -136,6 +139,33 @@ impl Writer for Cache {
 
         Ok(())
     }
+
+    async fn set_hash_rate_7d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+        *self.hash_rate_7d_change.write().await = CacheEntry::<Decimal> {
+            value,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
+
+    async fn set_hash_rate_30d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+        *self.hash_rate_30d_change.write().await = CacheEntry::<Decimal> {
+            value,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
+
+    async fn set_hash_rate_90d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+        *self.hash_rate_90d_change.write().await = CacheEntry::<Decimal> {
+            value,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
 }
 
 impl Reader for Cache {
@@ -173,5 +203,17 @@ impl Reader for Cache {
 
     async fn get_hash_rate(&self) -> CacheEntry<u64> {
         self.hash_rate.read().await.clone()
+    }
+
+    async fn get_hash_rate_7d_change(&self) -> CacheEntry<Decimal> {
+        self.hash_rate_7d_change.read().await.clone()
+    }
+
+    async fn get_hash_rate_30d_change(&self) -> CacheEntry<Decimal> {
+        self.hash_rate_30d_change.read().await.clone()
+    }
+
+    async fn get_hash_rate_90d_change(&self) -> CacheEntry<Decimal> {
+        self.hash_rate_90d_change.read().await.clone()
     }
 }

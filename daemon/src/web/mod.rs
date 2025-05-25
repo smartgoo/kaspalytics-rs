@@ -9,9 +9,6 @@ use log::{error, info, warn};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use tower_governor::{
-    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
-};
 use tower_http::{
     classify::{ServerErrorsAsFailures, SharedClassifier},
     cors::{Any, CorsLayer},
@@ -135,31 +132,19 @@ impl WebServer {
 
 impl WebServer {
     pub async fn run(&self) {
-        info!(target: "web", "Starting WebServer configuration");
-
-        let governor_conf = GovernorConfigBuilder::default()
-            .per_second(60)
-            .burst_size(10)
-            .key_extractor(SmartIpKeyExtractor)
-            .finish()
-            .unwrap_or_else(|| {
-                error!(target: "web_err", "Failed to configure rate limiting");
-                panic!("Rate limiting configuration failed");
-            });
-
-        info!(target: "web", "Rate limiting configured: 60 req/sec with burst of 10");
+        info!(target: "web", "Starting WebServer...");
 
         let app = Router::new()
-            .route("/home/stream", get(handlers::home::stream))
+            .route("/sse/v1/home/stream", get(handlers::home::stream))
             .with_state(self.state.clone())
             .layer(self.cors_layer())
-            // .layer(GovernorLayer {
-            //     config: Arc::new(governor_conf),
-            // })
             .layer(RequestBodyLimitLayer::new(64 * 1024))
             .layer(self.trace_layer());
 
-        let addr = format!("0.0.0.0:{}", self.context.config.web_port);
+        let addr = format!(
+            "{}:{}",
+            self.context.config.web_listen_ip, self.context.config.web_port,
+        );
 
         let listener = match tokio::net::TcpListener::bind(&addr).await {
             Ok(listener) => listener,
@@ -168,8 +153,6 @@ impl WebServer {
                 return;
             }
         };
-
-        info!(target: "web", "Web server running on http://{}", addr);
 
         let shutdown_flag = self.context.shutdown_flag.clone();
 
@@ -181,6 +164,8 @@ impl WebServer {
             info!(target: "web", "Web server shutting down...");
         };
 
+        info!(target: "web", "WebServer started, listening on http://{}", addr);
+
         tokio::select! {
             result = server => {
                 if let Err(e) = result {
@@ -188,9 +173,9 @@ impl WebServer {
                 }
             }
             _ = shutdown => {
-                info!(target: "web", "Shutdown flag detected, terminating server");
+                info!(target: "web", "WebServer shutting down...");
             }
         }
-        info!(target: "web", "Web server shut down complete")
+        info!(target: "web", "WebServer shut down complete")
     }
 }
