@@ -137,10 +137,7 @@ impl SseData {
         Ok(data)
     }
 
-    async fn collect_hash_rate_data(
-        &mut self,
-        storage: &Arc<Storage>,
-    ) -> Result<(), sqlx::Error> {
+    async fn collect_hash_rate_data(&mut self, storage: &Arc<Storage>) -> Result<(), sqlx::Error> {
         let hash_rate = storage.get_hash_rate().await;
         let hash_rate_c = hash_rate_with_unit(&[hash_rate.value]);
         let hash_rate_str = format!(

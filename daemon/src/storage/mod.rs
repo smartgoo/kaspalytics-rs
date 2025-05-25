@@ -77,9 +77,21 @@ pub trait Writer {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
 
-    async fn set_hash_rate_7d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error>;
-    async fn set_hash_rate_30d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error>;
-    async fn set_hash_rate_90d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error>;
+    async fn set_hash_rate_7d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
+    async fn set_hash_rate_30d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
+    async fn set_hash_rate_90d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
 }
 
 impl Writer for Storage {
@@ -230,7 +242,11 @@ impl Writer for Storage {
         Ok(())
     }
 
-    async fn set_hash_rate_7d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+    async fn set_hash_rate_7d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
         self.cache.set_hash_rate_7d_change(value, timestamp).await?;
 
         key_value::upsert(
@@ -244,8 +260,14 @@ impl Writer for Storage {
         Ok(())
     }
 
-    async fn set_hash_rate_30d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
-        self.cache.set_hash_rate_30d_change(value, timestamp).await?;
+    async fn set_hash_rate_30d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        self.cache
+            .set_hash_rate_30d_change(value, timestamp)
+            .await?;
 
         key_value::upsert(
             &self.pg_pool,
@@ -258,8 +280,14 @@ impl Writer for Storage {
         Ok(())
     }
 
-    async fn set_hash_rate_90d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
-        self.cache.set_hash_rate_90d_change(value, timestamp).await?;
+    async fn set_hash_rate_90d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        self.cache
+            .set_hash_rate_90d_change(value, timestamp)
+            .await?;
 
         key_value::upsert(
             &self.pg_pool,

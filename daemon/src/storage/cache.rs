@@ -140,7 +140,11 @@ impl Writer for Cache {
         Ok(())
     }
 
-    async fn set_hash_rate_7d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+    async fn set_hash_rate_7d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
         *self.hash_rate_7d_change.write().await = CacheEntry::<Decimal> {
             value,
             timestamp: timestamp.unwrap_or(Utc::now()),
@@ -149,7 +153,11 @@ impl Writer for Cache {
         Ok(())
     }
 
-    async fn set_hash_rate_30d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+    async fn set_hash_rate_30d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
         *self.hash_rate_30d_change.write().await = CacheEntry::<Decimal> {
             value,
             timestamp: timestamp.unwrap_or(Utc::now()),
@@ -158,7 +166,11 @@ impl Writer for Cache {
         Ok(())
     }
 
-    async fn set_hash_rate_90d_change(&self, value: Decimal, timestamp: Option<DateTime<Utc>>) -> Result<(), Error> {
+    async fn set_hash_rate_90d_change(
+        &self,
+        value: Decimal,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
         *self.hash_rate_90d_change.write().await = CacheEntry::<Decimal> {
             value,
             timestamp: timestamp.unwrap_or(Utc::now()),

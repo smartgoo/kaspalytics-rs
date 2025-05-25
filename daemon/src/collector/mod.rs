@@ -2,8 +2,8 @@ use crate::storage::Reader;
 use chrono::Utc;
 use kaspa_rpc_core::{api::rpc::RpcApi, RpcError};
 use kaspa_wrpc_client::KaspaRpcClient;
-use kaspalytics_utils::log::LogTarget;
 use kaspalytics_utils::database::sql::hash_rate;
+use kaspalytics_utils::log::LogTarget;
 use log::error;
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use sqlx::PgPool;
@@ -63,7 +63,9 @@ impl Collector {
                 let mut interval = tokio::time::interval(Duration::from_secs(1));
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     interval.tick().await;
-                    if let Err(e) = update_block_dag_info(&context.rpc_client, context.storage.clone()).await {
+                    if let Err(e) =
+                        update_block_dag_info(&context.rpc_client, context.storage.clone()).await
+                    {
                         error!(target: LogTarget::Daemon.as_str(), "Error during update_block_dag_info: {}", e);
                     }
                 }
@@ -78,7 +80,9 @@ impl Collector {
                 let mut interval = tokio::time::interval(Duration::from_secs(1));
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     interval.tick().await;
-                    if let Err(e) = update_coin_supply_info(&context.rpc_client, context.storage.clone()).await {
+                    if let Err(e) =
+                        update_coin_supply_info(&context.rpc_client, context.storage.clone()).await
+                    {
                         error!(target: LogTarget::Daemon.as_str(), "Error during update_coin_supply_info: {}", e);
                     }
                 }
@@ -93,7 +97,9 @@ impl Collector {
                 let mut interval = tokio::time::interval(Duration::from_secs(15));
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     interval.tick().await;
-                    if let Err(e) = snapshot_hash_rate(&context.rpc_client, context.storage.clone()).await {
+                    if let Err(e) =
+                        snapshot_hash_rate(&context.rpc_client, context.storage.clone()).await
+                    {
                         error!(target: LogTarget::Daemon.as_str(), "Error during snapshot_hash_rate: {}", e);
                     }
                 }
@@ -108,13 +114,14 @@ impl Collector {
                 let mut interval = tokio::time::interval(Duration::from_secs(60));
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     interval.tick().await;
-                    if let Err(e) = update_hash_rate_changes(&context.pg_pool, context.storage.clone()).await {
+                    if let Err(e) =
+                        update_hash_rate_changes(&context.pg_pool, context.storage.clone()).await
+                    {
                         error!(target: LogTarget::Daemon.as_str(), "Error during update_hash_rate_changes: {}", e);
                     }
                 }
             });
         }
-
 
         while !self.context.shutdown_flag.load(Ordering::Relaxed) {
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -200,11 +207,25 @@ async fn update_hash_rate_changes(pg_pool: &PgPool, storage: Arc<Storage>) -> Re
 
     for days in [7, 30, 90] {
         let past = hash_rate::get_x_days_ago(pg_pool, days).await?;
-        if let Some(change) = kaspalytics_utils::math::percent_change(current_hash_rate, past.hash_rate, 2) {
+        if let Some(change) =
+            kaspalytics_utils::math::percent_change(current_hash_rate, past.hash_rate, 2)
+        {
             match days {
-                7 => storage.set_hash_rate_7d_change(change, Some(past.timestamp)).await?,
-                30 => storage.set_hash_rate_30d_change(change, Some(past.timestamp)).await?,
-                90 => storage.set_hash_rate_90d_change(change, Some(past.timestamp)).await?,
+                7 => {
+                    storage
+                        .set_hash_rate_7d_change(change, Some(past.timestamp))
+                        .await?
+                }
+                30 => {
+                    storage
+                        .set_hash_rate_30d_change(change, Some(past.timestamp))
+                        .await?
+                }
+                90 => {
+                    storage
+                        .set_hash_rate_90d_change(change, Some(past.timestamp))
+                        .await?
+                }
                 _ => continue,
             };
         }
