@@ -136,6 +136,7 @@ impl WebServer {
 
         let app = Router::new()
             .route("/sse/v1/home/stream", get(handlers::home::stream))
+            .route("/sse/v1/visualizer/stream", get(handlers::visualizer::stream))
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))

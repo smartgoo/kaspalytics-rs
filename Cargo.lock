@@ -2804,6 +2804,8 @@ dependencies = [
  "tower-http",
  "tower_governor",
  "tracing",
+ "workflow-core",
+ "workflow-log",
 ]
 
 [[package]]

@@ -1,4 +1,5 @@
 pub mod cache;
+mod listener;
 pub mod model;
 mod second;
 
@@ -75,6 +76,8 @@ impl DagIngest {
 
             // Assume not synced at start of every loop
             self.cache.set_synced(false);
+
+            // self.rpc_client.start_notify(id, scope)
 
             let block_dag_response = self.rpc_client.get_block_dag_info().await.unwrap();
             let (blocks, vspc) = tokio::try_join!(

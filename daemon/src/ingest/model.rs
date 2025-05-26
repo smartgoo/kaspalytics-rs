@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_hashes::Hash;
@@ -11,13 +12,15 @@ pub type CacheTransactionId = TransactionId;
 pub type CacheScriptPublicKey = ScriptPublicKey;
 pub type CacheScriptClass = ScriptClass;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CacheBlock {
     pub hash: Hash,
     pub timestamp: u64,
     pub daa_score: u64,
+    pub parents: Vec<Hash>,
     pub transactions: Vec<CacheTransactionId>,
     pub is_chain_block: bool,
+    pub seen_at: DateTime<Utc>,
 }
 
 impl From<RpcBlock> for CacheBlock {
@@ -26,12 +29,14 @@ impl From<RpcBlock> for CacheBlock {
             hash: value.header.hash,
             timestamp: value.header.timestamp,
             daa_score: value.header.daa_score,
+            parents: value.header.parents_by_level[0].clone(),
             transactions: value
                 .transactions
                 .iter()
                 .map(|tx| tx.verbose_data.clone().unwrap().transaction_id)
                 .collect(),
             is_chain_block: value.verbose_data.unwrap().is_chain_block,
+            seen_at: Utc::now(),
         }
     }
 }

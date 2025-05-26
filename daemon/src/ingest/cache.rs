@@ -296,6 +296,8 @@ pub trait Reader {
 
     fn contains_block_hash(&self, block_hash: &Hash) -> bool;
 
+    fn blocks_iter(&self) -> impl Iterator<Item = RefMulti<'_, Hash, CacheBlock>>;
+
     fn seconds_iter(&self) -> impl Iterator<Item = RefMulti<'_, u64, SecondMetrics>>;
 }
 
@@ -314,6 +316,10 @@ impl Reader for DagCache {
 
     fn contains_block_hash(&self, block_hash: &Hash) -> bool {
         self.blocks.contains_key(block_hash)
+    }
+
+    fn blocks_iter(&self) -> impl Iterator<Item = RefMulti<'_, Hash, CacheBlock>> {
+        self.blocks.iter()
     }
 
     fn seconds_iter(&self) -> impl Iterator<Item = RefMulti<'_, u64, SecondMetrics>> {
