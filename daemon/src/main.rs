@@ -131,7 +131,13 @@ async fn main() {
 
     let run_result = tokio::try_join!(
         tokio::spawn(async move {
-            ingest.run().await;
+            match ingest.run().await {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    error!(target: LogTarget::Daemon.as_str(), "DagIngest failed: {}", e);
+                    Err(e)
+                }
+            }
         }),
         tokio::spawn(async move {
             writer.run().await;

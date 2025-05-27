@@ -1,12 +1,16 @@
-use crate::{ingest::{cache::Reader, model::CacheBlock}, web::AppState, AppContext};
-use axum::{extract::State, response::{sse::Event, Sse}};
+use crate::ingest::{cache::Reader, model::CacheBlock};
+use crate::web::{AppContext, AppState};
+use axum::{
+    extract::State,
+    response::{sse::Event, Sse},
+};
 use chrono::{DateTime, Utc};
 use futures::{Stream, StreamExt};
 use kaspa_hashes::Hash;
-use tokio::sync::{watch, Mutex};
-use tokio_stream::wrappers::WatchStream;
 use serde::Serialize;
 use std::{convert::Infallible, sync::Arc, time::Duration};
+use tokio::sync::{watch, Mutex};
+use tokio_stream::wrappers::WatchStream;
 
 #[derive(Serialize)]
 struct SseBlock {
@@ -22,7 +26,7 @@ impl From<CacheBlock> for SseBlock {
             hash: value.hash,
             daa_score: value.daa_score,
             timestamp: value.timestamp,
-            parents: value.parents
+            parents: value.parents,
         }
     }
 }
@@ -44,20 +48,23 @@ impl SseState {
         let deltas_since = *self.deltas_since.lock().await;
 
         if !self.context.dag_cache.synced() {
-            ()
+            return Ok(Event::default().data("server not synced to dag tip"));
         }
 
         let data: Vec<SseBlock> = match deltas_since {
-            Some(since) => {
-                self.context.dag_cache.blocks_iter()
-                    .filter(|block| block.seen_at >= since)
-                    .map(|block| SseBlock::from(block.value().clone()))
-                    .collect()
-            }
+            Some(since) => self
+                .context
+                .dag_cache
+                .blocks_iter()
+                .filter(|block| block.seen_at >= since)
+                .map(|block| SseBlock::from(block.value().clone()))
+                .collect(),
             None => {
-                let thirty_seconds_ago = Utc::now() - chrono::Duration::seconds(30);
-                self.context.dag_cache.blocks_iter()
-                    .filter(|block| block.seen_at >= thirty_seconds_ago)
+                let since = Utc::now() - chrono::Duration::seconds(30);
+                self.context
+                    .dag_cache
+                    .blocks_iter()
+                    .filter(|block| block.seen_at >= since)
                     .map(|block| SseBlock::from(block.value().clone()))
                     .collect()
             }
@@ -70,7 +77,7 @@ impl SseState {
 }
 
 pub async fn stream(
-    State(state): State<AppState>
+    State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let (tx, rx) = watch::channel(());
 

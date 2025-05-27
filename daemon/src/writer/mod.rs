@@ -121,7 +121,7 @@ impl Writer {
     }
 
     pub async fn run(&mut self) {
-        // Logging task
+        // Monitor task
         let stats = Arc::clone(&self.stats);
         let log_handle = tokio::spawn(async move {
             let interval_duration = Duration::from_secs(10);
@@ -135,7 +135,7 @@ impl Writer {
 
                 info!(
                     target: LogTarget::Daemon.as_str(),
-                    "Writer (last {}s): Inserted {} batch(s). Avg batch insert time {}ms",
+                    "Writer Monitor (last {}s): Inserted {} batch(s). Avg batch insert time {}ms",
                     interval_duration.as_secs(),
                     stats.batches_processed,
                     if stats.batches_processed > 0 {

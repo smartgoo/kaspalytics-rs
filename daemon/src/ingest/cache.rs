@@ -2,7 +2,6 @@ use super::model::*;
 use super::second::SecondMetrics;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
-use kaspa_consensus_core::blockhash::BlockHashExtensions;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcBlock, RpcTransaction};
@@ -118,7 +117,14 @@ impl Writer for DagCache {
             .entry(transaction_id)
             .and_modify(|v| v.accepting_block_hash = None);
 
-        let tx = self.transactions.get(&transaction_id).unwrap();
+        let Some(tx) = self.transactions.get(&transaction_id) else {
+            warn!(
+                target: LogTarget::Daemon.as_str(),
+                "Failed to remove transaction acceptance status for tx {}, tx not in cache",
+                transaction_id
+            );
+            return;
+        };
 
         let tx_timestamp = tx.block_time;
 
@@ -139,7 +145,7 @@ impl Writer for DagCache {
         {
             let removed_chain_block_data = self.blocks.get(removed_chain_block);
 
-            if removed_chain_block.is_none() {
+            if removed_chain_block_data.is_none() {
                 warn!(
                     target: LogTarget::Daemon.as_str(),
                     "Removed chain block {} not found in blocks cache",
@@ -152,7 +158,7 @@ impl Writer for DagCache {
             // there are situations where removed_chain_block is not in
             // accepting_block_transactions map yet
             if removed_chain_block_data.unwrap().timestamp > self.tip_timestamp() {
-                info!(
+                warn!(
                     target: LogTarget::Daemon.as_str(),
                     "Removed chain block {} timestamp greater than tip_timestamp",
                     removed_chain_block
@@ -188,7 +194,15 @@ impl Writer for DagCache {
             .entry(transaction_id)
             .and_modify(|v| v.accepting_block_hash = Some(accepting_block_hash));
 
-        let tx = self.transactions.get(&transaction_id).unwrap();
+        let Some(tx) = self.transactions.get(&transaction_id) else {
+            warn!(
+                target: LogTarget::Daemon.as_str(),
+                "Failed to add transaction acceptance status for tx {}, tx not in cache",
+                transaction_id
+            );
+            return;
+        };
+
         let tx_timestamp = tx.block_time;
 
         // Increment transaction counts
@@ -222,7 +236,7 @@ impl Writer for DagCache {
     }
 
     fn prune(&self) -> Vec<PrunedBlock> {
-        let prune_timestamp = self.tip_timestamp() - 30 * 1000;
+        let prune_timestamp = self.tip_timestamp() - 60 * 1000;
 
         // Identify blocks older than pruning timestamp
         // Store these block hashes
