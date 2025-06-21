@@ -178,6 +178,7 @@ impl DagIngest {
             while !shutdown_flag.load(Ordering::Relaxed) {
                 let pruned_blocks = dag_cache.prune();
                 writer_tx.send(pruned_blocks).await?;
+                dag_cache.log_cache_size();
                 interval.tick().await;
             }
 

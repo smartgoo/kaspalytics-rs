@@ -56,12 +56,6 @@ pub struct SecondMetrics {
     // red_block_count TODO
     pub mining_node_version_block_counts: DashMap<String, u64>, // TODO Atomic?
 
-    // pub transaction_count: u64,
-    // pub accepted_transaction_count: u64,
-    // pub coinbase_transaction_count: u64,
-    // pub accepted_coinbase_transaction_count: u64,
-    // pub unique_transaction_count: u64,
-    // pub unique_accepted_transaction_count: u64,
     pub coinbase_transaction_count: u64,
     pub coinbase_accepted_transaction_count: u64,
     pub transaction_count: u64,

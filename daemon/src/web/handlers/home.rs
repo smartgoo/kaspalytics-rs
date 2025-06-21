@@ -30,13 +30,8 @@ enum SseKey {
     Volume,
     DaaScore,
     CsSompi,
-    CoinbaseTransactionCount24h,
-    CoinbaseAcceptedTransactionCount24h,
-    TransactionCount24h,
-    UniqueTransactionCount24h,
     UniqueTransactionAcceptedCount24h,
-    AcceptedTransactionCountPerHour24h,
-    AcceptedTransactionCountPerMinute1h,
+    UniqueTransactionAcceptedCountPerHour24h,
     MinerNodeVersionCount1h,
     CsAging,
     AddressByKasBalance,
@@ -292,40 +287,11 @@ impl SseData {
             - 86400;
 
         self.set(
-            SseKey::CoinbaseTransactionCount24h,
-            SseField::from(tx_counter::coinbase_transaction_count(dag_cache, threshold)),
-        );
-
-        self.set(
-            SseKey::CoinbaseAcceptedTransactionCount24h,
-            SseField::from(tx_counter::coinbase_accepted_transaction_count(
-                dag_cache, threshold,
-            )),
-        );
-
-        self.set(
-            SseKey::AcceptedTransactionCountPerMinute1h,
+            SseKey::UniqueTransactionAcceptedCountPerHour24h,
             SseField::from(
-                serde_json::to_string(&tx_counter::accepted_count_per_minute_60m(dag_cache))
+                serde_json::to_string(&tx_counter::unique_accepted_count_per_hour_24h(dag_cache))
                     .unwrap(),
             ),
-        );
-
-        self.set(
-            SseKey::AcceptedTransactionCountPerHour24h,
-            SseField::from(
-                serde_json::to_string(&tx_counter::accepted_count_per_hour_24h(dag_cache)).unwrap(),
-            ),
-        );
-
-        self.set(
-            SseKey::TransactionCount24h,
-            SseField::from(tx_counter::transaction_count(dag_cache, threshold)),
-        );
-
-        self.set(
-            SseKey::UniqueTransactionCount24h,
-            SseField::from(tx_counter::unique_transaction_count(dag_cache, threshold)),
         );
 
         self.set(
