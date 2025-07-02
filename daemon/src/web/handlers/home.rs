@@ -1,8 +1,5 @@
 use super::super::AppState;
-use crate::analysis::{
-    mining,
-    transactions::counter as tx_counter,
-};
+use crate::analysis::{mining, transactions::counter as tx_counter};
 use crate::ingest::cache::DagCache;
 use crate::storage::cache::CacheEntry;
 use crate::storage::{Reader, Storage};
@@ -311,7 +308,7 @@ impl SseData {
             SseKey::KasiaTransactionCount24h,
             SseField::from(tx_counter::kasia_transaction_count(dag_cache, threshold)),
         );
-        
+
         self.set(
             SseKey::KrcTransactionCount24h,
             SseField::from(tx_counter::krc_transaction_count(dag_cache, threshold)),

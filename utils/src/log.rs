@@ -120,24 +120,24 @@ pub fn init_logger(
     let web_logger = Logger::builder()
         .appender("web")
         .additive(false)
-        .build("web", log::LevelFilter::Info);
+        .build("web", config.log_level);
 
     let web_err_logger = Logger::builder()
         .appender("web_err")
         .additive(false)
-        .build("web_err", log::LevelFilter::Error);
+        .build("web_err", config.log_level);
 
     let daemon_logger = Logger::builder()
         .appender("daemon")
         .appender("stdout")
         .additive(false)
-        .build("daemon", log::LevelFilter::Info);
+        .build("daemon", config.log_level);
 
     let cli_logger = Logger::builder()
         .appender("cli")
         .appender("stdout")
         .additive(false)
-        .build("cli", log::LevelFilter::Info);
+        .build("cli", config.log_level);
 
     let tower_http_logger = Logger::builder().build("tower_http", log::LevelFilter::Warn);
 
