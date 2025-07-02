@@ -1,5 +1,8 @@
 use super::super::AppState;
-use crate::analysis::{mining, tx_counter};
+use crate::analysis::{
+    mining,
+    transactions::counter as tx_counter,
+};
 use crate::ingest::cache::DagCache;
 use crate::storage::cache::CacheEntry;
 use crate::storage::{Reader, Storage};
@@ -30,8 +33,11 @@ enum SseKey {
     Volume,
     DaaScore,
     CsSompi,
-    UniqueTransactionAcceptedCount24h,
-    UniqueTransactionAcceptedCountPerHour24h,
+    UniqueAcceptedTransactionCount24h,
+    UniqueAcceptedTransactionCountPerHour24h,
+    KasiaTransactionCount24h,
+    KrcTransactionCount24h,
+    KnsTransactionCount24h,
     MinerNodeVersionCount1h,
     CsAging,
     AddressByKasBalance,
@@ -287,7 +293,7 @@ impl SseData {
             - 86400;
 
         self.set(
-            SseKey::UniqueTransactionAcceptedCountPerHour24h,
+            SseKey::UniqueAcceptedTransactionCountPerHour24h,
             SseField::from(
                 serde_json::to_string(&tx_counter::unique_accepted_count_per_hour_24h(dag_cache))
                     .unwrap(),
@@ -295,10 +301,25 @@ impl SseData {
         );
 
         self.set(
-            SseKey::UniqueTransactionAcceptedCount24h,
-            SseField::from(tx_counter::unique_transaction_accepted_count(
+            SseKey::UniqueAcceptedTransactionCount24h,
+            SseField::from(tx_counter::unique_accepted_transaction_count(
                 dag_cache, threshold,
             )),
+        );
+
+        self.set(
+            SseKey::KasiaTransactionCount24h,
+            SseField::from(tx_counter::kasia_transaction_count(dag_cache, threshold)),
+        );
+        
+        self.set(
+            SseKey::KrcTransactionCount24h,
+            SseField::from(tx_counter::krc_transaction_count(dag_cache, threshold)),
+        );
+
+        self.set(
+            SseKey::KnsTransactionCount24h,
+            SseField::from(tx_counter::kns_transaction_count(dag_cache, threshold)),
         );
     }
 

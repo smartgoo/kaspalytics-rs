@@ -15,7 +15,7 @@ pub enum PayloadParseError {
     SplitError,
 }
 
-fn parse_payload_node_version(payload: Vec<u8>) -> Result<(String, String), PayloadParseError> {
+fn parse_coinbase_tx_payload(payload: Vec<u8>) -> Result<(String, String), PayloadParseError> {
     if payload.len() < 19 {
         return Err(PayloadParseError::InsufficientPayloadLength);
     }
@@ -52,15 +52,25 @@ fn parse_payload_node_version(payload: Vec<u8>) -> Result<(String, String), Payl
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SecondMetrics {
     pub block_count: AtomicU64,
-    // blu_block_count TODO
+    // blue_block_count TODO
     // red_block_count TODO
     pub mining_node_version_block_counts: DashMap<String, u64>, // TODO Atomic?
 
+    // Count of all transactions - coinbase + standard
+    pub transaction_count: u64,
+
+    // Count of coinbase transactions
     pub coinbase_transaction_count: u64,
     pub coinbase_accepted_transaction_count: u64,
-    pub transaction_count: u64,
+
+    // Count of unique standard (non-coinbase) transactions
     pub unique_transaction_count: u64,
-    pub unique_transaction_accepted_count: u64,
+    pub unique_accepted_transaction_count: u64,
+
+    // Count of various protocol transactions
+    pub kasia_transaction_count: u64,
+    pub krc_transaction_count: u64,
+    pub kns_transaction_count: u64,
 
     pub updated_at: DateTime<Utc>,
 }
@@ -69,7 +79,7 @@ impl SecondMetrics {
     pub fn add_block(&mut self, coinbase_tx_payload: Vec<u8>) {
         self.block_count.fetch_add(1, Ordering::Relaxed);
 
-        let (node_version, _) = parse_payload_node_version(coinbase_tx_payload).unwrap();
+        let (node_version, _) = parse_coinbase_tx_payload(coinbase_tx_payload).unwrap();
         self.mining_node_version_block_counts
             .entry(node_version)
             .and_modify(|v| *v += 1)
@@ -108,15 +118,45 @@ impl SecondMetrics {
         self.updated_at = Utc::now();
     }
 
-    pub fn increment_unique_transaction_accepted_count(&mut self) {
-        self.unique_transaction_accepted_count += 1;
+    pub fn increment_unique_accepted_transaction_count(&mut self) {
+        self.unique_accepted_transaction_count += 1;
 
         self.updated_at = Utc::now();
     }
 
-    pub fn decrement_unique_transaction_accepted_count(&mut self) {
-        self.unique_transaction_accepted_count -= 1;
+    pub fn decrement_unique_accepted_transaction_count(&mut self) {
+        self.unique_accepted_transaction_count -= 1;
 
+        self.updated_at = Utc::now();
+    }
+
+    pub fn increment_kasia_transaction_count(&mut self) {
+        self.kasia_transaction_count += 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn decrement_kasia_transaction_count(&mut self) {
+        self.kasia_transaction_count -= 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn increment_krc_transaction_count(&mut self) {
+        self.krc_transaction_count += 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn decrement_krc_transaction_count(&mut self) {
+        self.krc_transaction_count -= 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn increment_kns_transaction_count(&mut self) {
+        self.kns_transaction_count += 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn decrement_kns_transaction_count(&mut self) {
+        self.kns_transaction_count -= 1;
         self.updated_at = Utc::now();
     }
 }

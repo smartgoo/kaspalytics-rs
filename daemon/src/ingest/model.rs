@@ -1,3 +1,4 @@
+use crate::analysis::transactions::protocol::TransactionProtocol;
 use chrono::{DateTime, Utc};
 use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
@@ -131,6 +132,7 @@ pub struct CacheTransaction {
     pub blocks: Vec<Hash>,
     pub block_time: u64,
     pub accepting_block_hash: Option<Hash>,
+    pub protocol: Option<TransactionProtocol>,
 }
 
 impl CacheTransaction {
@@ -173,6 +175,7 @@ impl From<RpcTransaction> for CacheTransaction {
             blocks: vec![value.verbose_data.clone().unwrap().block_hash],
             block_time: value.verbose_data.clone().unwrap().block_time,
             accepting_block_hash: None,
+            protocol: None,
         }
     }
 }

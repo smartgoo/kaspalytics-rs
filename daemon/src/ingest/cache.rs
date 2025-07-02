@@ -1,3 +1,7 @@
+use crate::analysis::transactions::protocol::{
+    TransactionProtocol,
+    detect_transaction_protocol
+};
 use super::model::*;
 use super::second::SecondMetrics;
 use dashmap::mapref::multiple::RefMulti;
@@ -43,6 +47,8 @@ pub trait Writer {
 
     fn add_chain_block_acceptance_data(&self, acceptance_data: RpcAcceptedTransactionIds);
 
+    fn set_transaction_protocol(&self, transaction_id: Hash, protocol: TransactionProtocol);
+
     fn prune(&self) -> Vec<PrunedBlock>;
 }
 
@@ -66,10 +72,30 @@ impl Writer for DagCache {
 
         // Add transaction to map
         // If already in map, add block hash to CacheTransaction.blocks vec
-        self.transactions
-            .entry(tx_id)
-            .and_modify(|entry| entry.blocks.push(block_hash))
-            .or_insert({
+        // self.transactions
+        //     .entry(tx_id)
+        //     .and_modify(|entry| entry.blocks.push(block_hash))
+        //     .or_insert({
+        //         if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
+        //             self.seconds
+        //                 .entry(block_time / 1000)
+        //                 .and_modify(|v| v.increment_coinbase_transaction_count());
+        //         } else {
+        //             self.seconds
+        //                 .entry(block_time / 1000)
+        //                 .and_modify(|v| v.increment_unique_transaction_count());
+        //         }
+
+        //         CacheTransaction::from(transaction.clone())
+        //     });
+
+        match self.transactions.entry(tx_id) {
+            dashmap::Entry::Occupied(mut entry) => {
+                entry.get_mut().blocks.push(block_hash);
+            }
+            dashmap::Entry::Vacant(entry) => {
+                let mut cache_transaction = CacheTransaction::from(transaction.clone());
+
                 if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
                     self.seconds
                         .entry(block_time / 1000)
@@ -78,12 +104,15 @@ impl Writer for DagCache {
                     self.seconds
                         .entry(block_time / 1000)
                         .and_modify(|v| v.increment_unique_transaction_count());
+
+                    cache_transaction.protocol = detect_transaction_protocol(transaction);
                 }
 
-                CacheTransaction::from(transaction.clone())
-            });
+                entry.insert(cache_transaction);
+            }
+        }
 
-        // Increase transaction count (non-coinbase, non-unique)
+        // Increase total transaction count
         self.seconds
             .entry(block_time / 1000)
             .and_modify(|v| v.increment_transaction_count());
@@ -136,7 +165,26 @@ impl Writer for DagCache {
         } else {
             self.seconds
                 .entry(tx_timestamp / 1000)
-                .and_modify(|v| v.decrement_unique_transaction_accepted_count());
+                .and_modify(|v| v.decrement_unique_accepted_transaction_count());
+
+            match tx.protocol {
+                Some(TransactionProtocol::Kasia) => {
+                    self.seconds
+                        .entry(tx_timestamp / 1000)
+                        .and_modify(|v| v.decrement_kasia_transaction_count());
+                }
+                Some(TransactionProtocol::Krc) => {
+                    self.seconds
+                        .entry(tx_timestamp / 1000)
+                        .and_modify(|v| v.decrement_krc_transaction_count());
+                }
+                Some(TransactionProtocol::Kns) => {
+                    self.seconds
+                        .entry(tx_timestamp / 1000)
+                        .and_modify(|v| v.decrement_kns_transaction_count());
+                }
+                None => {}
+            }
         }
     }
 
@@ -213,7 +261,26 @@ impl Writer for DagCache {
         } else {
             self.seconds
                 .entry(tx_timestamp / 1000)
-                .and_modify(|v| v.increment_unique_transaction_accepted_count());
+                .and_modify(|v| v.increment_unique_accepted_transaction_count());
+
+            match tx.protocol {
+                Some(TransactionProtocol::Kasia) => {
+                    self.seconds
+                        .entry(tx_timestamp / 1000)
+                        .and_modify(|v| v.increment_kasia_transaction_count());
+                }
+                Some(TransactionProtocol::Krc) => {
+                    self.seconds
+                        .entry(tx_timestamp / 1000)
+                        .and_modify(|v| v.increment_krc_transaction_count());
+                }
+                Some(TransactionProtocol::Kns) => {
+                    self.seconds
+                        .entry(tx_timestamp / 1000)
+                        .and_modify(|v| v.increment_kns_transaction_count());
+                }
+                None => {}
+            }
         }
     }
 
@@ -233,6 +300,12 @@ impl Writer for DagCache {
         for tx_id in acceptance_data.accepted_transaction_ids {
             self.add_transaction_acceptance(tx_id, acceptance_data.accepting_block_hash);
         }
+    }
+
+    fn set_transaction_protocol(&self, transaction_id: Hash, protocol: TransactionProtocol) {
+        self.transactions
+            .entry(transaction_id)
+            .and_modify(|v| v.protocol = Some(protocol));
     }
 
     fn prune(&self) -> Vec<PrunedBlock> {

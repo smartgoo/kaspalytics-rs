@@ -1,2 +1,2 @@
 pub mod mining;
-pub mod tx_counter;
+pub mod transactions;
