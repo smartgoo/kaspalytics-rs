@@ -613,6 +613,12 @@ impl DagCache {
                                 .entry(previous_transaction.block_time / 1000)
                                 .and_modify(|v| v.increment_krc_transaction_count());
                         }
+                    } else {
+                        warn!(
+                            target: LogTarget::Daemon.as_str(),
+                            "KRC tx detected, but previous transaction not found in cache: {}",
+                            transaction.verbose_data.as_ref().unwrap().transaction_id,
+                        );
                     }
                     return Some(TransactionProtocol::Krc);
                 }
@@ -629,6 +635,12 @@ impl DagCache {
                                 .entry(previous_transaction.block_time / 1000)
                                 .and_modify(|v| v.increment_kns_transaction_count());
                         }
+                    } else {
+                        warn!(
+                            target: LogTarget::Daemon.as_str(),
+                            "KNS tx detected, but previous transaction not found in cache: {}",
+                            transaction.verbose_data.as_ref().unwrap().transaction_id,
+                        );
                     }
                     return Some(TransactionProtocol::Kns);
                 }

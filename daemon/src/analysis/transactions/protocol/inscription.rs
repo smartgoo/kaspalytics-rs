@@ -71,5 +71,5 @@ pub fn parse_signature_script(signature_script: &[u8]) -> Vec<(String, String)> 
 }
 
 fn is_human_readable(data: &[u8]) -> bool {
-    data.iter().all(|&b|  (0x02..=0x7e).contains(&b))
+    data.iter().all(|&b| (0x02..=0x7e).contains(&b))
 }
