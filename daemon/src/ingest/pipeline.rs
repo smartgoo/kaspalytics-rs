@@ -6,11 +6,58 @@ use crate::ingest::cache::Reader;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcBlock, RpcTransaction};
+use kaspa_wrpc_client::node;
 use kaspalytics_utils::log::LogTarget;
 use log::warn;
 use std::sync::Arc;
 
-pub fn block_add_pipeline(dag_cache: &Arc<DagCache>, block: &RpcBlock) {
+#[derive(thiserror::Error, Debug)]
+pub enum PayloadParseError {
+    #[error("Payload less than 19 bytes")]
+    InsufficientPayloadLength,
+
+    #[error("First byte 0xaa indicates address payload")]
+    InvalidFirstByte,
+
+    #[error("Payload split error")]
+    SplitError,
+}
+
+fn parse_coinbase_tx_payload(payload: &Vec<u8>) -> Result<(String, String), PayloadParseError> {
+    if payload.len() < 19 {
+        return Err(PayloadParseError::InsufficientPayloadLength);
+    }
+
+    let length = payload[18] as usize;
+
+    if payload.len() < 19 + length {
+        return Err(PayloadParseError::InsufficientPayloadLength);
+    }
+
+    let script = &payload[19..19 + length];
+    if script.is_empty() || script[0] == 0xaa {
+        return Err(PayloadParseError::InvalidFirstByte);
+    }
+
+    let payload_str = payload[19 + length..]
+        .iter()
+        .map(|&b| b as char)
+        .collect::<String>();
+
+    let parts: Vec<&str> = payload_str.splitn(2, '/').collect();
+    match parts.len() {
+        1 => Ok((parts[0].to_string(), "".to_string())),
+        2 => {
+            // TODO miner_prefix needs work....
+            let miner_parts: Vec<&str> = parts[1].splitn(2, '/').collect();
+            let miner_prefix = miner_parts[0].to_string();
+            Ok((parts[0].to_string(), miner_prefix))
+        }
+        _ => Err(PayloadParseError::SplitError),
+    }
+}
+
+pub fn block_add_pipeline(dag_cache: Arc<DagCache>, block: &RpcBlock) {
     // Add block to DagCache Blocks
     // If it already exists, return early, block has already been processed
     match dag_cache.blocks.entry(block.header.hash) {
@@ -20,16 +67,28 @@ pub fn block_add_pipeline(dag_cache: &Arc<DagCache>, block: &RpcBlock) {
         }
     }
 
-    // Increment block count for the block's second
+    let (node_version, _) = parse_coinbase_tx_payload(&block.transactions[0].payload).unwrap();
+
+    // Increment second counters
     dag_cache
         .seconds
         .entry(block.header.timestamp / 1000)
         .or_default()
-        .add_block(block.transactions[0].payload.clone());
+        .map(|e| {
+            // Increment block count for the block's second
+            e.increment_block_count();
+
+            // Increment mining node version count
+            e.mining_node_version_block_counts
+                .entry(node_version)
+                .and_modify(|v| *v += 1)
+                .or_insert(1);
+            e
+        });
 
     // Process transactions in the block
     for tx in block.transactions.iter() {
-        transaction_add_pipeline(dag_cache, tx);
+        transaction_add_pipeline(dag_cache.clone(), tx);
     }
 }
 
@@ -38,7 +97,7 @@ fn payload_to_string(payload: Vec<u8>) -> String {
 }
 
 fn detect_transaction_protocol(
-    dag_cache: &Arc<DagCache>,
+    dag_cache: Arc<DagCache>,
     transaction: &RpcTransaction,
 ) -> Option<TransactionProtocol> {
     // Check for Kasia protocol in transactionpayload
@@ -102,49 +161,51 @@ fn detect_transaction_protocol(
     None
 }
 
-pub fn transaction_add_pipeline(dag_cache: &Arc<DagCache>, transaction: &RpcTransaction) {
+fn transaction_add_pipeline(dag_cache: Arc<DagCache>, transaction: &RpcTransaction) {
     let tx_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
     let block_hash = transaction.verbose_data.as_ref().unwrap().block_hash;
     let block_time = transaction.verbose_data.as_ref().unwrap().block_time;
-
-    // Add Transaction to DagCache Transactions
-    // If already in cache, add block_hash
-    if let Some(mut tx) = dag_cache.transactions.get_mut(&tx_id) {
-        tx.blocks.push(block_hash);
-    } else {
-        let mut cache_transaction = CacheTransaction::from(transaction.clone());
-
-        if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
-            dag_cache
-                .seconds
-                .entry(block_time / 1000)
-                .and_modify(|v| v.increment_coinbase_transaction_count());
-        } else {
-            dag_cache
-                .seconds
-                .entry(block_time / 1000)
-                .and_modify(|v| v.increment_unique_transaction_count());
-
-            // Transaction Protocol
-            cache_transaction.protocol = detect_transaction_protocol(dag_cache, transaction);
-        }
-
-        dag_cache.transactions.insert(tx_id, cache_transaction);
-    }
 
     // Increase total transaction count
     dag_cache
         .seconds
         .entry(block_time / 1000)
         .and_modify(|v| v.increment_transaction_count());
+
+    // If TX already in cache, add block_hash
+    if let Some(mut tx) = dag_cache.transactions.get_mut(&tx_id) {
+        tx.blocks.push(block_hash);
+        return;
+    }
+
+    // Transaction is not in cache
+    // Run process to determine TX type, protocol, and add to cache
+    let mut cache_transaction = CacheTransaction::from(transaction.clone());
+
+    if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
+        dag_cache
+            .seconds
+            .entry(block_time / 1000)
+            .and_modify(|v| v.increment_coinbase_transaction_count());
+    } else {
+        dag_cache
+            .seconds
+            .entry(block_time / 1000)
+            .and_modify(|v| v.increment_unique_transaction_count());
+
+        // Transaction Protocol
+        cache_transaction.protocol = detect_transaction_protocol(dag_cache.clone(), transaction);
+    }
+
+    dag_cache.transactions.insert(tx_id, cache_transaction);
 }
 
 fn add_transaction_acceptance(
-    dag_cache: &Arc<DagCache>,
+    dag_cache: Arc<DagCache>,
     transaction_id: Hash,
     accepting_block_hash: Hash,
 ) {
-    // Set transactions accepting block hash
+    // Set transaction's accepting block hash
     dag_cache
         .transactions
         .entry(transaction_id)
@@ -198,7 +259,7 @@ fn add_transaction_acceptance(
 }
 
 pub fn add_chain_block_acceptance_pipeline(
-    dag_cache: &Arc<DagCache>,
+    dag_cache: Arc<DagCache>,
     acceptance_data: RpcAcceptedTransactionIds,
 ) {
     // Set block's chain block status to true
@@ -215,11 +276,11 @@ pub fn add_chain_block_acceptance_pipeline(
 
     // Process transactions
     for tx_id in acceptance_data.accepted_transaction_ids {
-        add_transaction_acceptance(dag_cache, tx_id, acceptance_data.accepting_block_hash);
+        add_transaction_acceptance(dag_cache.clone(), tx_id, acceptance_data.accepting_block_hash);
     }
 }
 
-fn remove_transaction_acceptance(dag_cache: &Arc<DagCache>, transaction_id: Hash) {
+fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash) {
     // Remove former accepting block hash from transaction
     dag_cache
         .transactions
@@ -273,7 +334,7 @@ fn remove_transaction_acceptance(dag_cache: &Arc<DagCache>, transaction_id: Hash
     }
 }
 
-pub fn remove_chain_block_pipeline(dag_cache: &Arc<DagCache>, removed_chain_block: &Hash) {
+pub fn remove_chain_block_pipeline(dag_cache: Arc<DagCache>, removed_chain_block: &Hash) {
     // Temporary while working thru bug...
     {
         let removed_chain_block_data = dag_cache.blocks.get(removed_chain_block);
@@ -311,7 +372,7 @@ pub fn remove_chain_block_pipeline(dag_cache: &Arc<DagCache>, removed_chain_bloc
         .remove(removed_chain_block)
     {
         for tx_id in removed_transactions {
-            remove_transaction_acceptance(dag_cache, tx_id);
+            remove_transaction_acceptance(dag_cache.clone(), tx_id);
         }
     } else {
         warn!(

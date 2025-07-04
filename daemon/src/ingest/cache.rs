@@ -5,7 +5,7 @@ use dashmap::DashMap;
 use kaspa_hashes::Hash;
 use kaspalytics_utils::{config::Config, log::LogTarget};
 use log::info;
-use rocksdb::DB;
+use rocksdb::{Cache, DB};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -46,7 +46,7 @@ impl Writer for DagCache {
     }
 
     fn prune(&self) -> Vec<PrunedBlock> {
-        let prune_timestamp = self.tip_timestamp() - 60 * 1000;
+        let prune_timestamp = self.tip_timestamp() - 120 * 1000;
 
         // Identify blocks older than pruning timestamp
         // Store these block hashes
@@ -118,6 +118,10 @@ pub trait Reader {
 
     fn tip_timestamp(&self) -> u64;
 
+    fn get_block(&self, block_hash: &Hash) -> Option<CacheBlock>;
+
+    fn get_transaction(&self, transaction_id: &Hash) -> Option<CacheTransaction>;
+
     fn contains_block_hash(&self, block_hash: &Hash) -> bool;
 
     fn blocks_iter(&self) -> impl Iterator<Item = RefMulti<'_, Hash, CacheBlock>>;
@@ -138,6 +142,14 @@ impl Reader for DagCache {
 
     fn tip_timestamp(&self) -> u64 {
         self.tip_timestamp.load(Ordering::Relaxed)
+    }
+
+    fn get_block(&self, block_hash: &Hash) -> Option<CacheBlock> {
+        self.blocks.get(block_hash).map(|v| v.value().clone())
+    }
+
+    fn get_transaction(&self, transaction_id: &Hash) -> Option<CacheTransaction> {
+        self.transactions.get(transaction_id).map(|v| v.value().clone())
     }
 
     fn contains_block_hash(&self, block_hash: &Hash) -> bool {
