@@ -1,6 +1,7 @@
 pub mod cache;
 mod listener;
 pub mod model;
+mod pipeline;
 mod second;
 
 use cache::{CacheStateError, DagCache, Reader, Writer};
@@ -86,12 +87,13 @@ impl DagIngest {
 
             // Add blocks to cache
             for block in blocks.blocks.iter() {
-                self.dag_cache.add_block(block);
+                // self.dag_cache.add_block(block);
+                pipeline::block_add_pipeline(&self.dag_cache, block);
             }
 
             // Process removed chain blocks
             for removed_chain_block in vspc.removed_chain_block_hashes {
-                self.dag_cache.remove_chain_block(&removed_chain_block);
+                pipeline::remove_chain_block_pipeline(&self.dag_cache, &removed_chain_block);
             }
 
             // Process added chain blocks
@@ -106,7 +108,8 @@ impl DagIngest {
                 self.dag_cache
                     .set_last_known_chain_block(acceptance.accepting_block_hash);
 
-                self.dag_cache.add_chain_block_acceptance_data(acceptance);
+                // self.dag_cache.add_chain_block_acceptance_data(acceptance);
+                pipeline::add_chain_block_acceptance_pipeline(&self.dag_cache, acceptance);
             }
 
             // Prune data and send pruned to broker

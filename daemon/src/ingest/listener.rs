@@ -13,6 +13,7 @@ use workflow_core::channel::{Channel, DuplexChannel};
 use workflow_core::task::spawn;
 
 use crate::ingest::cache::Writer;
+use crate::ingest::pipeline;
 
 use super::cache::{DagCache, Reader};
 
@@ -145,12 +146,14 @@ impl Listener {
                     self.dag_cache.set_tip_timestamp(bn.block.header.timestamp);
                 }
 
-                self.dag_cache.add_block(&bn.block);
+                // self.dag_cache.add_block(&bn.block);
+                pipeline::block_add_pipeline(&self.dag_cache, &bn.block);
             }
             Notification::VirtualChainChanged(vccn) => {
                 // Process removed chain blocks
                 for removed_chain_block in vccn.removed_chain_block_hashes.iter() {
-                    self.dag_cache.remove_chain_block(removed_chain_block);
+                    // self.dag_cache.remove_chain_block(removed_chain_block);
+                    pipeline::remove_chain_block_pipeline(&self.dag_cache, removed_chain_block);
                 }
 
                 // Process added chain blocks
@@ -165,8 +168,12 @@ impl Listener {
                     self.dag_cache
                         .set_last_known_chain_block(acceptance.accepting_block_hash);
 
-                    self.dag_cache
-                        .add_chain_block_acceptance_data(acceptance.clone());
+                    // self.dag_cache
+                    //     .add_chain_block_acceptance_data(acceptance.clone());
+                    pipeline::add_chain_block_acceptance_pipeline(
+                        &self.dag_cache,
+                        acceptance.clone(),
+                    );
                 }
             }
             _ => unimplemented!(),
