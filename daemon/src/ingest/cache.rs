@@ -5,7 +5,7 @@ use dashmap::DashMap;
 use kaspa_hashes::Hash;
 use kaspalytics_utils::{config::Config, log::LogTarget};
 use log::info;
-use rocksdb::{Cache, DB};
+use rocksdb::DB;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,7 +29,10 @@ pub trait Writer {
 
     fn set_tip_timestamp(&self, timestamp: u64);
 
-    fn prune(&self) -> Vec<PrunedBlock>;
+    // TODO
+    // insert_block
+    // update_block
+    // etc.
 }
 
 impl Writer for DagCache {
@@ -44,73 +47,9 @@ impl Writer for DagCache {
     fn set_tip_timestamp(&self, timestamp: u64) {
         self.tip_timestamp.store(timestamp, Ordering::Relaxed);
     }
-
-    fn prune(&self) -> Vec<PrunedBlock> {
-        let prune_timestamp = self.tip_timestamp() - 120 * 1000;
-
-        // Identify blocks older than pruning timestamp
-        // Store these block hashes
-        let mut candidate_blocks: Vec<Hash> = vec![];
-        for block in self.blocks.iter() {
-            if block.timestamp < prune_timestamp {
-                candidate_blocks.push(*block.key());
-            }
-        }
-
-        // Var to store pruned blocks
-        // That will later be returned at end of function
-        let mut pruned_blocks = Vec::new();
-
-        for block_hash in candidate_blocks {
-            // Remove block from blocks cache
-            let (_, removed_block) = self.blocks.remove(&block_hash).unwrap();
-
-            // Var to store current block's transactions
-            // Since all transactions are not removed from cache until all containing blocks are removed,
-            // need to clone all transactions into this var
-            let mut transactions = Vec::new();
-
-            // Var to store transactions in this block that no longer have any containing blocks
-            // These transactions can be fully removed from cache at end
-            let mut transactions_to_remove = Vec::new();
-
-            for tx_id in removed_block.transactions {
-                let mut cache_tx = self.transactions.get_mut(&tx_id).unwrap();
-                transactions.push(cache_tx.value().clone());
-
-                cache_tx.blocks.retain(|b| *b != block_hash);
-                if cache_tx.blocks.is_empty() {
-                    transactions_to_remove.push(tx_id);
-                }
-            }
-
-            // Remove transactions whose containing blocks are no longer in cache
-            for tx_id in transactions_to_remove.into_iter() {
-                self.transactions.remove(&tx_id).unwrap();
-            }
-
-            // Remove block from accepting_block_transaction
-            self.accepting_block_transactions.remove(&block_hash);
-
-            pruned_blocks.push(PrunedBlock {
-                hash: removed_block.hash,
-                timestamp: removed_block.timestamp,
-                daa_score: removed_block.daa_score,
-                transactions,
-            });
-        }
-
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let threshold = now - (86_400f64 * 1.1) as u64;
-        self.seconds.retain(|second, _| *second > threshold);
-
-        pruned_blocks
-    }
 }
 
+#[allow(dead_code)]
 pub trait Reader {
     fn last_known_chain_block(&self) -> Option<Hash>;
 
@@ -149,7 +88,9 @@ impl Reader for DagCache {
     }
 
     fn get_transaction(&self, transaction_id: &Hash) -> Option<CacheTransaction> {
-        self.transactions.get(transaction_id).map(|v| v.value().clone())
+        self.transactions
+            .get(transaction_id)
+            .map(|v| v.value().clone())
     }
 
     fn contains_block_hash(&self, block_hash: &Hash) -> bool {
@@ -223,8 +164,81 @@ pub enum CacheStateError {
     MissingKeyError(String),
 }
 
-impl DagCache {
-    pub async fn load_cache_state(config: Config) -> Result<DagCache, CacheStateError> {
+pub trait Manager {
+    fn prune(&self) -> Vec<PrunedBlock>;
+
+    async fn load_cache_state(config: Config) -> Result<DagCache, CacheStateError>;
+
+    async fn store_cache_state(&self, config: Config) -> Result<(), CacheStateError>;
+}
+
+impl Manager for DagCache {
+    fn prune(&self) -> Vec<PrunedBlock> {
+        let prune_timestamp = self.tip_timestamp() - 120 * 1000;
+
+        // Identify blocks older than pruning timestamp
+        // Store these block hashes
+        let mut candidate_blocks: Vec<Hash> = vec![];
+        for block in self.blocks.iter() {
+            if block.timestamp < prune_timestamp {
+                candidate_blocks.push(*block.key());
+            }
+        }
+
+        // Var to store pruned blocks
+        // That will later be returned at end of function
+        let mut pruned_blocks = Vec::new();
+
+        for block_hash in candidate_blocks {
+            // Remove block from blocks cache
+            let (_, removed_block) = self.blocks.remove(&block_hash).unwrap();
+
+            // Var to store current block's transactions
+            // Since all transactions are not removed from cache until all containing blocks are removed,
+            // need to clone all transactions into this var
+            let mut transactions = Vec::new();
+
+            // Var to store transactions in this block that no longer have any containing blocks
+            // These transactions can be fully removed from cache at end
+            let mut transactions_to_remove = Vec::new();
+
+            for tx_id in removed_block.transactions {
+                let mut cache_tx = self.transactions.get_mut(&tx_id).unwrap();
+                transactions.push(cache_tx.value().clone());
+
+                cache_tx.blocks.retain(|b| *b != block_hash);
+                if cache_tx.blocks.is_empty() {
+                    transactions_to_remove.push(tx_id);
+                }
+            }
+
+            // Remove transactions whose containing blocks are no longer in cache
+            for tx_id in transactions_to_remove.into_iter() {
+                self.transactions.remove(&tx_id).unwrap();
+            }
+
+            // Remove block from accepting_block_transaction
+            self.accepting_block_transactions.remove(&block_hash);
+
+            pruned_blocks.push(PrunedBlock {
+                hash: removed_block.hash,
+                timestamp: removed_block.timestamp,
+                daa_score: removed_block.daa_score,
+                transactions,
+            });
+        }
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let threshold = now - (86_400f64 * 1.1) as u64;
+        self.seconds.retain(|second, _| *second > threshold);
+
+        pruned_blocks
+    }
+
+    async fn load_cache_state(config: Config) -> Result<DagCache, CacheStateError> {
         // TODO refactor store and load function to better handle DB
         info!(target: LogTarget::Daemon.as_str(), "Loading cache state...");
 
@@ -285,7 +299,7 @@ impl DagCache {
         })
     }
 
-    pub async fn store_cache_state(&self, config: Config) -> Result<(), CacheStateError> {
+    async fn store_cache_state(&self, config: Config) -> Result<(), CacheStateError> {
         info!(target: LogTarget::Daemon.as_str(), "Storing cache state... ");
 
         let db = DB::open_default(config.kaspalytics_dirs.cache_dir)?;

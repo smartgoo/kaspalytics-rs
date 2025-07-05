@@ -151,7 +151,10 @@ impl Listener {
             Notification::VirtualChainChanged(vccn) => {
                 // Process removed chain blocks
                 for removed_chain_block in vccn.removed_chain_block_hashes.iter() {
-                    pipeline::remove_chain_block_pipeline(self.dag_cache.clone(), removed_chain_block);
+                    pipeline::remove_chain_block_pipeline(
+                        self.dag_cache.clone(),
+                        removed_chain_block,
+                    );
                 }
 
                 // Process added chain blocks

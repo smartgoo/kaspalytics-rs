@@ -36,17 +36,20 @@ impl SecondMetrics {
     }
 
     pub fn increment_coinbase_transaction_count(&mut self) {
-        self.coinbase_transaction_count.fetch_add(1, Ordering::Relaxed);
+        self.coinbase_transaction_count
+            .fetch_add(1, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 
     pub fn increment_coinbase_accepted_transaction_count(&mut self) {
-        self.coinbase_accepted_transaction_count.fetch_add(1, Ordering::Relaxed);
+        self.coinbase_accepted_transaction_count
+            .fetch_add(1, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 
     pub fn decrement_coinbase_accepted_transaction_count(&mut self) {
-        self.coinbase_accepted_transaction_count.fetch_sub(1, Ordering::Relaxed);
+        self.coinbase_accepted_transaction_count
+            .fetch_sub(1, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 
@@ -56,17 +59,20 @@ impl SecondMetrics {
     }
 
     pub fn increment_unique_transaction_count(&mut self) {
-        self.unique_transaction_count.fetch_add(1, Ordering::Relaxed);
+        self.unique_transaction_count
+            .fetch_add(1, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 
     pub fn increment_unique_accepted_transaction_count(&mut self) {
-        self.unique_accepted_transaction_count.fetch_add(1, Ordering::Relaxed);
+        self.unique_accepted_transaction_count
+            .fetch_add(1, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 
     pub fn decrement_unique_accepted_transaction_count(&mut self) {
-        self.unique_accepted_transaction_count.fetch_sub(1, Ordering::Relaxed);
+        self.unique_accepted_transaction_count
+            .fetch_sub(1, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 

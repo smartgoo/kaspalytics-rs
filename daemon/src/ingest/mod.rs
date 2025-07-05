@@ -4,7 +4,7 @@ pub mod model;
 mod pipeline;
 mod second;
 
-use cache::{CacheStateError, DagCache, Reader, Writer};
+use cache::{CacheStateError, DagCache, Manager, Reader, Writer};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
 use kaspalytics_utils::{config::Config, log::LogTarget};

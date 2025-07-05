@@ -6,7 +6,6 @@ use crate::ingest::cache::Reader;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcBlock, RpcTransaction};
-use kaspa_wrpc_client::node;
 use kaspalytics_utils::log::LogTarget;
 use log::warn;
 use std::sync::Arc;
@@ -23,7 +22,7 @@ pub enum PayloadParseError {
     SplitError,
 }
 
-fn parse_coinbase_tx_payload(payload: &Vec<u8>) -> Result<(String, String), PayloadParseError> {
+fn parse_coinbase_tx_payload(payload: &[u8]) -> Result<(String, String), PayloadParseError> {
     if payload.len() < 19 {
         return Err(PayloadParseError::InsufficientPayloadLength);
     }
@@ -276,7 +275,11 @@ pub fn add_chain_block_acceptance_pipeline(
 
     // Process transactions
     for tx_id in acceptance_data.accepted_transaction_ids {
-        add_transaction_acceptance(dag_cache.clone(), tx_id, acceptance_data.accepting_block_hash);
+        add_transaction_acceptance(
+            dag_cache.clone(),
+            tx_id,
+            acceptance_data.accepting_block_hash,
+        );
     }
 }
 
