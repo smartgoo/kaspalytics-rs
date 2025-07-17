@@ -3,9 +3,10 @@ use super::model::{CacheBlock, CacheTransaction};
 use crate::analysis::transactions::protocol::inscription::parse_signature_script;
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use crate::ingest::cache::Reader;
+use crate::ingest::model::CacheUtxoEntry;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
-use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcBlock, RpcTransaction};
+use kaspa_rpc_core::{RpcAcceptanceData, RpcBlock, RpcTransaction};
 use kaspalytics_utils::log::LogTarget;
 use log::warn;
 use std::sync::Arc;
@@ -65,6 +66,12 @@ pub fn block_add_pipeline(dag_cache: Arc<DagCache>, block: &RpcBlock) {
             entry.insert(CacheBlock::from(block.clone()));
         }
     }
+
+    // debug!(
+    //     target: LogTarget::Daemon.as_str(),
+    //     "block_add_pipeline {}",
+    //     block.header.hash,
+    // );
 
     let (node_version, _) = parse_coinbase_tx_payload(&block.transactions[0].payload).unwrap();
 
@@ -165,6 +172,12 @@ fn transaction_add_pipeline(dag_cache: Arc<DagCache>, transaction: &RpcTransacti
     let block_hash = transaction.verbose_data.as_ref().unwrap().block_hash;
     let block_time = transaction.verbose_data.as_ref().unwrap().block_time;
 
+    // debug!(
+    //     target: LogTarget::Daemon.as_str(),
+    //     "transaction_add_pipeline {}",
+    //     tx_id,
+    // );
+
     // Increase total transaction count
     dag_cache
         .seconds
@@ -259,26 +272,72 @@ fn add_transaction_acceptance(
 
 pub fn add_chain_block_acceptance_pipeline(
     dag_cache: Arc<DagCache>,
-    acceptance_data: RpcAcceptedTransactionIds,
+    acceptance_data: RpcAcceptanceData,
 ) {
     // Set block's chain block status to true
     dag_cache
         .blocks
-        .entry(acceptance_data.accepting_block_hash)
+        .entry(acceptance_data.accepting_chain_block_header.hash)
         .and_modify(|v| v.is_chain_block = true);
 
+    // Popuplate UTXO on Transaction
+    for merged_block in acceptance_data.mergeset_block_acceptance_data.iter() {
+        for transaction in merged_block.accepted_transactions.iter() {
+            let tx_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
+
+            for (idx, input) in transaction.inputs.iter().enumerate() {
+                if input.verbose_data.as_ref().unwrap().utxo_entry.is_none() {
+                    warn!(
+                        target: LogTarget::Daemon.as_str(),
+                        "input.verbose_data.utxo_entry is none: {}-{}",
+                        tx_id, idx
+                    );
+                    continue;
+                }
+
+                dag_cache.transactions.entry(tx_id).and_modify(|cache_tx| {
+                    let rpc_utxo = input
+                        .verbose_data
+                        .as_ref()
+                        .unwrap()
+                        .utxo_entry
+                        .clone()
+                        .unwrap();
+                    let cache_utxo = CacheUtxoEntry::from(rpc_utxo);
+                    if cache_utxo.script_public_key_type.is_none() {
+                        warn!(
+                            target: LogTarget::Daemon.as_str(),
+                            "utxo_entry.script_public_key_type is none: {}-{}",
+                            tx_id, idx
+                        );
+                    }
+                    cache_tx.inputs[idx].utxo_entry = Some(cache_utxo);
+                });
+            }
+        }
+    }
+
     // Add chain block and it's accepted transactions
+    let mut accepted_transactions = acceptance_data
+        .mergeset_block_acceptance_data
+        .into_iter()
+        .flat_map(|block| block.accepted_transactions)
+        .map(|tx| tx.verbose_data.unwrap().transaction_id)
+        .collect::<Vec<_>>();
+    accepted_transactions.sort();
+    accepted_transactions.dedup();
+
     dag_cache.accepting_block_transactions.insert(
-        acceptance_data.accepting_block_hash,
-        acceptance_data.accepted_transaction_ids.clone(),
+        acceptance_data.accepting_chain_block_header.hash,
+        accepted_transactions.clone(),
     );
 
     // Process transactions
-    for tx_id in acceptance_data.accepted_transaction_ids {
+    for tx_id in accepted_transactions {
         add_transaction_acceptance(
             dag_cache.clone(),
             tx_id,
-            acceptance_data.accepting_block_hash,
+            acceptance_data.accepting_chain_block_header.hash,
         );
     }
 }

@@ -75,9 +75,8 @@ impl DagIngest {
                     true,
                     true
                 ),
-                self.rpc_client.get_virtual_chain_from_block(
+                self.rpc_client.get_virtual_chain_from_block_custom(
                     self.dag_cache.last_known_chain_block().unwrap(),
-                    true
                 ),
             )?;
             let rpc_end = start.elapsed().as_millis();
@@ -96,16 +95,16 @@ impl DagIngest {
             }
 
             // Process added chain blocks
-            for acceptance in vspc.accepted_transaction_ids {
+            for acceptance in vspc.added_acceptance_data {
                 if !self
                     .dag_cache
-                    .contains_block_hash(&acceptance.accepting_block_hash)
+                    .contains_block_hash(&acceptance.accepting_chain_block_header.hash)
                 {
                     break;
                 }
 
                 self.dag_cache
-                    .set_last_known_chain_block(acceptance.accepting_block_hash);
+                    .set_last_known_chain_block(acceptance.accepting_chain_block_header.hash);
 
                 pipeline::add_chain_block_acceptance_pipeline(self.dag_cache.clone(), acceptance);
             }
@@ -146,7 +145,7 @@ impl DagIngest {
         Ok(())
     }
 
-    fn spawn_subscriber_task(&self) -> JoinHandle<Result<(), Error>> {
+    fn spawn_block_subscriber_task(&self) -> JoinHandle<Result<(), Error>> {
         let config = self.config.clone();
         let shutdown_flag = self.shutdown_flag.clone();
         let dag_cache = self.dag_cache.clone();
@@ -169,6 +168,45 @@ impl DagIngest {
         })
     }
 
+    fn spawn_vspc_task(&self) -> JoinHandle<Result<(), Error>> {
+        let shutdown_flag = self.shutdown_flag.clone();
+        let dag_cache = self.dag_cache.clone();
+        let rpc_client = self.rpc_client.clone();
+
+        tokio::task::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            while !shutdown_flag.load(Ordering::Relaxed) {
+                let vspc = rpc_client
+                    .get_virtual_chain_from_block_custom(
+                        dag_cache.last_known_chain_block().unwrap(),
+                    )
+                    .await?;
+
+                // Process removed chain blocks
+                for removed_chain_block in vspc.removed_chain_block_hashes {
+                    pipeline::remove_chain_block_pipeline(dag_cache.clone(), &removed_chain_block);
+                }
+
+                // Process added chain blocks
+                for acceptance in vspc.added_acceptance_data {
+                    if !dag_cache.contains_block_hash(&acceptance.accepting_chain_block_header.hash)
+                    {
+                        break;
+                    }
+
+                    dag_cache
+                        .set_last_known_chain_block(acceptance.accepting_chain_block_header.hash);
+
+                    pipeline::add_chain_block_acceptance_pipeline(dag_cache.clone(), acceptance);
+                }
+
+                interval.tick().await;
+            }
+
+            Ok::<(), Error>(())
+        })
+    }
+
     fn spawn_pruning_task(&self) -> JoinHandle<Result<(), Error>> {
         let shutdown_flag = self.shutdown_flag.clone();
         let dag_cache = self.dag_cache.clone();
@@ -179,7 +217,7 @@ impl DagIngest {
             while !shutdown_flag.load(Ordering::Relaxed) {
                 let pruned_blocks = dag_cache.prune();
                 writer_tx.send(pruned_blocks).await?;
-                dag_cache.log_cache_size();
+                // dag_cache.log_cache_size();
                 interval.tick().await;
             }
 
@@ -252,7 +290,8 @@ impl DagIngest {
 
         // Spawn tasks
         match tokio::try_join!(
-            self.spawn_subscriber_task(),
+            self.spawn_block_subscriber_task(),
+            self.spawn_vspc_task(),
             self.spawn_pruning_task(),
             self.spawn_monitor_task(),
         ) {

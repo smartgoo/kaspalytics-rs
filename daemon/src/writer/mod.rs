@@ -41,6 +41,7 @@ impl Writer {
         let start = Instant::now();
 
         let mut block_queue = Vec::new();
+        let mut block_parents_queue = Vec::new();
         let mut transaction_queue = Vec::new();
         let mut input_queue = Vec::new();
         let mut output_queue = Vec::new();
@@ -70,10 +71,15 @@ impl Writer {
                 transaction_queue.push(DbTransaction::new(block.hash, tx));
             }
 
+            for parent in block.parent_hashes.iter() {
+                block_parents_queue.push(DbBlockParent::new(block.hash, *parent, block.timestamp));
+            }
+
             block_queue.push(DbBlock::from(block));
         }
 
         let block_pool = self.pg_pool.clone();
+        let block_parents_pool = self.pg_pool.clone();
         let transaction_pool = self.pg_pool.clone();
         let input_pool = self.pg_pool.clone();
         let output_pool = self.pg_pool.clone();
@@ -82,6 +88,11 @@ impl Writer {
         tokio::try_join!(
             tokio::spawn(async {
                 insert::insert_blocks_unnest(block_queue, block_pool)
+                    .await
+                    .unwrap();
+            }),
+            tokio::spawn( async {
+                insert::insert_block_parents_unnest(block_parents_queue, block_parents_pool)
                     .await
                     .unwrap();
             }),

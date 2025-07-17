@@ -114,20 +114,14 @@ impl Listener {
                 self.inner.notification_channel.sender.clone(),
                 ChannelType::Persistent,
             ));
+
         *self.inner.listener_id.lock().unwrap() = Some(listener_id);
+
         self.client()
             .rpc_api()
             .start_notify(listener_id, Scope::BlockAdded(BlockAddedScope {}))
             .await?;
-        self.client()
-            .rpc_api()
-            .start_notify(
-                listener_id,
-                Scope::VirtualChainChanged(VirtualChainChangedScope {
-                    include_accepted_transaction_ids: true,
-                }),
-            )
-            .await?;
+
         Ok(())
     }
 
@@ -148,33 +142,33 @@ impl Listener {
 
                 pipeline::block_add_pipeline(self.dag_cache.clone(), &bn.block);
             }
-            Notification::VirtualChainChanged(vccn) => {
-                // Process removed chain blocks
-                for removed_chain_block in vccn.removed_chain_block_hashes.iter() {
-                    pipeline::remove_chain_block_pipeline(
-                        self.dag_cache.clone(),
-                        removed_chain_block,
-                    );
-                }
+            // Notification::VirtualChainChanged(vccn) => {
+            //     // Process removed chain blocks
+            //     for removed_chain_block in vccn.removed_chain_block_hashes.iter() {
+            //         pipeline::remove_chain_block_pipeline(
+            //             self.dag_cache.clone(),
+            //             removed_chain_block,
+            //         );
+            //     }
 
-                // Process added chain blocks
-                for acceptance in vccn.accepted_transaction_ids.iter() {
-                    if !self
-                        .dag_cache
-                        .contains_block_hash(&acceptance.accepting_block_hash)
-                    {
-                        break;
-                    }
+            //     // Process added chain blocks
+            //     for acceptance in vccn.accepted_transaction_ids.iter() {
+            //         if !self
+            //             .dag_cache
+            //             .contains_block_hash(&acceptance.accepting_block_hash)
+            //         {
+            //             break;
+            //         }
 
-                    self.dag_cache
-                        .set_last_known_chain_block(acceptance.accepting_block_hash);
+            //         self.dag_cache
+            //             .set_last_known_chain_block(acceptance.accepting_block_hash);
 
-                    pipeline::add_chain_block_acceptance_pipeline(
-                        self.dag_cache.clone(),
-                        acceptance.clone(),
-                    );
-                }
-            }
+            //         pipeline::add_chain_block_acceptance_pipeline(
+            //             self.dag_cache.clone(),
+            //             acceptance.clone(),
+            //         );
+            //     }
+            // }
             _ => unimplemented!(),
         }
 

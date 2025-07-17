@@ -1,4 +1,7 @@
+use crate::writer::model::DbBlockParent;
+
 use super::{DbBlock, DbTransaction, DbTransactionInput, DbTransactionOutput};
+use chrono::ParseError;
 use sqlx::{PgPool, QueryBuilder};
 
 const CHUNK_SIZE: usize = 1000;
@@ -7,31 +10,121 @@ pub async fn insert_blocks_unnest(
     blocks: Vec<DbBlock>,
     pg_pool: PgPool,
 ) -> Result<(), sqlx::Error> {
-    let mut block_times = Vec::new();
     let mut block_hashes = Vec::new();
+    let mut versions = Vec::new();
+    // let mut parent_hashes = Vec::new();
+    let mut hash_merkle_roots = Vec::new();
+    let mut accepted_id_merkle_roots = Vec::new();
+    let mut utxo_commitments = Vec::new();
+    let mut block_times = Vec::new();
+    let mut bits = Vec::new();
+    let mut nonces = Vec::new();
     let mut daa_scores = Vec::new();
+    let mut blue_works = Vec::new();
+    let mut blue_scores = Vec::new();
+    let mut pruning_points = Vec::new();
+    let mut difficulties = Vec::new();
+    let mut selected_parent_hashes = Vec::new();
+    let mut is_chain_blocks = Vec::new();
+
     for block in blocks.into_iter() {
-        block_times.push(block.block_time);
         block_hashes.push(block.block_hash);
+        versions.push(block.version);
+        // parent_hashes.push(block.parent_hashes);
+        hash_merkle_roots.push(block.hash_merkle_root);
+        accepted_id_merkle_roots.push(block.accepted_id_merkle_root);
+        utxo_commitments.push(block.utxo_commitment);
+        block_times.push(block.block_time);
+        bits.push(block.bits);
+        nonces.push(block.nonce);
         daa_scores.push(block.daa_score);
+        blue_works.push(block.blue_work);
+        blue_scores.push(block.blue_score);
+        pruning_points.push(block.pruning_point);
+        difficulties.push(block.difficulty);
+        selected_parent_hashes.push(block.selected_parent_hash);
+        is_chain_blocks.push(block.is_chain_block);
     }
 
     let mut qb = QueryBuilder::new(
         "INSERT INTO kaspad.blocks
-        (block_time, block_hash, daa_score) 
+        (block_hash, version, hash_merkle_root, accepted_id_merkle_root, 
+         utxo_commitment, block_time, bits, nonce, daa_score, blue_work, blue_score, 
+         pruning_point, difficulty, selected_parent_hash, is_chain_block) 
         SELECT * FROM UNNEST (
-            $1::timestamp[],
-            $2::bytea[],
-            $3::bigint[]
+            $1::bytea[],
+            $2::smallint[],
+            $3::bytea[],
+            $4::bytea[],
+            $5::bytea[],
+            $6::timestamp[],
+            $7::integer[],
+            $8::bigint[],
+            $9::bigint[],
+            $10::bytea[],
+            $11::bigint[],
+            $12::bytea[],
+            $13::double precision[],
+            $14::bytea[],
+            $15::boolean[]
         )",
     );
 
     // qb.push(" ON CONFLICT DO NOTHING");
 
     qb.build()
-        .bind(block_times)
         .bind(block_hashes)
+        .bind(versions)
+        // .bind(parent_hashes)
+        .bind(hash_merkle_roots)
+        .bind(accepted_id_merkle_roots)
+        .bind(utxo_commitments)
+        .bind(block_times)
+        .bind(bits)
+        .bind(nonces)
         .bind(daa_scores)
+        .bind(blue_works)
+        .bind(blue_scores)
+        .bind(pruning_points)
+        .bind(difficulties)
+        .bind(selected_parent_hashes)
+        .bind(is_chain_blocks)
+        .execute(&pg_pool)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn insert_block_parents_unnest(
+    blocks_parents: Vec<DbBlockParent>,
+    pg_pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    let mut block_hashes = Vec::new();
+    let mut parent_hashes = Vec::new();
+    let mut block_times = Vec::new();
+
+    for relationship in blocks_parents.into_iter() {
+        block_hashes.push(relationship.block_hash);
+        parent_hashes.push(relationship.parent_hash);
+        block_times.push(relationship.block_time);
+    }
+
+    let mut qb = QueryBuilder::new(
+        "INSERT INTO kaspad.blocks_parents
+        (block_hash, parent_hash, block_time) 
+        SELECT * FROM UNNEST (
+            $1::bytea[],
+            $2::bytea[],
+            $3::timestamp[]
+        )",
+    );
+
+    // qb.push(" ON CONFLICT DO NOTHING");
+
+    qb.build()
+        .bind(block_hashes)
+        .bind(parent_hashes)
+        .bind(block_times)
         .execute(&pg_pool)
         .await?;
 
@@ -120,6 +213,11 @@ pub async fn insert_inputs_unnest(
         let mut prev_outpoint_indexes = Vec::with_capacity(CHUNK_SIZE);
         let mut signature_scripts = Vec::with_capacity(CHUNK_SIZE);
         let mut sig_op_counts = Vec::with_capacity(CHUNK_SIZE);
+        let mut utxo_amounts = Vec::with_capacity(CHUNK_SIZE);
+        let mut utxo_script_public_keys = Vec::with_capacity(CHUNK_SIZE);
+        let mut utxo_is_coinbases = Vec::with_capacity(CHUNK_SIZE);
+        let mut utxo_script_public_key_types = Vec::with_capacity(CHUNK_SIZE);
+        let mut utxo_script_public_key_addresses = Vec::with_capacity(CHUNK_SIZE);
 
         for input in chunk.iter() {
             block_times.push(input.block_time);
@@ -130,6 +228,11 @@ pub async fn insert_inputs_unnest(
             prev_outpoint_indexes.push(input.previous_outpoint_index);
             signature_scripts.push(input.signature_script.clone());
             sig_op_counts.push(input.sig_op_count);
+            utxo_amounts.push(input.utxo_amount);
+            utxo_script_public_keys.push(input.utxo_script_public_key.clone());
+            utxo_is_coinbases.push(input.utxo_is_coinbase);
+            utxo_script_public_key_types.push(input.utxo_script_public_key_type);
+            utxo_script_public_key_addresses.push(input.utxo_script_public_key_address.clone());
         }
 
         let mut qb = QueryBuilder::new(
@@ -137,7 +240,8 @@ pub async fn insert_inputs_unnest(
                 INSERT INTO kaspad.transactions_inputs
                 (
                     block_time, block_hash, transaction_id, index, previous_outpoint_transaction_id,
-                    previous_outpoint_index, signature_script, sig_op_count
+                    previous_outpoint_index, signature_script, sig_op_count, utxo_amount, utxo_script_public_key,
+                    utxo_is_coinbase, utxo_script_public_key_type, utxo_script_public_key_address
                 )
                 SELECT * FROM UNNEST (
                     $1::timestamp[],
@@ -147,7 +251,12 @@ pub async fn insert_inputs_unnest(
                     $5::bytea[],
                     $6::integer[],
                     $7::bytea[],
-                    $8::integer[]
+                    $8::integer[],
+                    $9::bigint[],
+                    $10::bytea[],
+                    $11::boolean[],
+                    $12::integer[],
+                    $13::varchar[]
                 )
             "#,
         );
@@ -161,6 +270,11 @@ pub async fn insert_inputs_unnest(
             .bind(prev_outpoint_indexes)
             .bind(signature_scripts)
             .bind(sig_op_counts)
+            .bind(utxo_amounts)
+            .bind(utxo_script_public_keys)
+            .bind(utxo_is_coinbases)
+            .bind(utxo_script_public_key_types)
+            .bind(utxo_script_public_key_addresses)
             .execute(&pg_pool)
             .await?;
     }

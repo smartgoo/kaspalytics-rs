@@ -26,7 +26,7 @@ impl From<CacheBlock> for SseBlock {
             hash: value.hash,
             daa_score: value.daa_score,
             timestamp: value.timestamp,
-            parents: value.parents,
+            parents: value.parent_hashes,
         }
     }
 }
