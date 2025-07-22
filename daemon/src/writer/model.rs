@@ -1,8 +1,7 @@
 use crate::ingest::model::{
-    CacheBlock, CacheTransaction, CacheTransactionInput, CacheTransactionOutput, PrunedBlock,
+    CacheBlock, CacheTransaction, CacheTransactionInput, CacheTransactionOutput,
 };
 use chrono::{DateTime, Utc};
-use kaspa_consensus_core::BlueWorkType;
 use kaspa_hashes::Hash;
 
 pub struct DbBlock {
@@ -25,8 +24,8 @@ pub struct DbBlock {
     pub is_chain_block: bool,
 }
 
-impl From<PrunedBlock> for DbBlock {
-    fn from(value: PrunedBlock) -> Self {
+impl From<CacheBlock> for DbBlock {
+    fn from(value: CacheBlock) -> Self {
         DbBlock {
             block_hash: value.hash.as_bytes().to_vec(),
             version: value.version as i16,
@@ -64,38 +63,54 @@ impl DbBlockParent {
     }
 }
 
-pub struct DbTransaction {
-    pub block_time: DateTime<Utc>,
+pub struct DbBlockTransaction {
     pub block_hash: Vec<u8>,
     pub transaction_id: Vec<u8>,
+    pub block_time: DateTime<Utc>,
+}
+
+impl DbBlockTransaction {
+    pub fn new(block_hash: Hash, transaction_id: Hash, block_time: u64) -> Self {
+        Self {
+            block_hash: block_hash.as_bytes().to_vec(),
+            transaction_id: transaction_id.as_bytes().to_vec(),
+            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
+        }
+    }
+}
+
+pub struct DbTransaction {
+    pub block_time: DateTime<Utc>,
+    pub transaction_id: Vec<u8>,
+    pub version: i16,
+    pub lock_time: i64,
     pub subnetwork_id: String,
+    pub gas: i64,
     pub payload: Vec<u8>,
     pub mass: i64,
     pub compute_mass: i64,
     pub accepting_block_hash: Option<Vec<u8>>,
 }
 
-impl DbTransaction {
-    pub fn new(block_hash: Hash, transaction: &CacheTransaction) -> Self {
+impl From<CacheTransaction> for DbTransaction {
+    fn from(value: CacheTransaction) -> Self {
         DbTransaction {
-            block_time: DateTime::<Utc>::from_timestamp_millis(transaction.block_time as i64)
-                .unwrap(),
-            block_hash: block_hash.as_bytes().to_vec(),
-            transaction_id: transaction.id.as_bytes().to_vec(),
-            subnetwork_id: transaction.subnetwork_id.to_string(),
-            payload: transaction.payload.clone(),
-            mass: transaction.mass as i64,
-            compute_mass: transaction.compute_mass as i64,
-            accepting_block_hash: transaction
-                .accepting_block_hash
-                .map(|h| h.as_bytes().to_vec()),
+            block_time: DateTime::<Utc>::from_timestamp_millis(value.block_time as i64).unwrap(),
+            transaction_id: value.id.as_bytes().to_vec(),
+            version: value.version as i16,
+            lock_time: value.lock_time as i64,
+            subnetwork_id: value.subnetwork_id.to_string(),
+            gas: value.gas as i64,
+            payload: value.payload.clone(),
+            mass: value.mass as i64,
+            compute_mass: value.compute_mass as i64,
+            accepting_block_hash: value.accepting_block_hash.map(|h| h.as_bytes().to_vec()),
         }
     }
 }
 
 pub struct DbTransactionInput {
     pub block_time: DateTime<Utc>,
-    pub block_hash: Vec<u8>,
     pub transaction_id: Vec<u8>,
     pub index: i32,
     pub previous_outpoint_transaction_id: Vec<u8>,
@@ -111,7 +126,6 @@ pub struct DbTransactionInput {
 
 impl DbTransactionInput {
     pub fn new(
-        block_hash: Hash,
         block_time: u64,
         transaction_id: Hash,
         index: u32,
@@ -155,7 +169,6 @@ impl DbTransactionInput {
 
         DbTransactionInput {
             block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
-            block_hash: block_hash.as_bytes().to_vec(),
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i32,
             previous_outpoint_transaction_id: input
@@ -177,7 +190,6 @@ impl DbTransactionInput {
 
 pub struct DbTransactionOutput {
     pub block_time: DateTime<Utc>,
-    pub block_hash: Vec<u8>,
     pub transaction_id: Vec<u8>,
     pub index: i32,
     pub amount: i64,
@@ -187,7 +199,6 @@ pub struct DbTransactionOutput {
 
 impl DbTransactionOutput {
     pub fn new(
-        block_hash: Hash,
         block_time: u64,
         transaction_id: Hash,
         index: u32,
@@ -195,7 +206,6 @@ impl DbTransactionOutput {
     ) -> Self {
         DbTransactionOutput {
             block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
-            block_hash: block_hash.as_bytes().to_vec(),
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i32,
             amount: output.value as i64,

@@ -165,7 +165,7 @@ pub enum CacheStateError {
 }
 
 pub trait Manager {
-    fn prune(&self) -> Vec<PrunedBlock>;
+    fn prune(&self) -> PruningBatch;
 
     async fn load_cache_state(config: Config) -> Result<DagCache, CacheStateError>;
 
@@ -173,8 +173,8 @@ pub trait Manager {
 }
 
 impl Manager for DagCache {
-    fn prune(&self) -> Vec<PrunedBlock> {
-        let prune_timestamp = self.tip_timestamp() - 120 * 1000;
+    fn prune(&self) -> PruningBatch {
+        let prune_timestamp = self.tip_timestamp() - 60 * 1000;
 
         // Identify blocks older than pruning timestamp
         // Store these block hashes
@@ -188,6 +188,7 @@ impl Manager for DagCache {
         // Var to store pruned blocks
         // That will later be returned at end of function
         let mut pruned_blocks = Vec::new();
+        let mut pruned_transactions = Vec::new();
 
         for block_hash in candidate_blocks {
             // Remove block from blocks cache
@@ -203,7 +204,7 @@ impl Manager for DagCache {
             let mut transactions_to_remove = Vec::new();
 
             for tx_id in removed_block.transactions.iter() {
-                let mut cache_tx = self.transactions.get_mut(&tx_id).unwrap();
+                let mut cache_tx = self.transactions.get_mut(tx_id).unwrap();
                 transactions.push(cache_tx.value().clone());
 
                 cache_tx.blocks.retain(|b| *b != block_hash);
@@ -214,13 +215,14 @@ impl Manager for DagCache {
 
             // Remove transactions whose containing blocks are no longer in cache
             for tx_id in transactions_to_remove.into_iter() {
-                self.transactions.remove(&tx_id).unwrap();
+                let (_, removed_tx) = self.transactions.remove(tx_id).unwrap();
+                pruned_transactions.push(removed_tx);
             }
 
             // Remove block from accepting_block_transaction
             self.accepting_block_transactions.remove(&block_hash);
 
-            pruned_blocks.push(PrunedBlock::new(removed_block, transactions));
+            pruned_blocks.push(removed_block);
         }
 
         let now = SystemTime::now()
@@ -230,7 +232,10 @@ impl Manager for DagCache {
         let threshold = now - (86_400f64 * 1.1) as u64;
         self.seconds.retain(|second, _| *second > threshold);
 
-        pruned_blocks
+        PruningBatch {
+            blocks: pruned_blocks,
+            transactions: pruned_transactions,
+        }
     }
 
     async fn load_cache_state(config: Config) -> Result<DagCache, CacheStateError> {

@@ -7,14 +7,16 @@ mod second;
 use cache::{CacheStateError, DagCache, Manager, Reader, Writer};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
+use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::{config::Config, log::LogTarget};
-use log::{error, info};
-use model::PrunedBlock;
+use log::{debug, error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
+
+use crate::ingest::model::PruningBatch;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -25,7 +27,7 @@ pub enum Error {
     Rpc(#[from] kaspa_rpc_core::RpcError),
 
     #[error("Failed to send pruned blocks to writer: {0}")]
-    ChannelSend(#[from] tokio::sync::mpsc::error::SendError<Vec<PrunedBlock>>),
+    ChannelSend(#[from] tokio::sync::mpsc::error::SendError<PruningBatch>),
 
     #[error("Listener error: {0}")]
     Listener(#[from] kaspa_wrpc_client::error::Error),
@@ -37,8 +39,8 @@ pub enum Error {
 pub struct DagIngest {
     config: Config,
     shutdown_flag: Arc<AtomicBool>,
-    writer_tx: Sender<Vec<PrunedBlock>>,
-    rpc_client: Arc<dyn RpcApi>,
+    writer_tx: Sender<PruningBatch>,
+    rpc_client: Arc<KaspaRpcClient>,
     dag_cache: Arc<DagCache>,
 }
 
@@ -46,8 +48,8 @@ impl DagIngest {
     pub fn new(
         config: Config,
         shutdown_flag: Arc<AtomicBool>,
-        writer_tx: Sender<Vec<PrunedBlock>>,
-        rpc_client: Arc<dyn RpcApi>,
+        writer_tx: Sender<PruningBatch>,
+        rpc_client: Arc<KaspaRpcClient>,
         dag_cache: Arc<DagCache>,
     ) -> Self {
         DagIngest {
@@ -68,6 +70,11 @@ impl DagIngest {
             // Assume not synced at start of every loop
             // self.cache.set_synced(false);
 
+            debug!(
+                target: LogTarget::Daemon.as_str(),
+                "low hash {:?}", self.dag_cache.last_known_chain_block().unwrap(),
+            );
+
             let block_dag_response = self.rpc_client.get_block_dag_info().await?;
             let (blocks, vspc) = tokio::try_join!(
                 self.rpc_client.get_blocks(
@@ -79,6 +86,15 @@ impl DagIngest {
                     self.dag_cache.last_known_chain_block().unwrap(),
                 ),
             )?;
+            
+            // let blocks = self.rpc_client.get_blocks(
+            //     Some(self.dag_cache.last_known_chain_block().unwrap()),
+            //     true,
+            //     true
+            // ).await.unwrap();
+            // let vspc = self.rpc_client.get_virtual_chain_from_block_custom(
+            //     self.dag_cache.last_known_chain_block().unwrap(),
+            // ).await.unwrap();
             let rpc_end = start.elapsed().as_millis();
 
             self.dag_cache
@@ -284,6 +300,8 @@ impl DagIngest {
                 self.dag_cache.last_known_chain_block().unwrap(),
             );
         }
+
+        // self.dag_cache.set_last_known_chain_block("e4eede8a0954a634595dc9e26a88dc2488a55e45c5796ff93814aa40761ac644".parse().unwrap());
 
         // Initial sync to tip using iterative GetBlocks/GetVSPC
         self.initial_sync_to_tip().await?;

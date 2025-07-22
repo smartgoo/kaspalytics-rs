@@ -1,7 +1,7 @@
 mod insert;
 mod model;
 
-use crate::ingest::model::PrunedBlock;
+use crate::ingest::model::PruningBatch;
 use kaspalytics_utils::log::LogTarget;
 use log::{debug, info};
 use model::*;
@@ -14,7 +14,7 @@ use tokio::time::{interval, Duration};
 
 pub struct Writer {
     pg_pool: PgPool,
-    rx: Receiver<Vec<PrunedBlock>>,
+    rx: Receiver<PruningBatch>,
     stats: Arc<Mutex<WriterStats>>,
 }
 
@@ -24,7 +24,7 @@ struct WriterStats {
 }
 
 impl Writer {
-    pub fn new(pg_pool: PgPool, rx: Receiver<Vec<PrunedBlock>>) -> Self {
+    pub fn new(pg_pool: PgPool, rx: Receiver<PruningBatch>) -> Self {
         Writer {
             pg_pool,
             rx,
@@ -37,49 +37,57 @@ impl Writer {
 }
 
 impl Writer {
-    pub async fn handle(&self, blocks: Vec<PrunedBlock>) {
+    pub async fn handle(&self, batch: PruningBatch) {
         let start = Instant::now();
 
         let mut block_queue = Vec::new();
-        let mut block_parents_queue = Vec::new();
+        let mut blocks_parents_queue = Vec::new();
+        let mut blocks_transactions_queue = Vec::new();
         let mut transaction_queue = Vec::new();
         let mut input_queue = Vec::new();
         let mut output_queue = Vec::new();
 
-        for block in blocks {
-            for tx in block.transactions.iter() {
-                for (index, input) in tx.inputs.iter().enumerate() {
-                    input_queue.push(DbTransactionInput::new(
-                        block.hash,
-                        block.timestamp,
-                        tx.id,
-                        index as u32,
-                        input,
-                    ));
-                }
-
-                for (index, output) in tx.outputs.iter().enumerate() {
-                    output_queue.push(DbTransactionOutput::new(
-                        block.hash,
-                        block.timestamp,
-                        tx.id,
-                        index as u32,
-                        output,
-                    ));
-                }
-
-                transaction_queue.push(DbTransaction::new(block.hash, tx));
+        for block in batch.blocks {
+            for parent in block.parent_hashes.iter() {
+                blocks_parents_queue.push(DbBlockParent::new(block.hash, *parent, block.timestamp));
             }
 
-            for parent in block.parent_hashes.iter() {
-                block_parents_queue.push(DbBlockParent::new(block.hash, *parent, block.timestamp));
+            for transaction_id in block.transactions.iter() {
+                blocks_transactions_queue.push(DbBlockTransaction::new(
+                    block.hash,
+                    *transaction_id,
+                    block.timestamp,
+                ))
             }
 
             block_queue.push(DbBlock::from(block));
         }
 
+        for tx in batch.transactions {
+            for (index, input) in tx.inputs.iter().enumerate() {
+                input_queue.push(DbTransactionInput::new(
+                    tx.block_time,
+                    tx.id,
+                    index as u32,
+                    input,
+                ));
+            }
+
+            for (index, output) in tx.outputs.iter().enumerate() {
+                output_queue.push(DbTransactionOutput::new(
+                    tx.block_time,
+                    tx.id,
+                    index as u32,
+                    output,
+                ));
+            }
+
+            transaction_queue.push(DbTransaction::from(tx));
+        }
+
         let block_pool = self.pg_pool.clone();
-        let block_parents_pool = self.pg_pool.clone();
+        let blocks_parents_pool = self.pg_pool.clone();
+        let blocks_transactions_pool = self.pg_pool.clone();
         let transaction_pool = self.pg_pool.clone();
         let input_pool = self.pg_pool.clone();
         let output_pool = self.pg_pool.clone();
@@ -91,10 +99,18 @@ impl Writer {
                     .await
                     .unwrap();
             }),
-            tokio::spawn( async {
-                insert::insert_block_parents_unnest(block_parents_queue, block_parents_pool)
+            tokio::spawn(async {
+                insert::insert_blocks_parents_unnest(blocks_parents_queue, blocks_parents_pool)
                     .await
                     .unwrap();
+            }),
+            tokio::spawn(async {
+                insert::insert_blocks_transactions_unnest(
+                    blocks_transactions_queue,
+                    blocks_transactions_pool,
+                )
+                .await
+                .unwrap();
             }),
             tokio::spawn(async {
                 insert::insert_transactions_unnest(transaction_queue, transaction_pool)

@@ -1,7 +1,6 @@
-use crate::writer::model::DbBlockParent;
+use crate::writer::model::{DbBlockParent, DbBlockTransaction};
 
 use super::{DbBlock, DbTransaction, DbTransactionInput, DbTransactionOutput};
-use chrono::ParseError;
 use sqlx::{PgPool, QueryBuilder};
 
 const CHUNK_SIZE: usize = 1000;
@@ -48,9 +47,11 @@ pub async fn insert_blocks_unnest(
 
     let mut qb = QueryBuilder::new(
         "INSERT INTO kaspad.blocks
-        (block_hash, version, hash_merkle_root, accepted_id_merkle_root, 
-         utxo_commitment, block_time, bits, nonce, daa_score, blue_work, blue_score, 
-         pruning_point, difficulty, selected_parent_hash, is_chain_block) 
+        (
+            block_hash, version, hash_merkle_root, accepted_id_merkle_root, utxo_commitment,
+            block_time, bits, nonce, daa_score, blue_work, blue_score, 
+            pruning_point, difficulty, selected_parent_hash, is_chain_block
+        ) 
         SELECT * FROM UNNEST (
             $1::bytea[],
             $2::smallint[],
@@ -95,7 +96,7 @@ pub async fn insert_blocks_unnest(
     Ok(())
 }
 
-pub async fn insert_block_parents_unnest(
+pub async fn insert_blocks_parents_unnest(
     blocks_parents: Vec<DbBlockParent>,
     pg_pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -131,6 +132,42 @@ pub async fn insert_block_parents_unnest(
     Ok(())
 }
 
+pub async fn insert_blocks_transactions_unnest(
+    blocks_transactions: Vec<DbBlockTransaction>,
+    pg_pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    let mut block_hashes = Vec::new();
+    let mut transaction_ids = Vec::new();
+    let mut block_times = Vec::new();
+
+    for relationship in blocks_transactions.into_iter() {
+        block_hashes.push(relationship.block_hash);
+        transaction_ids.push(relationship.transaction_id);
+        block_times.push(relationship.block_time);
+    }
+
+    let mut qb = QueryBuilder::new(
+        "INSERT INTO kaspad.blocks_transactions
+        (block_hash, transaction_id, block_time) 
+        SELECT * FROM UNNEST (
+            $1::bytea[],
+            $2::bytea[],
+            $3::timestamp[]
+        )",
+    );
+
+    // qb.push(" ON CONFLICT DO NOTHING");
+
+    qb.build()
+        .bind(block_hashes)
+        .bind(transaction_ids)
+        .bind(block_times)
+        .execute(&pg_pool)
+        .await?;
+
+    Ok(())
+}
+
 pub async fn insert_transactions_unnest(
     transactions: Vec<DbTransaction>,
     pg_pool: PgPool,
@@ -142,9 +179,11 @@ pub async fn insert_transactions_unnest(
     // TODO take ownership in iter chunks
     for chunk in transactions.chunks(CHUNK_SIZE) {
         let mut block_times = Vec::with_capacity(CHUNK_SIZE);
-        let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
+        let mut versions = Vec::with_capacity(CHUNK_SIZE);
+        let mut lock_times = Vec::with_capacity(CHUNK_SIZE);
         let mut subnetwork_ids = Vec::with_capacity(CHUNK_SIZE);
+        let mut gases = Vec::with_capacity(CHUNK_SIZE);
         let mut payloads = Vec::with_capacity(CHUNK_SIZE);
         let mut masses = Vec::with_capacity(CHUNK_SIZE);
         let mut compute_masses = Vec::with_capacity(CHUNK_SIZE);
@@ -152,9 +191,11 @@ pub async fn insert_transactions_unnest(
 
         for tx in chunk.iter() {
             block_times.push(tx.block_time);
-            block_hashes.push(tx.block_hash.clone());
             transaction_ids.push(tx.transaction_id.clone());
+            versions.push(tx.version);
+            lock_times.push(tx.lock_time);
             subnetwork_ids.push(tx.subnetwork_id.clone());
+            gases.push(tx.gas);
             payloads.push(tx.payload.clone());
             masses.push(tx.mass);
             compute_masses.push(tx.compute_mass);
@@ -164,26 +205,30 @@ pub async fn insert_transactions_unnest(
         let mut qb = QueryBuilder::new(
             "INSERT INTO kaspad.transactions
             (
-                block_time, block_hash, transaction_id, subnetwork_id, payload,
-                mass, compute_mass, accepting_block_hash
+                block_time, transaction_id, version, lock_time, subnetwork_id,
+                gas, payload, mass, compute_mass, accepting_block_hash
             ) 
             SELECT * FROM UNNEST (
                 $1::timestamp[],
                 $2::bytea[],
-                $3::bytea[],
-                $4::text[],
-                $5::bytea[],
+                $3::smallint[],
+                $4::bigint[],
+                $5::text[],
                 $6::bigint[],
-                $7::bigint[],
-                $8::bytea[]
+                $7::bytea[],
+                $8::bigint[],
+                $9::bigint[],
+                $10::bytea[]
             )",
         );
 
         qb.build()
             .bind(block_times)
-            .bind(block_hashes)
             .bind(transaction_ids)
+            .bind(versions)
+            .bind(lock_times)
             .bind(subnetwork_ids)
+            .bind(gases)
             .bind(payloads)
             .bind(masses)
             .bind(compute_masses)
@@ -206,7 +251,7 @@ pub async fn insert_inputs_unnest(
     // TODO take ownership in iter chunks
     for chunk in inputs.chunks(1000) {
         let mut block_times = Vec::with_capacity(CHUNK_SIZE);
-        let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
+        // let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut indexes = Vec::with_capacity(CHUNK_SIZE);
         let mut prev_outpoint_tx_ids = Vec::with_capacity(CHUNK_SIZE);
@@ -221,7 +266,7 @@ pub async fn insert_inputs_unnest(
 
         for input in chunk.iter() {
             block_times.push(input.block_time);
-            block_hashes.push(input.block_hash.clone());
+            // block_hashes.push(input.block_hash.clone());
             transaction_ids.push(input.transaction_id.clone());
             indexes.push(input.index);
             prev_outpoint_tx_ids.push(input.previous_outpoint_transaction_id.clone());
@@ -239,31 +284,29 @@ pub async fn insert_inputs_unnest(
             r#"
                 INSERT INTO kaspad.transactions_inputs
                 (
-                    block_time, block_hash, transaction_id, index, previous_outpoint_transaction_id,
+                    block_time, transaction_id, index, previous_outpoint_transaction_id,
                     previous_outpoint_index, signature_script, sig_op_count, utxo_amount, utxo_script_public_key,
                     utxo_is_coinbase, utxo_script_public_key_type, utxo_script_public_key_address
                 )
                 SELECT * FROM UNNEST (
                     $1::timestamp[],
                     $2::bytea[],
-                    $3::bytea[],
-                    $4::integer[],
-                    $5::bytea[],
-                    $6::integer[],
-                    $7::bytea[],
-                    $8::integer[],
-                    $9::bigint[],
-                    $10::bytea[],
-                    $11::boolean[],
-                    $12::integer[],
-                    $13::varchar[]
+                    $3::integer[],
+                    $4::bytea[],
+                    $5::integer[],
+                    $6::bytea[],
+                    $7::integer[],
+                    $8::bigint[],
+                    $9::bytea[],
+                    $10::boolean[],
+                    $11::integer[],
+                    $12::varchar[]
                 )
             "#,
         );
 
         qb.build()
             .bind(block_times)
-            .bind(block_hashes)
             .bind(transaction_ids)
             .bind(indexes)
             .bind(prev_outpoint_tx_ids)
@@ -292,7 +335,7 @@ pub async fn insert_outputs_unnest(
     // TODO take ownership in iter chunks
     for chunk in outputs.chunks(1000) {
         let mut block_times = Vec::with_capacity(CHUNK_SIZE);
-        let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
+        // let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut indexes = Vec::with_capacity(CHUNK_SIZE);
         let mut amounts = Vec::with_capacity(CHUNK_SIZE);
@@ -301,7 +344,7 @@ pub async fn insert_outputs_unnest(
 
         for output in chunk.iter() {
             block_times.push(output.block_time);
-            block_hashes.push(output.block_hash.clone());
+            // block_hashes.push(output.block_hash.clone());
             transaction_ids.push(output.transaction_id.clone());
             indexes.push(output.index);
             amounts.push(output.amount);
@@ -313,24 +356,22 @@ pub async fn insert_outputs_unnest(
             r#"
                 INSERT INTO kaspad.transactions_outputs
                 (
-                    block_time, block_hash, transaction_id, index, amount,
-                    script_public_key, script_public_key_address
+                    block_time, transaction_id, index, amount, script_public_key,
+                    script_public_key_address
                 )
                 SELECT * FROM UNNEST (
                     $1::timestamp[],
                     $2::bytea[],
-                    $3::bytea[],
-                    $4::integer[],
-                    $5::bigint[],
-                    $6::bytea[],
-                    $7::text[]
+                    $3::integer[],
+                    $4::bigint[],
+                    $5::bytea[],
+                    $6::text[]
                 )
             "#,
         );
 
         qb.build()
             .bind(block_times)
-            .bind(block_hashes)
             .bind(transaction_ids)
             .bind(indexes)
             .bind(amounts)
