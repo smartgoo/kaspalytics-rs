@@ -9,7 +9,7 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::{config::Config, log::LogTarget};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -86,15 +86,7 @@ impl DagIngest {
                     self.dag_cache.last_known_chain_block().unwrap(),
                 ),
             )?;
-            
-            // let blocks = self.rpc_client.get_blocks(
-            //     Some(self.dag_cache.last_known_chain_block().unwrap()),
-            //     true,
-            //     true
-            // ).await.unwrap();
-            // let vspc = self.rpc_client.get_virtual_chain_from_block_custom(
-            //     self.dag_cache.last_known_chain_block().unwrap(),
-            // ).await.unwrap();
+
             let rpc_end = start.elapsed().as_millis();
 
             self.dag_cache
@@ -190,8 +182,32 @@ impl DagIngest {
         let rpc_client = self.rpc_client.clone();
 
         tokio::task::spawn(async move {
+            // Do a one time get_blocks to cover gap
+            // where gap is time between initial_sync completing
+            // and listener starting
+            let blocks = rpc_client
+                .get_blocks(
+                    Some(dag_cache.last_known_chain_block().unwrap()),
+                    true,
+                    true,
+                )
+                .await
+                .unwrap();
+
+            for block in blocks.blocks.iter() {
+                pipeline::block_add_pipeline(dag_cache.clone(), block);
+            }
+
             let mut interval = tokio::time::interval(Duration::from_secs(5));
             while !shutdown_flag.load(Ordering::Relaxed) {
+                // Always assume we are no longer synced to tip at start
+                dag_cache.set_synced(false);
+
+                // Get tip hashes to check synced at end of iter
+                let GetBlockDagInfoResponse { tip_hashes, .. } =
+                    rpc_client.get_block_dag_info().await?;
+
+                // Get VSPC
                 let vspc = rpc_client
                     .get_virtual_chain_from_block_custom(
                         dag_cache.last_known_chain_block().unwrap(),
@@ -207,16 +223,40 @@ impl DagIngest {
                 for acceptance in vspc.added_acceptance_data {
                     if !dag_cache.contains_block_hash(&acceptance.accepting_chain_block_header.hash)
                     {
-                        break;
+                        warn!(
+                            target: LogTarget::Daemon.as_str(),
+                            "not in cache: {:?} | {:?}",
+                            acceptance.accepting_chain_block_header.hash,
+                            acceptance.accepting_chain_block_header.timestamp
+                        );
+
+                        continue;
                     }
 
                     dag_cache
                         .set_last_known_chain_block(acceptance.accepting_chain_block_header.hash);
 
+                    if tip_hashes.contains(&acceptance.accepting_chain_block_header.hash) {
+                        dag_cache.set_synced(true);
+                    }
+
                     pipeline::add_chain_block_acceptance_pipeline(dag_cache.clone(), acceptance);
                 }
 
-                interval.tick().await;
+                if dag_cache.synced() {
+                    interval.tick().await;
+                } else {
+                    let tip_timestamp = dag_cache.tip_timestamp() / 1000;
+                    info!(
+                        target: LogTarget::Daemon.as_str(),
+                        "vspc_task {}s behind, not sleeping",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs()
+                            - tip_timestamp,
+                    );
+                }
             }
 
             Ok::<(), Error>(())

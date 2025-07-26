@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TransactionProtocol {
-    Krc,
+    Krc = 0,
     Kns,
     Kasia,
 }

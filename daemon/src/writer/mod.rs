@@ -49,14 +49,14 @@ impl Writer {
 
         for block in batch.blocks {
             for parent in block.parent_hashes.iter() {
-                blocks_parents_queue.push(DbBlockParent::new(block.hash, *parent, block.timestamp));
+                blocks_parents_queue.push(DbBlockParent::new(block.hash, *parent));
             }
 
-            for transaction_id in block.transactions.iter() {
+            for (index, transaction_id) in block.transactions.iter().enumerate() {
                 blocks_transactions_queue.push(DbBlockTransaction::new(
                     block.hash,
                     *transaction_id,
-                    block.timestamp,
+                    index as u16,
                 ))
             }
 
@@ -65,21 +65,11 @@ impl Writer {
 
         for tx in batch.transactions {
             for (index, input) in tx.inputs.iter().enumerate() {
-                input_queue.push(DbTransactionInput::new(
-                    tx.block_time,
-                    tx.id,
-                    index as u32,
-                    input,
-                ));
+                input_queue.push(DbTransactionInput::new(tx.id, index as u32, input));
             }
 
             for (index, output) in tx.outputs.iter().enumerate() {
-                output_queue.push(DbTransactionOutput::new(
-                    tx.block_time,
-                    tx.id,
-                    index as u32,
-                    output,
-                ));
+                output_queue.push(DbTransactionOutput::new(tx.id, index as u32, output));
             }
 
             transaction_queue.push(DbTransaction::from(tx));

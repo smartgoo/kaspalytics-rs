@@ -10,12 +10,11 @@ pub async fn insert_blocks_unnest(
     pg_pool: PgPool,
 ) -> Result<(), sqlx::Error> {
     let mut block_hashes = Vec::new();
+    let mut block_times = Vec::new();
     let mut versions = Vec::new();
-    // let mut parent_hashes = Vec::new();
     let mut hash_merkle_roots = Vec::new();
     let mut accepted_id_merkle_roots = Vec::new();
     let mut utxo_commitments = Vec::new();
-    let mut block_times = Vec::new();
     let mut bits = Vec::new();
     let mut nonces = Vec::new();
     let mut daa_scores = Vec::new();
@@ -28,12 +27,11 @@ pub async fn insert_blocks_unnest(
 
     for block in blocks.into_iter() {
         block_hashes.push(block.block_hash);
+        block_times.push(block.block_time);
         versions.push(block.version);
-        // parent_hashes.push(block.parent_hashes);
         hash_merkle_roots.push(block.hash_merkle_root);
         accepted_id_merkle_roots.push(block.accepted_id_merkle_root);
         utxo_commitments.push(block.utxo_commitment);
-        block_times.push(block.block_time);
         bits.push(block.bits);
         nonces.push(block.nonce);
         daa_scores.push(block.daa_score);
@@ -48,39 +46,38 @@ pub async fn insert_blocks_unnest(
     let mut qb = QueryBuilder::new(
         "INSERT INTO kaspad.blocks
         (
-            block_hash, version, hash_merkle_root, accepted_id_merkle_root, utxo_commitment,
-            block_time, bits, nonce, daa_score, blue_work, blue_score, 
-            pruning_point, difficulty, selected_parent_hash, is_chain_block
+            block_hash, block_time, \"version\", hash_merkle_root, accepted_id_merkle_root,
+            utxo_commitment, bits, nonce, daa_score, blue_work,
+            blue_score, pruning_point, difficulty, selected_parent_hash, is_chain_block
         ) 
         SELECT * FROM UNNEST (
-            $1::bytea[],
-            $2::smallint[],
-            $3::bytea[],
-            $4::bytea[],
-            $5::bytea[],
-            $6::timestamp[],
-            $7::integer[],
-            $8::bigint[],
-            $9::bigint[],
-            $10::bytea[],
-            $11::bigint[],
-            $12::bytea[],
-            $13::double precision[],
-            $14::bytea[],
-            $15::boolean[]
-        )",
+            $1::bytea[],                -- block_hash
+            $2::timestamp[],            -- block_time
+            $3::smallint[],             -- version
+            $4::bytea[],                -- hash_merkle_root
+            $5::bytea[],                -- accepted_id_merkle_root
+            $6::bytea[],                -- utxo_committment
+            $7::integer[],              -- bits
+            $8::bigint[],               -- nonce
+            $9::bigint[],               -- daa_score
+            $10::bytea[],               -- blue_work
+            $11::bigint[],              -- blue_score
+            $12::bytea[],               -- pruning_point
+            $13::double precision[],    -- difficulty
+            $14::bytea[],               -- selected_parent_hash
+            $15::boolean[]              -- is_chain_block
+        )
+        ON CONFLICT DO NOTHING
+        ",
     );
-
-    // qb.push(" ON CONFLICT DO NOTHING");
 
     qb.build()
         .bind(block_hashes)
+        .bind(block_times)
         .bind(versions)
-        // .bind(parent_hashes)
         .bind(hash_merkle_roots)
         .bind(accepted_id_merkle_roots)
         .bind(utxo_commitments)
-        .bind(block_times)
         .bind(bits)
         .bind(nonces)
         .bind(daa_scores)
@@ -102,30 +99,28 @@ pub async fn insert_blocks_parents_unnest(
 ) -> Result<(), sqlx::Error> {
     let mut block_hashes = Vec::new();
     let mut parent_hashes = Vec::new();
-    let mut block_times = Vec::new();
 
     for relationship in blocks_parents.into_iter() {
         block_hashes.push(relationship.block_hash);
         parent_hashes.push(relationship.parent_hash);
-        block_times.push(relationship.block_time);
     }
 
     let mut qb = QueryBuilder::new(
         "INSERT INTO kaspad.blocks_parents
-        (block_hash, parent_hash, block_time) 
+        (
+            block_hash, parent_hash
+        ) 
         SELECT * FROM UNNEST (
-            $1::bytea[],
-            $2::bytea[],
-            $3::timestamp[]
-        )",
+            $1::bytea[],    -- block_hash
+            $2::bytea[]     -- parent_hash
+        )
+        ON CONFLICT DO NOTHING
+        ",
     );
-
-    // qb.push(" ON CONFLICT DO NOTHING");
 
     qb.build()
         .bind(block_hashes)
         .bind(parent_hashes)
-        .bind(block_times)
         .execute(&pg_pool)
         .await?;
 
@@ -136,32 +131,34 @@ pub async fn insert_blocks_transactions_unnest(
     blocks_transactions: Vec<DbBlockTransaction>,
     pg_pool: PgPool,
 ) -> Result<(), sqlx::Error> {
-    let mut block_hashes = Vec::new();
-    let mut transaction_ids = Vec::new();
-    let mut block_times = Vec::new();
+    let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
+    let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
+    let mut indexes = Vec::with_capacity(CHUNK_SIZE);
 
     for relationship in blocks_transactions.into_iter() {
         block_hashes.push(relationship.block_hash);
         transaction_ids.push(relationship.transaction_id);
-        block_times.push(relationship.block_time);
+        indexes.push(relationship.index);
     }
 
     let mut qb = QueryBuilder::new(
         "INSERT INTO kaspad.blocks_transactions
-        (block_hash, transaction_id, block_time) 
+        (
+            block_hash, transaction_id, index
+        ) 
         SELECT * FROM UNNEST (
-            $1::bytea[],
-            $2::bytea[],
-            $3::timestamp[]
-        )",
+            $1::bytea[],    -- block_hash
+            $2::bytea[],    -- transaction_id
+            $3::smallint[]  -- index
+        )
+        ON CONFLICT DO NOTHING
+        ",
     );
-
-    // qb.push(" ON CONFLICT DO NOTHING");
 
     qb.build()
         .bind(block_hashes)
         .bind(transaction_ids)
-        .bind(block_times)
+        .bind(indexes)
         .execute(&pg_pool)
         .await?;
 
@@ -178,61 +175,76 @@ pub async fn insert_transactions_unnest(
 
     // TODO take ownership in iter chunks
     for chunk in transactions.chunks(CHUNK_SIZE) {
-        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut versions = Vec::with_capacity(CHUNK_SIZE);
         let mut lock_times = Vec::with_capacity(CHUNK_SIZE);
         let mut subnetwork_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut gases = Vec::with_capacity(CHUNK_SIZE);
-        let mut payloads = Vec::with_capacity(CHUNK_SIZE);
         let mut masses = Vec::with_capacity(CHUNK_SIZE);
         let mut compute_masses = Vec::with_capacity(CHUNK_SIZE);
         let mut accepting_blocks = Vec::with_capacity(CHUNK_SIZE);
+        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
+        let mut protocol_ids = Vec::with_capacity(CHUNK_SIZE);
+        let mut total_input_amounts = Vec::with_capacity(CHUNK_SIZE);
+        let mut total_output_amounts = Vec::with_capacity(CHUNK_SIZE);
+        let mut payloads = Vec::with_capacity(CHUNK_SIZE);
 
         for tx in chunk.iter() {
-            block_times.push(tx.block_time);
             transaction_ids.push(tx.transaction_id.clone());
             versions.push(tx.version);
             lock_times.push(tx.lock_time);
-            subnetwork_ids.push(tx.subnetwork_id.clone());
+            subnetwork_ids.push(tx.subnetwork_id);
             gases.push(tx.gas);
-            payloads.push(tx.payload.clone());
             masses.push(tx.mass);
             compute_masses.push(tx.compute_mass);
             accepting_blocks.push(tx.accepting_block_hash.clone());
+            block_times.push(tx.block_time);
+            protocol_ids.push(tx.protocol_id);
+            total_input_amounts.push(tx.total_input_amount);
+            total_output_amounts.push(tx.total_output_amount);
+            payloads.push(tx.payload.clone());
         }
 
         let mut qb = QueryBuilder::new(
             "INSERT INTO kaspad.transactions
             (
-                block_time, transaction_id, version, lock_time, subnetwork_id,
-                gas, payload, mass, compute_mass, accepting_block_hash
+                transaction_id, version, lock_time, subnetwork_id, gas,
+                mass, compute_mass, accepting_block_hash, block_time, protocol_id,
+                total_input_amount, total_output_amount, payload
             ) 
             SELECT * FROM UNNEST (
-                $1::timestamp[],
-                $2::bytea[],
-                $3::smallint[],
-                $4::bigint[],
-                $5::text[],
-                $6::bigint[],
-                $7::bytea[],
-                $8::bigint[],
-                $9::bigint[],
-                $10::bytea[]
-            )",
+                $1::bytea[],        -- transaction_id
+                $2::smallint[],     -- version
+                $3::bigint[],       -- lock_time
+                $4::integer[],      -- subnetwork_id
+                $5::bigint[],       -- gas
+                $6::bigint[],       -- mass
+                $7::bigint[],       -- compute_mass
+                $8::bytea[],        -- accepting_block_hash
+                $9::timestamptz[],  -- block_time
+                $10::integer[],     -- protocol
+                $11::bigint[],      -- total_input_amount
+                $12::bigint[],      -- total_output_amount
+                $13::bytea[]        --payload
+            )
+            ON CONFLICT DO NOTHING
+            ",
         );
 
         qb.build()
-            .bind(block_times)
             .bind(transaction_ids)
             .bind(versions)
             .bind(lock_times)
             .bind(subnetwork_ids)
             .bind(gases)
-            .bind(payloads)
             .bind(masses)
             .bind(compute_masses)
             .bind(accepting_blocks)
+            .bind(block_times)
+            .bind(protocol_ids)
+            .bind(total_input_amounts)
+            .bind(total_output_amounts)
+            .bind(payloads)
             .execute(&pg_pool)
             .await?;
     }
@@ -250,7 +262,6 @@ pub async fn insert_inputs_unnest(
 
     // TODO take ownership in iter chunks
     for chunk in inputs.chunks(1000) {
-        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
         // let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut indexes = Vec::with_capacity(CHUNK_SIZE);
@@ -265,7 +276,6 @@ pub async fn insert_inputs_unnest(
         let mut utxo_script_public_key_addresses = Vec::with_capacity(CHUNK_SIZE);
 
         for input in chunk.iter() {
-            block_times.push(input.block_time);
             // block_hashes.push(input.block_hash.clone());
             transaction_ids.push(input.transaction_id.clone());
             indexes.push(input.index);
@@ -284,29 +294,28 @@ pub async fn insert_inputs_unnest(
             r#"
                 INSERT INTO kaspad.transactions_inputs
                 (
-                    block_time, transaction_id, index, previous_outpoint_transaction_id,
+                    transaction_id, index, previous_outpoint_transaction_id,
                     previous_outpoint_index, signature_script, sig_op_count, utxo_amount, utxo_script_public_key,
                     utxo_is_coinbase, utxo_script_public_key_type, utxo_script_public_key_address
                 )
                 SELECT * FROM UNNEST (
-                    $1::timestamp[],
-                    $2::bytea[],
-                    $3::integer[],
-                    $4::bytea[],
-                    $5::integer[],
-                    $6::bytea[],
-                    $7::integer[],
-                    $8::bigint[],
-                    $9::bytea[],
-                    $10::boolean[],
-                    $11::integer[],
-                    $12::varchar[]
+                    $1::bytea[],    -- transaction_id
+                    $2::integer[],  -- index
+                    $3::bytea[],    -- previous_outpoint_transaction_id
+                    $4::integer[],  -- previous_outpoint_index
+                    $5::bytea[],    -- signature_script
+                    $6::integer[],  -- sig_op_count
+                    $7::bigint[],   -- utxo_amount
+                    $8::bytea[],    -- utxo_script_public_key
+                    $9::boolean[],  -- utxo_is_coinbase
+                    $10::integer[], -- utxo_script_public_key_type
+                    $11::varchar[]  -- utxo_script_public_key_address
                 )
+                ON CONFLICT DO NOTHING
             "#,
         );
 
         qb.build()
-            .bind(block_times)
             .bind(transaction_ids)
             .bind(indexes)
             .bind(prev_outpoint_tx_ids)
@@ -334,21 +343,19 @@ pub async fn insert_outputs_unnest(
 
     // TODO take ownership in iter chunks
     for chunk in outputs.chunks(1000) {
-        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
-        // let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut indexes = Vec::with_capacity(CHUNK_SIZE);
         let mut amounts = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_keys = Vec::with_capacity(CHUNK_SIZE);
+        let mut script_public_key_types = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_key_addresses = Vec::with_capacity(CHUNK_SIZE);
 
         for output in chunk.iter() {
-            block_times.push(output.block_time);
-            // block_hashes.push(output.block_hash.clone());
             transaction_ids.push(output.transaction_id.clone());
             indexes.push(output.index);
             amounts.push(output.amount);
             script_public_keys.push(output.script_public_key.clone());
+            script_public_key_types.push(output.script_public_key_type);
             script_public_key_addresses.push(output.script_public_key_address.clone());
         }
 
@@ -356,26 +363,27 @@ pub async fn insert_outputs_unnest(
             r#"
                 INSERT INTO kaspad.transactions_outputs
                 (
-                    block_time, transaction_id, index, amount, script_public_key,
+                    transaction_id, index, amount, script_public_key, script_public_key_type
                     script_public_key_address
                 )
                 SELECT * FROM UNNEST (
-                    $1::timestamp[],
-                    $2::bytea[],
-                    $3::integer[],
-                    $4::bigint[],
-                    $5::bytea[],
-                    $6::text[]
+                    $1::bytea[],    -- transaction_id
+                    $2::integer[],  -- index
+                    $3::bigint[],   -- amount
+                    $4::bytea[],    -- script_public_key
+                    $5::smallint[], -- script_public_key_type
+                    $5::text[]      -- script_public_key_address
                 )
+                ON CONFLICT DO NOTHING
             "#,
         );
 
         qb.build()
-            .bind(block_times)
             .bind(transaction_ids)
             .bind(indexes)
             .bind(amounts)
             .bind(script_public_keys)
+            .bind(script_public_key_types)
             .bind(script_public_key_addresses)
             .execute(&pg_pool)
             .await?;

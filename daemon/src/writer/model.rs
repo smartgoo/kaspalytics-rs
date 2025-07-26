@@ -2,6 +2,7 @@ use crate::ingest::model::{
     CacheBlock, CacheTransaction, CacheTransactionInput, CacheTransactionOutput,
 };
 use chrono::{DateTime, Utc};
+use kaspa_consensus_core::subnets::{SUBNETWORK_ID_COINBASE, SUBNETWORK_ID_NATIVE};
 use kaspa_hashes::Hash;
 
 pub struct DbBlock {
@@ -50,15 +51,13 @@ impl From<CacheBlock> for DbBlock {
 pub struct DbBlockParent {
     pub block_hash: Vec<u8>,
     pub parent_hash: Vec<u8>,
-    pub block_time: DateTime<Utc>,
 }
 
 impl DbBlockParent {
-    pub fn new(block_hash: Hash, parent_hash: Hash, block_time: u64) -> Self {
+    pub fn new(block_hash: Hash, parent_hash: Hash) -> Self {
         Self {
             block_hash: block_hash.as_bytes().to_vec(),
             parent_hash: parent_hash.as_bytes().to_vec(),
-            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
         }
     }
 }
@@ -66,51 +65,79 @@ impl DbBlockParent {
 pub struct DbBlockTransaction {
     pub block_hash: Vec<u8>,
     pub transaction_id: Vec<u8>,
-    pub block_time: DateTime<Utc>,
+    pub index: i16,
 }
 
 impl DbBlockTransaction {
-    pub fn new(block_hash: Hash, transaction_id: Hash, block_time: u64) -> Self {
+    pub fn new(block_hash: Hash, transaction_id: Hash, index: u16) -> Self {
         Self {
             block_hash: block_hash.as_bytes().to_vec(),
             transaction_id: transaction_id.as_bytes().to_vec(),
-            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
+            index: index as i16,
         }
     }
 }
 
 pub struct DbTransaction {
-    pub block_time: DateTime<Utc>,
     pub transaction_id: Vec<u8>,
     pub version: i16,
     pub lock_time: i64,
-    pub subnetwork_id: String,
+    pub subnetwork_id: i64,
     pub gas: i64,
-    pub payload: Vec<u8>,
     pub mass: i64,
     pub compute_mass: i64,
     pub accepting_block_hash: Option<Vec<u8>>,
+    pub block_time: DateTime<Utc>,
+    pub protocol_id: Option<i64>,
+    pub total_input_amount: i64,
+    pub total_output_amount: i64,
+    pub payload: Vec<u8>,
 }
 
 impl From<CacheTransaction> for DbTransaction {
     fn from(value: CacheTransaction) -> Self {
+        let subnetwork_id = match value.subnetwork_id {
+            SUBNETWORK_ID_NATIVE => 0,
+            SUBNETWORK_ID_COINBASE => 1,
+            _ => panic!("Unknown subnetwork ID {:?}", value.subnetwork_id),
+        };
+
+        let protocol_id = value.protocol.map(|v| v as i64);
+
+        let total_input_amount = value
+            .inputs
+            .iter()
+            .map(|input| {
+                input
+                    .utxo_entry
+                    .as_ref()
+                    .map(|utxo_entry| utxo_entry.amount)
+                    .unwrap_or(0)
+            })
+            .sum::<u64>() as i64;
+
+        let total_output_amount =
+            value.outputs.iter().map(|output| output.value).sum::<u64>() as i64;
+
         DbTransaction {
-            block_time: DateTime::<Utc>::from_timestamp_millis(value.block_time as i64).unwrap(),
             transaction_id: value.id.as_bytes().to_vec(),
             version: value.version as i16,
             lock_time: value.lock_time as i64,
-            subnetwork_id: value.subnetwork_id.to_string(),
+            subnetwork_id: subnetwork_id as i64,
             gas: value.gas as i64,
-            payload: value.payload.clone(),
             mass: value.mass as i64,
             compute_mass: value.compute_mass as i64,
             accepting_block_hash: value.accepting_block_hash.map(|h| h.as_bytes().to_vec()),
+            block_time: DateTime::<Utc>::from_timestamp_millis(value.block_time as i64).unwrap(),
+            protocol_id,
+            total_input_amount,
+            total_output_amount,
+            payload: value.payload.clone(),
         }
     }
 }
 
 pub struct DbTransactionInput {
-    pub block_time: DateTime<Utc>,
     pub transaction_id: Vec<u8>,
     pub index: i32,
     pub previous_outpoint_transaction_id: Vec<u8>,
@@ -125,12 +152,7 @@ pub struct DbTransactionInput {
 }
 
 impl DbTransactionInput {
-    pub fn new(
-        block_time: u64,
-        transaction_id: Hash,
-        index: u32,
-        input: &CacheTransactionInput,
-    ) -> Self {
+    pub fn new(transaction_id: Hash, index: u32, input: &CacheTransactionInput) -> Self {
         let (
             utxo_amount,
             utxo_script_public_key,
@@ -168,7 +190,6 @@ impl DbTransactionInput {
         };
 
         DbTransactionInput {
-            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i32,
             previous_outpoint_transaction_id: input
@@ -189,27 +210,22 @@ impl DbTransactionInput {
 }
 
 pub struct DbTransactionOutput {
-    pub block_time: DateTime<Utc>,
     pub transaction_id: Vec<u8>,
     pub index: i32,
     pub amount: i64,
     pub script_public_key: Vec<u8>,
+    pub script_public_key_type: i8,
     pub script_public_key_address: String,
 }
 
 impl DbTransactionOutput {
-    pub fn new(
-        block_time: u64,
-        transaction_id: Hash,
-        index: u32,
-        output: &CacheTransactionOutput,
-    ) -> Self {
+    pub fn new(transaction_id: Hash, index: u32, output: &CacheTransactionOutput) -> Self {
         DbTransactionOutput {
-            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i32,
             amount: output.value as i64,
             script_public_key: output.script_public_key.script().to_vec(),
+            script_public_key_type: output.script_public_key_type.clone() as i8,
             script_public_key_address: output.script_public_key_address.clone(),
         }
     }
