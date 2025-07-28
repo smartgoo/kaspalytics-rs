@@ -8,6 +8,7 @@ pub enum KeyRegistry {
     PriceBtc,
     MarketCap,
     Volume,
+    SinkBlueScore,
     DaaScore,
     PruningPoint,
     CsSompi,

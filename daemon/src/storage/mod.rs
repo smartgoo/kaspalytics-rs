@@ -58,6 +58,12 @@ pub trait Writer {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
 
+    async fn set_sink_blue_score(
+        &self,
+        value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
+
     async fn set_daa_score(
         &self,
         value: u64,
@@ -177,6 +183,24 @@ impl Writer for Storage {
         key_value::upsert(
             &self.pg_pool,
             KeyRegistry::PruningPoint,
+            value,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn set_sink_blue_score(
+        &self,
+        value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        self.cache.set_sink_blue_score(value, timestamp).await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::SinkBlueScore,
             value,
             timestamp.unwrap_or(Utc::now()),
         )

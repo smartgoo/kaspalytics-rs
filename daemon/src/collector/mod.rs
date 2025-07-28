@@ -55,6 +55,23 @@ impl Collector {
             });
         }
 
+        // Sink Blue Score update task
+        {
+            let context = self.context.clone();
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) =
+                        update_sink_blue_score(&context.rpc_client, context.storage.clone()).await
+                    {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_sink_blue_score: {}", e);
+                    }
+                }
+            });
+        }
+
         // Block DAG info update task
         {
             let context = self.context.clone();
@@ -145,6 +162,20 @@ async fn update_markets_data(storage: Arc<Storage>) -> Result<(), Error> {
         .await?;
     storage
         .set_volume(data.market_data.total_volume.usd, Some(date))
+        .await?;
+
+    Ok(())
+}
+
+async fn update_sink_blue_score(
+    rpc_client: &Arc<KaspaRpcClient>,
+    storage: Arc<Storage>,
+) -> Result<(), Error> {
+    let date = Utc::now();
+    let data = rpc_client.get_sink_blue_score().await?;
+
+    storage
+        .set_sink_blue_score(data, Some(date))
         .await?;
 
     Ok(())

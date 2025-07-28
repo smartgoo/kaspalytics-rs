@@ -20,6 +20,7 @@ pub struct Cache {
 
     // Network Data
     pruning_point: RwLock<CacheEntry<Hash>>,
+    sink_blue_score: RwLock<CacheEntry<u64>>,
     daa_score: RwLock<CacheEntry<u64>>,
     circulating_supply: RwLock<CacheEntry<u64>>,
     difficulty: RwLock<CacheEntry<Decimal>>,
@@ -88,6 +89,19 @@ impl Writer for Cache {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error> {
         *self.pruning_point.write().await = CacheEntry::<Hash> {
+            value,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
+
+    async fn set_sink_blue_score(
+        &self,
+        value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        *self.sink_blue_score.write().await = CacheEntry::<u64> {
             value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };

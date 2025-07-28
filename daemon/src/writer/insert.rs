@@ -300,15 +300,15 @@ pub async fn insert_inputs_unnest(
                 )
                 SELECT * FROM UNNEST (
                     $1::bytea[],    -- transaction_id
-                    $2::integer[],  -- index
+                    $2::smallint[], -- index
                     $3::bytea[],    -- previous_outpoint_transaction_id
-                    $4::integer[],  -- previous_outpoint_index
+                    $4::smallint[], -- previous_outpoint_index
                     $5::bytea[],    -- signature_script
-                    $6::integer[],  -- sig_op_count
+                    $6::smallint[], -- sig_op_count
                     $7::bigint[],   -- utxo_amount
                     $8::bytea[],    -- utxo_script_public_key
                     $9::boolean[],  -- utxo_is_coinbase
-                    $10::integer[], -- utxo_script_public_key_type
+                    $10::smallint[],-- utxo_script_public_key_type
                     $11::varchar[]  -- utxo_script_public_key_address
                 )
                 ON CONFLICT DO NOTHING
@@ -330,6 +330,7 @@ pub async fn insert_inputs_unnest(
             .execute(&pg_pool)
             .await?;
     }
+
     Ok(())
 }
 
@@ -363,16 +364,16 @@ pub async fn insert_outputs_unnest(
             r#"
                 INSERT INTO kaspad.transactions_outputs
                 (
-                    transaction_id, index, amount, script_public_key, script_public_key_type
+                    transaction_id, index, amount, script_public_key, script_public_key_type,
                     script_public_key_address
                 )
                 SELECT * FROM UNNEST (
                     $1::bytea[],    -- transaction_id
-                    $2::integer[],  -- index
+                    $2::smallint[], -- index
                     $3::bigint[],   -- amount
                     $4::bytea[],    -- script_public_key
                     $5::smallint[], -- script_public_key_type
-                    $5::text[]      -- script_public_key_address
+                    $6::varchar[]   -- script_public_key_address
                 )
                 ON CONFLICT DO NOTHING
             "#,

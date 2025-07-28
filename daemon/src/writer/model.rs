@@ -139,15 +139,15 @@ impl From<CacheTransaction> for DbTransaction {
 
 pub struct DbTransactionInput {
     pub transaction_id: Vec<u8>,
-    pub index: i32,
+    pub index: i16,
     pub previous_outpoint_transaction_id: Vec<u8>,
-    pub previous_outpoint_index: i32,
+    pub previous_outpoint_index: i16,
     pub signature_script: Vec<u8>,
-    pub sig_op_count: i8,
+    pub sig_op_count: i16,
     pub utxo_amount: Option<i64>,
     pub utxo_script_public_key: Option<Vec<u8>>,
     pub utxo_is_coinbase: Option<bool>,
-    pub utxo_script_public_key_type: Option<i8>,
+    pub utxo_script_public_key_type: Option<i16>,
     pub utxo_script_public_key_address: Option<String>,
 }
 
@@ -160,7 +160,7 @@ impl DbTransactionInput {
             utxo_script_public_key_type,
             utxo_script_public_key_address,
         ) = if let Some(cache_utxo) = input.utxo_entry.clone() {
-            let script_public_key_type = cache_utxo.script_public_key_type.map(|spkt| spkt as i8);
+            let script_public_key_type = cache_utxo.script_public_key_type.map(|spkt| spkt as i16);
             // let script_public_key_type =
             //     if let Some(script_public_key_type) = cache_utxo.script_public_key_type {
             //         Some(script_public_key_type as i8)
@@ -191,15 +191,15 @@ impl DbTransactionInput {
 
         DbTransactionInput {
             transaction_id: transaction_id.as_bytes().to_vec(),
-            index: index as i32,
+            index: index as i16,
             previous_outpoint_transaction_id: input
                 .previous_outpoint
                 .transaction_id
                 .as_bytes()
                 .to_vec(),
-            previous_outpoint_index: input.previous_outpoint.index as i32,
+            previous_outpoint_index: input.previous_outpoint.index as i16,
             signature_script: input.signature_script.clone(),
-            sig_op_count: input.sig_op_count as i8,
+            sig_op_count: input.sig_op_count as i16,
             utxo_amount,
             utxo_script_public_key,
             utxo_is_coinbase,
@@ -211,10 +211,10 @@ impl DbTransactionInput {
 
 pub struct DbTransactionOutput {
     pub transaction_id: Vec<u8>,
-    pub index: i32,
+    pub index: i16,
     pub amount: i64,
     pub script_public_key: Vec<u8>,
-    pub script_public_key_type: i8,
+    pub script_public_key_type: i16,
     pub script_public_key_address: String,
 }
 
@@ -222,10 +222,10 @@ impl DbTransactionOutput {
     pub fn new(transaction_id: Hash, index: u32, output: &CacheTransactionOutput) -> Self {
         DbTransactionOutput {
             transaction_id: transaction_id.as_bytes().to_vec(),
-            index: index as i32,
+            index: index as i16,
             amount: output.value as i64,
             script_public_key: output.script_public_key.script().to_vec(),
-            script_public_key_type: output.script_public_key_type.clone() as i8,
+            script_public_key_type: output.script_public_key_type.clone() as i16,
             script_public_key_address: output.script_public_key_address.clone(),
         }
     }
