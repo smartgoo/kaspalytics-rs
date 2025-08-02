@@ -1,5 +1,11 @@
 use super::super::AppState;
-use crate::analysis::{mining, transactions::counter as tx_counter};
+use crate::analysis::{
+    mining,
+    transactions::{
+        counter as tx_counter,
+        fees,
+    }
+};
 use crate::ingest::cache::DagCache;
 use crate::storage::cache::CacheEntry;
 use crate::storage::{Reader, Storage};
@@ -23,27 +29,46 @@ use tokio_stream::{wrappers::WatchStream, Stream, StreamExt};
 
 #[derive(Clone, Copy, Debug, Display, EnumIter, Eq, Hash, PartialEq, Serialize)]
 enum SseKey {
+    // Markets 
     PriceUsd,
     PriceBtc,
     PruningPoint,
     MarketCap,
     Volume,
+
+    // Network
     DaaScore,
     CsSompi,
+    Difficulty,
+    PercentIssued,
+    HashRate,
+    HashRate7dChange,
+    HashRate30dChange,
+    HashRate90dChange,
+
+    // Tx Counts
     UniqueAcceptedTransactionCount24h,
     UniqueAcceptedTransactionCountPerHour24h,
     KasiaTransactionCount24h,
     KrcTransactionCount24h,
     KnsTransactionCount24h,
+
+    // Fees
+    FeeMean60s,
+    // FeeMedian60s,
+    FeesTotal60s,
+    FeeMean60m,
+    // FeeMedian60m,
+    FeesTotal60m,
+    FeeMean24h,
+    // FeeMedian24h,
+    FeesTotal24h,
+    FeesMeanTimeline,
+
+    // Misc
     MinerNodeVersionCount1h,
     CsAging,
     AddressByKasBalance,
-    HashRate,
-    HashRate7dChange,
-    HashRate30dChange,
-    HashRate90dChange,
-    Difficulty,
-    PercentIssued,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -130,6 +155,7 @@ impl SseData {
         Self::collect_market_data(&mut data, &storage, cutoff).await;
         Self::collect_chain_data(&mut data, &storage, cutoff).await;
         Self::collect_transaction_data(&mut data, &dag_cache).await;
+        Self::collect_fee_data(&mut data, &dag_cache).await;
         Self::collect_mining_data(&mut data, &dag_cache).await;
 
         Ok(data)
@@ -318,6 +344,45 @@ impl SseData {
             SseKey::KnsTransactionCount24h,
             SseField::from(tx_counter::kns_transaction_count(dag_cache, threshold)),
         );
+    }
+
+    async fn collect_fee_data(&mut self, dag_cache: &Arc<DagCache>) {
+        self.set(
+            SseKey::FeeMean60s,
+            SseField::from(fees::median_fee(dag_cache, 60)),
+        );
+
+        self.set(
+            SseKey::FeeMean60m,
+            SseField::from(fees::median_fee(dag_cache, 3600)),
+        );
+
+        self.set(
+            SseKey::FeeMean24h,
+            SseField::from(fees::median_fee(dag_cache, 86400)),
+        );
+
+        self.set(
+            SseKey::FeesTotal60s,
+            SseField::from(fees::total_fees(dag_cache, 60)),
+        );
+
+        self.set(
+            SseKey::FeesTotal60m,
+            SseField::from(fees::total_fees(dag_cache, 3600)),
+        );
+
+        self.set(
+            SseKey::FeesTotal24h,
+            SseField::from(fees::total_fees(dag_cache, 86400)),
+        );
+
+        self.set(
+            SseKey::FeesMeanTimeline,
+            SseField::from(
+                serde_json::to_string(&fees::average_fee_by_time_bucket(dag_cache, 300, 86400)).unwrap(),
+            )
+        )
     }
 
     async fn collect_mining_data(&mut self, dag_cache: &Arc<DagCache>) {
