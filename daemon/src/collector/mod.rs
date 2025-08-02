@@ -123,6 +123,39 @@ impl Collector {
             });
         }
 
+        // Feerate update task
+        {
+            let context = self.context.clone();
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) =
+                        update_fee_rates(&context.rpc_client, context.storage.clone()).await
+                    {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_fee_rates: {}", e);
+                    }
+                }
+            });
+        }
+
+        {
+            let context = self.context.clone();
+            let shutdown_flag = context.shutdown_flag.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    interval.tick().await;
+                    if let Err(e) =
+                        update_mempool_entries(&context.rpc_client, context.storage.clone()).await
+                    {
+                        error!(target: LogTarget::Daemon.as_str(), "Error during update_mempool_entries: {}", e);
+                    }
+                }
+            });
+        }
+
         // Hash rate changes update task
         {
             let context = self.context.clone();
@@ -174,9 +207,7 @@ async fn update_sink_blue_score(
     let date = Utc::now();
     let data = rpc_client.get_sink_blue_score().await?;
 
-    storage
-        .set_sink_blue_score(data, Some(date))
-        .await?;
+    storage.set_sink_blue_score(data, Some(date)).await?;
 
     Ok(())
 }
@@ -228,6 +259,30 @@ async fn snapshot_hash_rate(
             None,
         )
         .await?;
+
+    Ok(())
+}
+
+async fn update_fee_rates(
+    rpc_client: &Arc<KaspaRpcClient>,
+    storage: Arc<Storage>,
+) -> Result<(), Error> {
+    let date = Utc::now();
+    let data = rpc_client.get_fee_estimate().await?;
+
+    storage.set_fee_rates(data, Some(date)).await?;
+
+    Ok(())
+}
+
+async fn update_mempool_entries(
+    rpc_client: &Arc<KaspaRpcClient>,
+    storage: Arc<Storage>,
+) -> Result<(), Error> {
+    let date = Utc::now();
+    let data = rpc_client.get_mempool_entries(true, false).await?;
+
+    storage.set_mempool_entries(data, Some(date)).await?;
 
     Ok(())
 }

@@ -1,7 +1,11 @@
+use crate::ingest::model::CacheTransaction;
+
 use super::{Error, Reader, Writer};
 use chrono::{DateTime, Utc};
+use kaspa_addresses::Address;
 use kaspa_hashes::Hash;
-use rust_decimal::Decimal;
+use kaspa_rpc_core::{RpcFeeEstimate, RpcMempoolEntry};
+use rust_decimal::{prelude::FromPrimitive, Decimal};
 use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Default)]
@@ -25,9 +29,26 @@ pub struct Cache {
     circulating_supply: RwLock<CacheEntry<u64>>,
     difficulty: RwLock<CacheEntry<Decimal>>,
     hash_rate: RwLock<CacheEntry<u64>>,
+    fee_rate_priority: RwLock<CacheEntry<Decimal>>,
+    fee_rate_normal: RwLock<CacheEntry<Decimal>>,
+    fee_rate_low: RwLock<CacheEntry<Decimal>>,
+    mempool_entries: RwLock<CacheEntry<Vec<RpcMempoolEntry>>>,
+
+    // Hash rate change
     hash_rate_7d_change: RwLock<CacheEntry<Decimal>>,
     hash_rate_30d_change: RwLock<CacheEntry<Decimal>>,
     hash_rate_90d_change: RwLock<CacheEntry<Decimal>>,
+
+    // Largest fees 24h
+    // transactions_top_100_fees_24h_min: RwLock<u64>,
+    // transactions_top_100_fees_24h: RwLock<Vec<CacheTransaction>>,
+
+    // // Largest txs 24h
+    // transactions_top_100_output_amounts_24h_min: RwLock<u64>,
+    // transactions_top_100_output_amounts_24h: RwLock<Vec<CacheTransaction>>,
+
+    // // Most active addresses 24h
+    // address_activity_24h: RwLock<Vec<Address>>,
 }
 
 impl Writer for Cache {
@@ -148,6 +169,42 @@ impl Writer for Cache {
 
         *self.hash_rate.write().await = CacheEntry::<u64> {
             value: hash_rate,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
+
+    async fn set_fee_rates(
+        &self,
+        value: RpcFeeEstimate,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        *self.fee_rate_priority.write().await = CacheEntry::<Decimal> {
+            value: Decimal::from_f64(value.priority_bucket.feerate).unwrap(),
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        *self.fee_rate_normal.write().await = CacheEntry::<Decimal> {
+            value: Decimal::from_f64(value.normal_buckets[0].feerate).unwrap(),
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        *self.fee_rate_low.write().await = CacheEntry::<Decimal> {
+            value: Decimal::from_f64(value.low_buckets[0].feerate).unwrap(),
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
+
+    async fn set_mempool_entries(
+        &self,
+        value: Vec<kaspa_rpc_core::RpcMempoolEntry>,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        *self.mempool_entries.write().await = CacheEntry::<Vec<RpcMempoolEntry>> {
+            value,
             timestamp: timestamp.unwrap_or(Utc::now()),
         };
 

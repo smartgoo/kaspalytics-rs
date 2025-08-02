@@ -4,19 +4,30 @@ use strum_macros::Display;
 
 #[derive(Clone, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum KeyRegistry {
+    // Markets data
     PriceUsd,
     PriceBtc,
     MarketCap,
     Volume,
+
+    // Kaspa RPC Data
     SinkBlueScore,
     DaaScore,
     PruningPoint,
     CsSompi,
     HashRate,
     Difficulty,
+    FeeratePriority,
+    FeerateNormal,
+    FeerateLow,
+    MempoolEntries,
+
+    // Hash Rate changes
     HashRate7dChange,
     HashRate30dChange,
     HashRate90dChange,
+
+    // Transaction Counts
     TransactionCount24h,
     CoinbaseTransactionCount24h,
     CoinbaseAcceptedTransactionCount24h,
@@ -25,6 +36,8 @@ pub enum KeyRegistry {
     AcceptedTransactionCountPerHour24h,
     AcceptedTransactionCountPerMinute1h,
     AcceptedTransactionCountPerSecond1m,
+
+    // Mining node versions
     MinerNodeVersionCount1h,
 }
 

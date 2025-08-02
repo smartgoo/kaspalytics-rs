@@ -206,6 +206,7 @@ pub struct CacheTransaction {
     pub block_time: u64,
     pub accepting_block_hash: Option<Hash>,
     pub protocol: Option<TransactionProtocol>,
+    pub fee: Option<u64>,
 }
 
 // impl CacheTransaction {
@@ -250,6 +251,7 @@ impl From<RpcTransaction> for CacheTransaction {
             block_time: value.verbose_data.clone().unwrap().block_time,
             accepting_block_hash: None,
             protocol: None,
+            fee: None,
         }
     }
 }

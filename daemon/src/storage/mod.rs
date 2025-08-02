@@ -1,7 +1,9 @@
 pub mod cache;
+
 use cache::{Cache, CacheEntry};
 use chrono::{DateTime, Utc};
 use kaspa_hashes::Hash;
+use kaspa_rpc_core::{RpcFeeEstimate, RpcMempoolEntry};
 use kaspalytics_utils::database::sql::{
     hash_rate,
     key_value::{self, KeyRegistry},
@@ -83,16 +85,30 @@ pub trait Writer {
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
 
+    async fn set_fee_rates(
+        &self,
+        value: RpcFeeEstimate,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
+
+    async fn set_mempool_entries(
+        &self,
+        value: Vec<RpcMempoolEntry>,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
+
     async fn set_hash_rate_7d_change(
         &self,
         value: Decimal,
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
+
     async fn set_hash_rate_30d_change(
         &self,
         value: Decimal,
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
+
     async fn set_hash_rate_90d_change(
         &self,
         value: Decimal,
@@ -262,6 +278,58 @@ impl Writer for Storage {
             difficulty.to_u64().unwrap(),
         )
         .await?;
+
+        Ok(())
+    }
+
+    async fn set_fee_rates(
+        &self,
+        value: RpcFeeEstimate,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        self.cache.set_fee_rates(value.clone(), timestamp).await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::FeeratePriority,
+            value.priority_bucket.feerate,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::FeerateNormal,
+            value.normal_buckets[0].feerate,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::FeerateLow,
+            value.low_buckets[0].feerate,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn set_mempool_entries(
+        &self,
+        value: Vec<RpcMempoolEntry>,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::MempoolEntries,
+            serde_json::to_string(&value).unwrap(),
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        self.cache.set_mempool_entries(value, timestamp).await?;
 
         Ok(())
     }

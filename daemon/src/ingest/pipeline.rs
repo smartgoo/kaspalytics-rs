@@ -223,7 +223,7 @@ fn add_transaction_acceptance(
         .entry(transaction_id)
         .and_modify(|v| v.accepting_block_hash = Some(accepting_block_hash));
 
-    let Some(tx) = dag_cache.transactions.get(&transaction_id) else {
+    let Some(mut tx) = dag_cache.transactions.get_mut(&transaction_id) else {
         warn!(
             target: LogTarget::Daemon.as_str(),
             "Failed to add transaction acceptance status for tx {}, tx not in cache",
@@ -241,32 +241,68 @@ fn add_transaction_acceptance(
             .entry(tx_timestamp / 1000)
             .and_modify(|v| v.increment_coinbase_accepted_transaction_count());
     } else {
+        // Cacluate fee paid
+        let total_input_amount = tx
+            .inputs
+            .iter()
+            .map(|input| {
+                input
+                    .utxo_entry
+                    .as_ref()
+                    .map(|utxo_entry| utxo_entry.amount)
+                    .unwrap_or(0)
+            })
+            .sum::<u64>();
+
+        let total_output_amount = tx.outputs.iter().map(|output| output.value).sum::<u64>();
+        
+        tx.fee = Some(total_input_amount - total_output_amount);
+
+        // Update metrics for given second
         dag_cache
             .seconds
             .entry(tx_timestamp / 1000)
-            .and_modify(|v| v.increment_unique_accepted_transaction_count());
+            .and_modify(|v| {
+                v.increment_unique_accepted_transaction_count();
+                v.increment_total_fees(tx.fee.unwrap());
 
-        match tx.protocol {
-            Some(TransactionProtocol::Kasia) => {
-                dag_cache
-                    .seconds
-                    .entry(tx_timestamp / 1000)
-                    .and_modify(|v| v.increment_kasia_transaction_count());
-            }
-            Some(TransactionProtocol::Krc) => {
-                dag_cache
-                    .seconds
-                    .entry(tx_timestamp / 1000)
-                    .and_modify(|v| v.increment_krc_transaction_count());
-            }
-            Some(TransactionProtocol::Kns) => {
-                dag_cache
-                    .seconds
-                    .entry(tx_timestamp / 1000)
-                    .and_modify(|v| v.increment_kns_transaction_count());
-            }
-            None => {}
-        }
+                // Increment Protocol count for given second
+                match tx.protocol {
+                    Some(TransactionProtocol::Kasia) => {
+                        v.increment_kasia_transaction_count();
+                    }
+                    Some(TransactionProtocol::Krc) => {
+                        v.increment_krc_transaction_count();
+                    }
+                    Some(TransactionProtocol::Kns) => {
+                        v.increment_kns_transaction_count();
+                    }
+                    None => {}
+                }
+            }); 
+
+        // Increment Protocol count for given second
+        // match tx.protocol {
+        //     Some(TransactionProtocol::Kasia) => {
+        //         dag_cache
+        //             .seconds
+        //             .entry(tx_timestamp / 1000)
+        //             .and_modify(|v| v.increment_kasia_transaction_count());
+        //     }
+        //     Some(TransactionProtocol::Krc) => {
+        //         dag_cache
+        //             .seconds
+        //             .entry(tx_timestamp / 1000)
+        //             .and_modify(|v| v.increment_krc_transaction_count());
+        //     }
+        //     Some(TransactionProtocol::Kns) => {
+        //         dag_cache
+        //             .seconds
+        //             .entry(tx_timestamp / 1000)
+        //             .and_modify(|v| v.increment_kns_transaction_count());
+        //     }
+        //     None => {}
+        // }
     }
 }
 
@@ -370,29 +406,45 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
         dag_cache
             .seconds
             .entry(tx_timestamp / 1000)
-            .and_modify(|v| v.decrement_unique_accepted_transaction_count());
+            .and_modify(|v| {
+                v.decrement_unique_accepted_transaction_count();
+                v.decrement_total_fees(tx.fee.unwrap());
 
-        match tx.protocol {
-            Some(TransactionProtocol::Kasia) => {
-                dag_cache
-                    .seconds
-                    .entry(tx_timestamp / 1000)
-                    .and_modify(|v| v.decrement_kasia_transaction_count());
-            }
-            Some(TransactionProtocol::Krc) => {
-                dag_cache
-                    .seconds
-                    .entry(tx_timestamp / 1000)
-                    .and_modify(|v| v.decrement_krc_transaction_count());
-            }
-            Some(TransactionProtocol::Kns) => {
-                dag_cache
-                    .seconds
-                    .entry(tx_timestamp / 1000)
-                    .and_modify(|v| v.decrement_kns_transaction_count());
-            }
-            None => {}
-        }
+                match tx.protocol {
+                    Some(TransactionProtocol::Kasia) => {
+                        v.decrement_kasia_transaction_count();
+                    }
+                    Some(TransactionProtocol::Krc) => {
+                        v.decrement_krc_transaction_count();
+                    }
+                    Some(TransactionProtocol::Kns) => {
+                        v.decrement_kns_transaction_count();
+                    }
+                    None => {}
+                }
+            });
+
+        // match tx.protocol {
+        //     Some(TransactionProtocol::Kasia) => {
+        //         dag_cache
+        //             .seconds
+        //             .entry(tx_timestamp / 1000)
+        //             .and_modify(|v| v.decrement_kasia_transaction_count());
+        //     }
+        //     Some(TransactionProtocol::Krc) => {
+        //         dag_cache
+        //             .seconds
+        //             .entry(tx_timestamp / 1000)
+        //             .and_modify(|v| v.decrement_krc_transaction_count());
+        //     }
+        //     Some(TransactionProtocol::Kns) => {
+        //         dag_cache
+        //             .seconds
+        //             .entry(tx_timestamp / 1000)
+        //             .and_modify(|v| v.decrement_kns_transaction_count());
+        //     }
+        //     None => {}
+        // }
     }
 }
 

@@ -21,6 +21,9 @@ pub struct SecondMetrics {
     pub unique_transaction_count: AtomicU64,
     pub unique_accepted_transaction_count: AtomicU64,
 
+    // Total fees paid this second
+    pub total_fees: AtomicU64,
+
     // Count of various protocol transactions
     pub kasia_transaction_count: AtomicU64,
     pub krc_transaction_count: AtomicU64,
@@ -73,6 +76,16 @@ impl SecondMetrics {
     pub fn decrement_unique_accepted_transaction_count(&mut self) {
         self.unique_accepted_transaction_count
             .fetch_sub(1, Ordering::Relaxed);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn increment_total_fees(&mut self, fee: u64) {
+        self.total_fees.fetch_add(fee, Ordering::Relaxed);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn decrement_total_fees(&mut self, fee: u64) {
+        self.total_fees.fetch_sub(fee, Ordering::Relaxed);
         self.updated_at = Utc::now();
     }
 
