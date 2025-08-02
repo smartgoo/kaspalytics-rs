@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS kaspad.transactions (
     total_output_amount BIGINT,
     payload BYTEA
 );
+CREATE INDEX ON kaspad.transactions (block_time);
 
 -----------------------------------------
 -- Reset kaspad.transactions_inputs

@@ -1,8 +1,5 @@
-use crate::ingest::model::CacheTransaction;
-
 use super::{Error, Reader, Writer};
 use chrono::{DateTime, Utc};
-use kaspa_addresses::Address;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcFeeEstimate, RpcMempoolEntry};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
@@ -38,17 +35,6 @@ pub struct Cache {
     hash_rate_7d_change: RwLock<CacheEntry<Decimal>>,
     hash_rate_30d_change: RwLock<CacheEntry<Decimal>>,
     hash_rate_90d_change: RwLock<CacheEntry<Decimal>>,
-
-    // Largest fees 24h
-    // transactions_top_100_fees_24h_min: RwLock<u64>,
-    // transactions_top_100_fees_24h: RwLock<Vec<CacheTransaction>>,
-
-    // // Largest txs 24h
-    // transactions_top_100_output_amounts_24h_min: RwLock<u64>,
-    // transactions_top_100_output_amounts_24h: RwLock<Vec<CacheTransaction>>,
-
-    // // Most active addresses 24h
-    // address_activity_24h: RwLock<Vec<Address>>,
 }
 
 impl Writer for Cache {
