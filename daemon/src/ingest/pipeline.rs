@@ -255,7 +255,7 @@ fn add_transaction_acceptance(
             .sum::<u64>();
 
         let total_output_amount = tx.outputs.iter().map(|output| output.value).sum::<u64>();
-        
+
         tx.fee = Some(total_input_amount - total_output_amount);
 
         // Update metrics for given second
@@ -279,7 +279,7 @@ fn add_transaction_acceptance(
                     }
                     None => {}
                 }
-            }); 
+            });
 
         // Increment Protocol count for given second
         // match tx.protocol {

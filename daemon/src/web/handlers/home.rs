@@ -1,10 +1,7 @@
 use super::super::AppState;
 use crate::analysis::{
     mining,
-    transactions::{
-        counter as tx_counter,
-        fees,
-    }
+    transactions::{counter as tx_counter, fees},
 };
 use crate::ingest::cache::DagCache;
 use crate::storage::cache::CacheEntry;
@@ -29,7 +26,7 @@ use tokio_stream::{wrappers::WatchStream, Stream, StreamExt};
 
 #[derive(Clone, Copy, Debug, Display, EnumIter, Eq, Hash, PartialEq, Serialize)]
 enum SseKey {
-    // Markets 
+    // Markets
     PriceUsd,
     PriceBtc,
     PruningPoint,
@@ -380,8 +377,9 @@ impl SseData {
         self.set(
             SseKey::FeesMeanTimeline,
             SseField::from(
-                serde_json::to_string(&fees::average_fee_by_time_bucket(dag_cache, 300, 86400)).unwrap(),
-            )
+                serde_json::to_string(&fees::average_fee_by_time_bucket(dag_cache, 300, 86400))
+                    .unwrap(),
+            ),
         )
     }
 

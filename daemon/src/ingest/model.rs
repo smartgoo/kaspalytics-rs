@@ -1,13 +1,12 @@
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use chrono::{DateTime, Utc};
-use kaspa_addresses::Address;
 use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
 use kaspa_consensus_core::BlueWorkType;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcScriptClass, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint,
-    RpcTransactionOutput, RpcUtxoEntry,
+    RpcBlock, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint, RpcTransactionOutput,
+    RpcUtxoEntry,
 };
 use kaspa_txscript::script_class::ScriptClass;
 use serde::{Deserialize, Serialize};
@@ -125,10 +124,10 @@ pub type CacheTransactionOutpoint = RpcTransactionOutpoint;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CacheUtxoEntry {
     pub amount: u64,
-    pub script_public_key: ScriptPublicKey,
+    pub script_public_key: CacheScriptPublicKey,
     pub is_coinbase: bool,
-    pub script_public_key_type: Option<RpcScriptClass>,
-    pub script_public_key_address: Option<Address>,
+    pub script_public_key_type: Option<CacheScriptClass>,
+    pub script_public_key_address: Option<String>,
 }
 
 impl From<RpcUtxoEntry> for CacheUtxoEntry {
@@ -147,7 +146,7 @@ impl From<RpcUtxoEntry> for CacheUtxoEntry {
             script_public_key: value.script_public_key,
             is_coinbase: value.is_coinbase,
             script_public_key_type: spkt,
-            script_public_key_address: spka,
+            script_public_key_address: spka.map(|v| v.to_string()),
         }
     }
 }

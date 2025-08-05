@@ -89,7 +89,10 @@ async fn main() {
                 }
             }
         }
-        Err(_) => Arc::new(DagCache::default()),
+        Err(e) => {
+            error!(target: LogTarget::Daemon.as_str(), "Error loading DagCache from disk: {}", e);
+            Arc::new(DagCache::default())
+        }
     };
 
     let context = Arc::new(AppContext {
