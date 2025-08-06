@@ -46,6 +46,7 @@ impl Writer {
         let mut transaction_queue = Vec::new();
         let mut input_queue = Vec::new();
         let mut output_queue = Vec::new();
+        let mut address_transaction_queue = Vec::new();
 
         for block in batch.blocks {
             for parent in block.parent_hashes.iter() {
@@ -66,10 +67,29 @@ impl Writer {
         for tx in batch.transactions {
             for (index, input) in tx.inputs.iter().enumerate() {
                 input_queue.push(DbTransactionInput::new(tx.id, index as u32, input));
+
+                if input.utxo_entry.is_some() {
+                    address_transaction_queue.push(DbAddressTransaction::new(
+                        input
+                            .utxo_entry
+                            .as_ref()
+                            .unwrap()
+                            .script_public_key_address
+                            .as_ref()
+                            .unwrap()
+                            .clone(),
+                        tx.id,
+                    ));
+                }
             }
 
             for (index, output) in tx.outputs.iter().enumerate() {
                 output_queue.push(DbTransactionOutput::new(tx.id, index as u32, output));
+
+                address_transaction_queue.push(DbAddressTransaction::new(
+                    output.script_public_key_address.clone(),
+                    tx.id,
+                ));
             }
 
             transaction_queue.push(DbTransaction::from(tx));
@@ -81,6 +101,7 @@ impl Writer {
         let transaction_pool = self.pg_pool.clone();
         let input_pool = self.pg_pool.clone();
         let output_pool = self.pg_pool.clone();
+        let address_transactions_pool = self.pg_pool.clone();
 
         let insert_start = start.elapsed().as_millis();
         tokio::try_join!(
@@ -116,6 +137,14 @@ impl Writer {
                 insert::insert_outputs_unnest(output_queue, output_pool)
                     .await
                     .unwrap();
+            }),
+            tokio::spawn(async {
+                insert::insert_address_transactions_unnest(
+                    address_transaction_queue,
+                    address_transactions_pool,
+                )
+                .await
+                .unwrap();
             }),
         )
         .unwrap();

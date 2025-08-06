@@ -230,3 +230,17 @@ impl DbTransactionOutput {
         }
     }
 }
+
+pub struct DbAddressTransaction {
+    pub address: String,
+    pub transaction_id: Vec<u8>,
+}
+
+impl DbAddressTransaction {
+    pub fn new(address: String, transaction_id: Hash) -> Self {
+        DbAddressTransaction {
+            address,
+            transaction_id: transaction_id.as_bytes().to_vec(),
+        }
+    }
+}

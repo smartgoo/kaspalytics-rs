@@ -115,15 +115,15 @@ pub fn average_fee_by_time_bucket(
     // Calculate averages and prepare result
     let mut result: Vec<(u64, Decimal)> = bucket_data
         .into_iter()
-        .filter_map(|(bucket_timestamp, (total_fees, tx_count))| {
+        .map(|(bucket_timestamp, (total_fees, tx_count))| {
             if tx_count == 0 {
                 // If no transactions, average fee is 0
-                Some((bucket_timestamp, Decimal::from_u64(0).unwrap()))
+                (bucket_timestamp, Decimal::from_u64(0).unwrap())
             } else {
                 // Calculate average fee
                 let average_fee =
                     Decimal::from_u64(total_fees).unwrap() / Decimal::from_u64(tx_count).unwrap();
-                Some((bucket_timestamp, average_fee))
+                (bucket_timestamp, average_fee)
             }
         })
         .collect();

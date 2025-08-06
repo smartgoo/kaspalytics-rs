@@ -1,6 +1,3 @@
------------------------------------------
--- Reset kaspad.blocks
------------------------------------------
 DROP TABLE kaspad.blocks CASCADE;
 
 CREATE TABLE IF NOT EXISTS kaspad.blocks (
@@ -21,18 +18,12 @@ CREATE TABLE IF NOT EXISTS kaspad.blocks (
     is_chain_block BOOLEAN
 );
 
------------------------------------------
--- Create kaspad.blocks_parents
------------------------------------------
 CREATE TABLE IF NOT EXISTS kaspad.blocks_parents (
     block_hash BYTEA NOT NULL,
     parent_hash BYTEA NOT NULL,
     PRIMARY KEY (block_hash, parent_hash)
 );
 
------------------------------------------
--- Create kaspad.blocks_transactions
------------------------------------------
 CREATE TABLE IF NOT EXISTS kaspad.blocks_transactions (
     block_hash BYTEA NOT NULL,
     transaction_id BYTEA NOT NULL,
@@ -40,9 +31,6 @@ CREATE TABLE IF NOT EXISTS kaspad.blocks_transactions (
     PRIMARY KEY (block_hash, transaction_id)
 );
 
------------------------------------------
--- Reset kaspad.transactions
------------------------------------------
 DROP TABLE kaspad.transactions CASCADE;
 
 CREATE TABLE IF NOT EXISTS kaspad.transactions (
@@ -62,9 +50,6 @@ CREATE TABLE IF NOT EXISTS kaspad.transactions (
 );
 CREATE INDEX ON kaspad.transactions (block_time);
 
------------------------------------------
--- Reset kaspad.transactions_inputs
------------------------------------------
 DROP TABLE kaspad.transactions_inputs CASCADE;
 
 CREATE TABLE IF NOT EXISTS kaspad.transactions_inputs (
@@ -83,9 +68,6 @@ CREATE TABLE IF NOT EXISTS kaspad.transactions_inputs (
     PRIMARY KEY (transaction_id, "index")
 );
 
------------------------------------------
--- Reset kaspad.transactions_outputs
------------------------------------------
 DROP TABLE kaspad.transactions_outputs CASCADE;
 
 CREATE TABLE IF NOT EXISTS kaspad.transactions_outputs (
@@ -98,17 +80,17 @@ CREATE TABLE IF NOT EXISTS kaspad.transactions_outputs (
     PRIMARY KEY (transaction_id, "index")
 );
 
------------------------------------------
--- Create kaspad.subnetwork_ids
------------------------------------------
+CREATE TABLE kaspad.address_transactions (
+    address VARCHAR,
+    transaction_id BYTEA,
+    PRIMARY KEY (address, transaction_id)
+);
+
 CREATE TABLE kaspad.subnetwork_ids (
     id SERIAL PRIMARY KEY,
     subnetwork_id TEXT
 );
 
------------------------------------------
--- Create kaspad.transaction_protocols
------------------------------------------
 CREATE TABLE kaspad.transaction_protocols (
     id SERIAL PRIMARY KEY,
     "name" TEXT,

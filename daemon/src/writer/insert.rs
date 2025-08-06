@@ -1,4 +1,4 @@
-use crate::writer::model::{DbBlockParent, DbBlockTransaction};
+use crate::writer::model::{DbAddressTransaction, DbBlockParent, DbBlockTransaction};
 
 use super::{DbBlock, DbTransaction, DbTransactionInput, DbTransactionOutput};
 use sqlx::{PgPool, QueryBuilder};
@@ -386,6 +386,48 @@ pub async fn insert_outputs_unnest(
             .bind(script_public_keys)
             .bind(script_public_key_types)
             .bind(script_public_key_addresses)
+            .execute(&pg_pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
+pub async fn insert_address_transactions_unnest(
+    outputs: Vec<DbAddressTransaction>,
+    pg_pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    if outputs.is_empty() {
+        return Ok(());
+    }
+
+    // TODO take ownership in iter chunks
+    for chunk in outputs.chunks(1000) {
+        let mut addresses = Vec::with_capacity(CHUNK_SIZE);
+        let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
+
+        for e in chunk.iter() {
+            addresses.push(e.address.clone());
+            transaction_ids.push(e.transaction_id.clone());
+        }
+
+        let mut qb = QueryBuilder::new(
+            r#"
+                INSERT INTO kaspad.address_transactions
+                (
+                    address, transaction_id
+                )
+                SELECT * FROM UNNEST (
+                    $1::varchar[],  -- address
+                    $2::bytea[]     -- transaction_id
+                )
+                ON CONFLICT DO NOTHING
+            "#,
+        );
+
+        qb.build()
+            .bind(addresses)
+            .bind(transaction_ids)
             .execute(&pg_pool)
             .await?;
     }
