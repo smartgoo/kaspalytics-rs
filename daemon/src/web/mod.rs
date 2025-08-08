@@ -140,6 +140,10 @@ impl WebServer {
                 "/sse/v1/visualizer/stream",
                 get(handlers::visualizer::stream),
             )
+            .route(
+                "/api/v1/address/{address}",
+                get(handlers::address::get_balance),
+            )
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))
