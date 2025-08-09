@@ -31,7 +31,6 @@ pub async fn get_balance(
     Ok(Json(BalanceResponse { address, balance }))
 }
 
-
 pub async fn get_utxos_by_address(
     Path(address): Path<String>,
     State(state): State<AppState>,
