@@ -234,13 +234,25 @@ impl DbTransactionOutput {
 pub struct DbAddressTransaction {
     pub address: String,
     pub transaction_id: Vec<u8>,
+    pub block_time: DateTime<Utc>,
+    pub direction: u8,
+    pub utxo_amount: i64,
 }
 
 impl DbAddressTransaction {
-    pub fn new(address: String, transaction_id: Hash) -> Self {
+    pub fn new(
+        address: String,
+        transaction_id: Hash,
+        block_time: u64,
+        direction: u8,
+        utxo_amount: u64,
+    ) -> Self {
         DbAddressTransaction {
             address,
             transaction_id: transaction_id.as_bytes().to_vec(),
+            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
+            direction,
+            utxo_amount: utxo_amount as i64
         }
     }
 }

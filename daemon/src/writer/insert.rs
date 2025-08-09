@@ -52,7 +52,7 @@ pub async fn insert_blocks_unnest(
         ) 
         SELECT * FROM UNNEST (
             $1::bytea[],                -- block_hash
-            $2::timestamp[],            -- block_time
+            $2::timestamptz[],          -- block_time
             $3::smallint[],             -- version
             $4::bytea[],                -- hash_merkle_root
             $5::bytea[],                -- accepted_id_merkle_root
@@ -405,21 +405,30 @@ pub async fn insert_address_transactions_unnest(
     for chunk in outputs.chunks(1000) {
         let mut addresses = Vec::with_capacity(CHUNK_SIZE);
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
+        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
+        let mut directions = Vec::with_capacity(CHUNK_SIZE);
+        let mut amounts = Vec::with_capacity(CHUNK_SIZE);
 
         for e in chunk.iter() {
             addresses.push(e.address.clone());
             transaction_ids.push(e.transaction_id.clone());
+            block_times.push(e.block_time);
+            directions.push(e.direction);
+            amounts.push(e.utxo_amount);
         }
 
         let mut qb = QueryBuilder::new(
             r#"
                 INSERT INTO kaspad.address_transactions
                 (
-                    address, transaction_id
+                    address, transaction_id, block_time, direction, utxo_amount
                 )
                 SELECT * FROM UNNEST (
-                    $1::varchar[],  -- address
-                    $2::bytea[]     -- transaction_id
+                    $1::varchar[],      -- address
+                    $2::bytea[],        -- transaction_id
+                    $3::timestamptz[],  -- block_time
+                    $4::smallint[],     -- direction
+                    $5::bigint[]        -- utxo_amount
                 )
                 ON CONFLICT DO NOTHING
             "#,
@@ -428,6 +437,9 @@ pub async fn insert_address_transactions_unnest(
         qb.build()
             .bind(addresses)
             .bind(transaction_ids)
+            .bind(block_times)
+            .bind(directions)
+            .bind(amounts)
             .execute(&pg_pool)
             .await?;
     }

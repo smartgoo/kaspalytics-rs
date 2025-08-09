@@ -144,6 +144,10 @@ impl WebServer {
                 "/api/v1/address/{address}",
                 get(handlers::address::get_balance),
             )
+            .route(
+                "/api/v1/address/{address}/utxos",
+                get(handlers::address::get_utxos_by_address),
+            )
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))

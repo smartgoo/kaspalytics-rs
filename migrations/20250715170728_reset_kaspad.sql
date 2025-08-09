@@ -1,6 +1,6 @@
 DROP TABLE kaspad.blocks CASCADE;
 
-CREATE TABLE IF NOT EXISTS kaspad.blocks (
+CREATE TABLE kaspad.blocks (
     block_hash BYTEA PRIMARY KEY,
     block_time TIMESTAMPTZ,
     "version" SMALLINT,
@@ -18,13 +18,13 @@ CREATE TABLE IF NOT EXISTS kaspad.blocks (
     is_chain_block BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS kaspad.blocks_parents (
+CREATE TABLE kaspad.blocks_parents (
     block_hash BYTEA NOT NULL,
     parent_hash BYTEA NOT NULL,
     PRIMARY KEY (block_hash, parent_hash)
 );
 
-CREATE TABLE IF NOT EXISTS kaspad.blocks_transactions (
+CREATE TABLE kaspad.blocks_transactions (
     block_hash BYTEA NOT NULL,
     transaction_id BYTEA NOT NULL,
     "index" SMALLINT,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS kaspad.blocks_transactions (
 
 DROP TABLE kaspad.transactions CASCADE;
 
-CREATE TABLE IF NOT EXISTS kaspad.transactions (
+CREATE TABLE kaspad.transactions (
     transaction_id BYTEA PRIMARY KEY,
     "version" SMALLINT,
     lock_time BIGINT,
@@ -52,7 +52,7 @@ CREATE INDEX ON kaspad.transactions (block_time);
 
 DROP TABLE kaspad.transactions_inputs CASCADE;
 
-CREATE TABLE IF NOT EXISTS kaspad.transactions_inputs (
+CREATE TABLE kaspad.transactions_inputs (
     transaction_id BYTEA NOT NULL,
     "index" SMALLINT,
     previous_outpoint_transaction_id BYTEA,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS kaspad.transactions_inputs (
 
 DROP TABLE kaspad.transactions_outputs CASCADE;
 
-CREATE TABLE IF NOT EXISTS kaspad.transactions_outputs (
+CREATE TABLE kaspad.transactions_outputs (
     transaction_id BYTEA NOT NULL,
     "index" SMALLINT,
     amount BIGINT,
@@ -83,8 +83,13 @@ CREATE TABLE IF NOT EXISTS kaspad.transactions_outputs (
 CREATE TABLE kaspad.address_transactions (
     address VARCHAR,
     transaction_id BYTEA,
+    block_time TIMESTAMPTZ,
+    direction SMALLINT,
+    utxo_amount BIGINT,
     PRIMARY KEY (address, transaction_id)
 );
+CREATE INDEX ON kaspad.address_transactions (block_time);
+CREATE INDEX ON kaspad.address_transactions (transaction_id);
 
 CREATE TABLE kaspad.subnetwork_ids (
     id SERIAL PRIMARY KEY,

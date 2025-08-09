@@ -5,6 +5,7 @@ use axum::{
     Json,
 };
 use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_rpc_core::RpcUtxosByAddressesEntry;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -28,4 +29,22 @@ pub async fn get_balance(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(BalanceResponse { address, balance }))
+}
+
+
+pub async fn get_utxos_by_address(
+    Path(address): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<RpcUtxosByAddressesEntry>>, (StatusCode, String)> {
+    let parsed_address = kaspa_addresses::Address::try_from(address.as_str())
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid address: {}", e)))?;
+
+    let data = state
+        .context
+        .rpc_client
+        .get_utxos_by_addresses(vec![parsed_address])
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(data))
 }

@@ -79,6 +79,13 @@ impl Writer {
                             .unwrap()
                             .clone(),
                         tx.id,
+                        tx.block_time,
+                        1,
+                        input
+                            .utxo_entry
+                            .as_ref()
+                            .unwrap()
+                            .amount,
                     ));
                 }
             }
@@ -89,6 +96,9 @@ impl Writer {
                 address_transaction_queue.push(DbAddressTransaction::new(
                     output.script_public_key_address.clone(),
                     tx.id,
+                    tx.block_time,
+                    2,
+                    output.value
                 ));
             }
 
