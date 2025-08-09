@@ -81,11 +81,7 @@ impl Writer {
                         tx.id,
                         tx.block_time,
                         1,
-                        input
-                            .utxo_entry
-                            .as_ref()
-                            .unwrap()
-                            .amount,
+                        input.utxo_entry.as_ref().unwrap().amount,
                     ));
                 }
             }
@@ -98,66 +94,39 @@ impl Writer {
                     tx.id,
                     tx.block_time,
                     2,
-                    output.value
+                    output.value,
                 ));
             }
 
             transaction_queue.push(DbTransaction::from(tx));
         }
 
-        let block_pool = self.pg_pool.clone();
-        let blocks_parents_pool = self.pg_pool.clone();
-        let blocks_transactions_pool = self.pg_pool.clone();
-        let transaction_pool = self.pg_pool.clone();
-        let input_pool = self.pg_pool.clone();
-        let output_pool = self.pg_pool.clone();
-        let address_transactions_pool = self.pg_pool.clone();
-
         let insert_start = start.elapsed().as_millis();
-        tokio::try_join!(
-            tokio::spawn(async {
-                insert::insert_blocks_unnest(block_queue, block_pool)
-                    .await
-                    .unwrap();
-            }),
-            tokio::spawn(async {
-                insert::insert_blocks_parents_unnest(blocks_parents_queue, blocks_parents_pool)
-                    .await
-                    .unwrap();
-            }),
-            tokio::spawn(async {
-                insert::insert_blocks_transactions_unnest(
-                    blocks_transactions_queue,
-                    blocks_transactions_pool,
-                )
-                .await
-                .unwrap();
-            }),
-            tokio::spawn(async {
-                insert::insert_transactions_unnest(transaction_queue, transaction_pool)
-                    .await
-                    .unwrap();
-            }),
-            tokio::spawn(async {
-                insert::insert_inputs_unnest(input_queue, input_pool)
-                    .await
-                    .unwrap();
-            }),
-            tokio::spawn(async {
-                insert::insert_outputs_unnest(output_queue, output_pool)
-                    .await
-                    .unwrap();
-            }),
-            tokio::spawn(async {
-                insert::insert_address_transactions_unnest(
-                    address_transaction_queue,
-                    address_transactions_pool,
-                )
-                .await
-                .unwrap();
-            }),
-        )
-        .unwrap();
+        let mut tx = self.pg_pool.begin().await.unwrap();
+
+        insert::insert_blocks_unnest(block_queue, &mut tx)
+            .await
+            .unwrap();
+        insert::insert_blocks_parents_unnest(blocks_parents_queue, &mut tx)
+            .await
+            .unwrap();
+        insert::insert_blocks_transactions_unnest(blocks_transactions_queue, &mut tx)
+            .await
+            .unwrap();
+        insert::insert_transactions_unnest(transaction_queue, &mut tx)
+            .await
+            .unwrap();
+        insert::insert_inputs_unnest(input_queue, &mut tx)
+            .await
+            .unwrap();
+        insert::insert_outputs_unnest(output_queue, &mut tx)
+            .await
+            .unwrap();
+        insert::insert_address_transactions_unnest(address_transaction_queue, &mut tx)
+            .await
+            .unwrap();
+
+        tx.commit().await.unwrap();
         let insert_end = start.elapsed().as_millis() - insert_start;
 
         let duration_ms = start.elapsed().as_millis() as u64;

@@ -252,7 +252,7 @@ impl DbAddressTransaction {
             transaction_id: transaction_id.as_bytes().to_vec(),
             block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
             direction,
-            utxo_amount: utxo_amount as i64
+            utxo_amount: utxo_amount as i64,
         }
     }
 }

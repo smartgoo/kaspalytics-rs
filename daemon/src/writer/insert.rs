@@ -1,173 +1,188 @@
 use crate::writer::model::{DbAddressTransaction, DbBlockParent, DbBlockTransaction};
 
 use super::{DbBlock, DbTransaction, DbTransactionInput, DbTransactionOutput};
-use sqlx::{PgPool, QueryBuilder};
+use sqlx::{Postgres, QueryBuilder, Transaction};
 
 const CHUNK_SIZE: usize = 1000;
 
 pub async fn insert_blocks_unnest(
     blocks: Vec<DbBlock>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
-    let mut block_hashes = Vec::new();
-    let mut block_times = Vec::new();
-    let mut versions = Vec::new();
-    let mut hash_merkle_roots = Vec::new();
-    let mut accepted_id_merkle_roots = Vec::new();
-    let mut utxo_commitments = Vec::new();
-    let mut bits = Vec::new();
-    let mut nonces = Vec::new();
-    let mut daa_scores = Vec::new();
-    let mut blue_works = Vec::new();
-    let mut blue_scores = Vec::new();
-    let mut pruning_points = Vec::new();
-    let mut difficulties = Vec::new();
-    let mut selected_parent_hashes = Vec::new();
-    let mut is_chain_blocks = Vec::new();
-
-    for block in blocks.into_iter() {
-        block_hashes.push(block.block_hash);
-        block_times.push(block.block_time);
-        versions.push(block.version);
-        hash_merkle_roots.push(block.hash_merkle_root);
-        accepted_id_merkle_roots.push(block.accepted_id_merkle_root);
-        utxo_commitments.push(block.utxo_commitment);
-        bits.push(block.bits);
-        nonces.push(block.nonce);
-        daa_scores.push(block.daa_score);
-        blue_works.push(block.blue_work);
-        blue_scores.push(block.blue_score);
-        pruning_points.push(block.pruning_point);
-        difficulties.push(block.difficulty);
-        selected_parent_hashes.push(block.selected_parent_hash);
-        is_chain_blocks.push(block.is_chain_block);
+    if blocks.is_empty() {
+        return Ok(());
     }
 
-    let mut qb = QueryBuilder::new(
-        "INSERT INTO kaspad.blocks
-        (
-            block_hash, block_time, \"version\", hash_merkle_root, accepted_id_merkle_root,
-            utxo_commitment, bits, nonce, daa_score, blue_work,
-            blue_score, pruning_point, difficulty, selected_parent_hash, is_chain_block
-        ) 
-        SELECT * FROM UNNEST (
-            $1::bytea[],                -- block_hash
-            $2::timestamptz[],          -- block_time
-            $3::smallint[],             -- version
-            $4::bytea[],                -- hash_merkle_root
-            $5::bytea[],                -- accepted_id_merkle_root
-            $6::bytea[],                -- utxo_committment
-            $7::integer[],              -- bits
-            $8::bigint[],               -- nonce
-            $9::bigint[],               -- daa_score
-            $10::bytea[],               -- blue_work
-            $11::bigint[],              -- blue_score
-            $12::bytea[],               -- pruning_point
-            $13::double precision[],    -- difficulty
-            $14::bytea[],               -- selected_parent_hash
-            $15::boolean[]              -- is_chain_block
-        )
-        ON CONFLICT DO NOTHING
-        ",
-    );
+    for chunk in blocks.chunks(CHUNK_SIZE) {
+        let mut block_hashes = Vec::with_capacity(chunk.len());
+        let mut block_times = Vec::with_capacity(chunk.len());
+        let mut versions = Vec::with_capacity(chunk.len());
+        let mut hash_merkle_roots = Vec::with_capacity(chunk.len());
+        let mut accepted_id_merkle_roots = Vec::with_capacity(chunk.len());
+        let mut utxo_commitments = Vec::with_capacity(chunk.len());
+        let mut bits = Vec::with_capacity(chunk.len());
+        let mut nonces = Vec::with_capacity(chunk.len());
+        let mut daa_scores = Vec::with_capacity(chunk.len());
+        let mut blue_works = Vec::with_capacity(chunk.len());
+        let mut blue_scores = Vec::with_capacity(chunk.len());
+        let mut pruning_points = Vec::with_capacity(chunk.len());
+        let mut difficulties = Vec::with_capacity(chunk.len());
+        let mut selected_parent_hashes = Vec::with_capacity(chunk.len());
+        let mut is_chain_blocks = Vec::with_capacity(chunk.len());
 
-    qb.build()
-        .bind(block_hashes)
-        .bind(block_times)
-        .bind(versions)
-        .bind(hash_merkle_roots)
-        .bind(accepted_id_merkle_roots)
-        .bind(utxo_commitments)
-        .bind(bits)
-        .bind(nonces)
-        .bind(daa_scores)
-        .bind(blue_works)
-        .bind(blue_scores)
-        .bind(pruning_points)
-        .bind(difficulties)
-        .bind(selected_parent_hashes)
-        .bind(is_chain_blocks)
-        .execute(&pg_pool)
-        .await?;
+        for block in chunk.iter() {
+            block_hashes.push(block.block_hash.clone());
+            block_times.push(block.block_time);
+            versions.push(block.version);
+            hash_merkle_roots.push(block.hash_merkle_root.clone());
+            accepted_id_merkle_roots.push(block.accepted_id_merkle_root.clone());
+            utxo_commitments.push(block.utxo_commitment.clone());
+            bits.push(block.bits);
+            nonces.push(block.nonce);
+            daa_scores.push(block.daa_score);
+            blue_works.push(block.blue_work.clone());
+            blue_scores.push(block.blue_score);
+            pruning_points.push(block.pruning_point.clone());
+            difficulties.push(block.difficulty);
+            selected_parent_hashes.push(block.selected_parent_hash.clone());
+            is_chain_blocks.push(block.is_chain_block);
+        }
+
+        let mut qb = QueryBuilder::new(
+            "INSERT INTO kaspad.blocks
+            (
+                block_hash, block_time, \"version\", hash_merkle_root, accepted_id_merkle_root,
+                utxo_commitment, bits, nonce, daa_score, blue_work,
+                blue_score, pruning_point, difficulty, selected_parent_hash, is_chain_block
+            ) 
+            SELECT * FROM UNNEST (
+                $1::bytea[],                -- block_hash
+                $2::timestamptz[],          -- block_time
+                $3::smallint[],             -- version
+                $4::bytea[],                -- hash_merkle_root
+                $5::bytea[],                -- accepted_id_merkle_root
+                $6::bytea[],                -- utxo_commitment
+                $7::integer[],              -- bits
+                $8::bigint[],               -- nonce
+                $9::bigint[],               -- daa_score
+                $10::bytea[],               -- blue_work
+                $11::bigint[],              -- blue_score
+                $12::bytea[],               -- pruning_point
+                $13::double precision[],    -- difficulty
+                $14::bytea[],               -- selected_parent_hash
+                $15::boolean[]              -- is_chain_block
+            )
+            ON CONFLICT DO NOTHING",
+        );
+
+        qb.build()
+            .bind(block_hashes)
+            .bind(block_times)
+            .bind(versions)
+            .bind(hash_merkle_roots)
+            .bind(accepted_id_merkle_roots)
+            .bind(utxo_commitments)
+            .bind(bits)
+            .bind(nonces)
+            .bind(daa_scores)
+            .bind(blue_works)
+            .bind(blue_scores)
+            .bind(pruning_points)
+            .bind(difficulties)
+            .bind(selected_parent_hashes)
+            .bind(is_chain_blocks)
+            .execute(&mut **tx)
+            .await?;
+    }
 
     Ok(())
 }
 
 pub async fn insert_blocks_parents_unnest(
     blocks_parents: Vec<DbBlockParent>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
-    let mut block_hashes = Vec::new();
-    let mut parent_hashes = Vec::new();
-
-    for relationship in blocks_parents.into_iter() {
-        block_hashes.push(relationship.block_hash);
-        parent_hashes.push(relationship.parent_hash);
+    if blocks_parents.is_empty() {
+        return Ok(());
     }
 
-    let mut qb = QueryBuilder::new(
-        "INSERT INTO kaspad.blocks_parents
-        (
-            block_hash, parent_hash
-        ) 
-        SELECT * FROM UNNEST (
-            $1::bytea[],    -- block_hash
-            $2::bytea[]     -- parent_hash
-        )
-        ON CONFLICT DO NOTHING
-        ",
-    );
+    for chunk in blocks_parents.chunks(CHUNK_SIZE) {
+        let mut block_hashes = Vec::with_capacity(chunk.len());
+        let mut parent_hashes = Vec::with_capacity(chunk.len());
 
-    qb.build()
-        .bind(block_hashes)
-        .bind(parent_hashes)
-        .execute(&pg_pool)
-        .await?;
+        for relationship in chunk.iter() {
+            block_hashes.push(relationship.block_hash.clone());
+            parent_hashes.push(relationship.parent_hash.clone());
+        }
+
+        let mut qb = QueryBuilder::new(
+            "INSERT INTO kaspad.blocks_parents
+            (
+                block_hash, parent_hash
+            ) 
+            SELECT * FROM UNNEST (
+                $1::bytea[],    -- block_hash
+                $2::bytea[]     -- parent_hash
+            )
+            ON CONFLICT DO NOTHING",
+        );
+
+        qb.build()
+            .bind(block_hashes)
+            .bind(parent_hashes)
+            .execute(&mut **tx)
+            .await?;
+    }
 
     Ok(())
 }
 
 pub async fn insert_blocks_transactions_unnest(
     blocks_transactions: Vec<DbBlockTransaction>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
-    let mut block_hashes = Vec::with_capacity(CHUNK_SIZE);
-    let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
-    let mut indexes = Vec::with_capacity(CHUNK_SIZE);
-
-    for relationship in blocks_transactions.into_iter() {
-        block_hashes.push(relationship.block_hash);
-        transaction_ids.push(relationship.transaction_id);
-        indexes.push(relationship.index);
+    if blocks_transactions.is_empty() {
+        return Ok(());
     }
 
-    let mut qb = QueryBuilder::new(
-        "INSERT INTO kaspad.blocks_transactions
-        (
-            block_hash, transaction_id, index
-        ) 
-        SELECT * FROM UNNEST (
-            $1::bytea[],    -- block_hash
-            $2::bytea[],    -- transaction_id
-            $3::smallint[]  -- index
-        )
-        ON CONFLICT DO NOTHING
-        ",
-    );
+    for chunk in blocks_transactions.chunks(CHUNK_SIZE) {
+        let mut block_hashes = Vec::with_capacity(chunk.len());
+        let mut transaction_ids = Vec::with_capacity(chunk.len());
+        let mut indexes = Vec::with_capacity(chunk.len());
 
-    qb.build()
-        .bind(block_hashes)
-        .bind(transaction_ids)
-        .bind(indexes)
-        .execute(&pg_pool)
-        .await?;
+        for relationship in chunk.iter() {
+            block_hashes.push(relationship.block_hash.clone());
+            transaction_ids.push(relationship.transaction_id.clone());
+            indexes.push(relationship.index);
+        }
+
+        let mut qb = QueryBuilder::new(
+            "INSERT INTO kaspad.blocks_transactions
+            (
+                block_hash, transaction_id, index
+            ) 
+            SELECT * FROM UNNEST (
+                $1::bytea[],    -- block_hash
+                $2::bytea[],    -- transaction_id
+                $3::smallint[]  -- index
+            )
+            ON CONFLICT DO NOTHING",
+        );
+
+        qb.build()
+            .bind(block_hashes)
+            .bind(transaction_ids)
+            .bind(indexes)
+            .execute(&mut **tx)
+            .await?;
+    }
 
     Ok(())
 }
 
 pub async fn insert_transactions_unnest(
     transactions: Vec<DbTransaction>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
     if transactions.is_empty() {
         return Ok(());
@@ -245,7 +260,7 @@ pub async fn insert_transactions_unnest(
             .bind(total_input_amounts)
             .bind(total_output_amounts)
             .bind(payloads)
-            .execute(&pg_pool)
+            .execute(&mut **tx)
             .await?;
     }
 
@@ -254,7 +269,7 @@ pub async fn insert_transactions_unnest(
 
 pub async fn insert_inputs_unnest(
     inputs: Vec<DbTransactionInput>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
     if inputs.is_empty() {
         return Ok(());
@@ -327,7 +342,7 @@ pub async fn insert_inputs_unnest(
             .bind(utxo_is_coinbases)
             .bind(utxo_script_public_key_types)
             .bind(utxo_script_public_key_addresses)
-            .execute(&pg_pool)
+            .execute(&mut **tx)
             .await?;
     }
 
@@ -336,7 +351,7 @@ pub async fn insert_inputs_unnest(
 
 pub async fn insert_outputs_unnest(
     outputs: Vec<DbTransactionOutput>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
     if outputs.is_empty() {
         return Ok(());
@@ -386,7 +401,7 @@ pub async fn insert_outputs_unnest(
             .bind(script_public_keys)
             .bind(script_public_key_types)
             .bind(script_public_key_addresses)
-            .execute(&pg_pool)
+            .execute(&mut **tx)
             .await?;
     }
 
@@ -395,7 +410,7 @@ pub async fn insert_outputs_unnest(
 
 pub async fn insert_address_transactions_unnest(
     outputs: Vec<DbAddressTransaction>,
-    pg_pool: PgPool,
+    tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
     if outputs.is_empty() {
         return Ok(());
@@ -403,17 +418,17 @@ pub async fn insert_address_transactions_unnest(
 
     // TODO take ownership in iter chunks
     for chunk in outputs.chunks(1000) {
-        let mut addresses = Vec::with_capacity(CHUNK_SIZE);
-        let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
+        let mut addresses: Vec<String> = Vec::with_capacity(CHUNK_SIZE);
+        let mut transaction_ids: Vec<Vec<u8>> = Vec::with_capacity(CHUNK_SIZE);
         let mut block_times = Vec::with_capacity(CHUNK_SIZE);
-        let mut directions = Vec::with_capacity(CHUNK_SIZE);
-        let mut amounts = Vec::with_capacity(CHUNK_SIZE);
+        let mut directions: Vec<i16> = Vec::with_capacity(CHUNK_SIZE);
+        let mut amounts: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
 
         for e in chunk.iter() {
             addresses.push(e.address.clone());
             transaction_ids.push(e.transaction_id.clone());
             block_times.push(e.block_time);
-            directions.push(e.direction);
+            directions.push(e.direction as i16);
             amounts.push(e.utxo_amount);
         }
 
@@ -440,7 +455,7 @@ pub async fn insert_address_transactions_unnest(
             .bind(block_times)
             .bind(directions)
             .bind(amounts)
-            .execute(&pg_pool)
+            .execute(&mut **tx)
             .await?;
     }
 

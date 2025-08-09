@@ -13,7 +13,7 @@ CREATE TABLE kaspad.blocks (
     blue_work BYTEA,
     blue_score BIGINT,
     pruning_point BYTEA,
-    difficulty NUMERIC,
+    difficulty DOUBLE PRECISION,
     selected_parent_hash BYTEA,
     is_chain_block BOOLEAN
 );
@@ -83,12 +83,12 @@ CREATE TABLE kaspad.transactions_outputs (
 CREATE TABLE kaspad.address_transactions (
     address VARCHAR,
     transaction_id BYTEA,
-    block_time TIMESTAMPTZ,
-    direction SMALLINT,
-    utxo_amount BIGINT,
+    block_time TIMESTAMPTZ, -- TODO remove?
+    direction SMALLINT, -- TODO remove?
+    utxo_amount BIGINT, -- TODO remove?
     PRIMARY KEY (address, transaction_id)
 );
-CREATE INDEX ON kaspad.address_transactions (block_time);
+CREATE INDEX ON kaspad.address_transactions (block_time); -- TODO remove?
 CREATE INDEX ON kaspad.address_transactions (transaction_id);
 
 CREATE TABLE kaspad.subnetwork_ids (
