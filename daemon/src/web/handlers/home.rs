@@ -61,6 +61,9 @@ enum SseKey {
     // FeeMedian24h,
     FeesTotal24h,
     FeesMeanTimeline,
+    FeerateLow,
+    FeerateNormal,
+    FeeratePriority,
 
     // Misc
     MinerNodeVersionCount1h,
@@ -153,6 +156,7 @@ impl SseData {
         Self::collect_chain_data(&mut data, &storage, cutoff).await;
         Self::collect_transaction_data(&mut data, &dag_cache).await;
         Self::collect_fee_data(&mut data, &dag_cache).await;
+        Self::collect_feerate_data(&mut data, &storage, cutoff).await;
         Self::collect_mining_data(&mut data, &dag_cache).await;
 
         Ok(data)
@@ -374,13 +378,51 @@ impl SseData {
             SseField::from(fees::total_fees(dag_cache, 86400)),
         );
 
-        self.set(
-            SseKey::FeesMeanTimeline,
-            SseField::from(
-                serde_json::to_string(&fees::average_fee_by_time_bucket(dag_cache, 300, 86400))
-                    .unwrap(),
-            ),
-        )
+        // self.set(
+        //     SseKey::FeesMeanTimeline,
+        //     SseField::from(
+        //         serde_json::to_string(&fees::average_fee_by_time_bucket(dag_cache, 300, 86400))
+        //             .unwrap(),
+        //     ),
+        // )
+    }
+
+    async fn collect_feerate_data(&mut self, storage: &Storage, cutoff: Option<DateTime<Utc>>) {
+        let feerate_low = storage.get_feerate_low().await;
+        match cutoff {
+            Some(cutoff) => {
+                if feerate_low.timestamp > cutoff {
+                    self.set(SseKey::FeerateLow, SseField::from(feerate_low));
+                }
+            }
+            None => {
+                self.set(SseKey::FeerateLow, SseField::from(feerate_low));
+            }
+        }
+
+        let feerate_normal = storage.get_feerate_normal().await;
+        match cutoff {
+            Some(cutoff) => {
+                if feerate_normal.timestamp > cutoff {
+                    self.set(SseKey::FeerateNormal, SseField::from(feerate_normal));
+                }
+            }
+            None => {
+                self.set(SseKey::FeerateNormal, SseField::from(feerate_normal));
+            }
+        }
+
+        let feerate_priority = storage.get_feerate_priority().await;
+        match cutoff {
+            Some(cutoff) => {
+                if feerate_priority.timestamp > cutoff {
+                    self.set(SseKey::FeeratePriority, SseField::from(feerate_priority));
+                }
+            }
+            None => {
+                self.set(SseKey::FeeratePriority, SseField::from(feerate_priority));
+            }
+        }
     }
 
     async fn collect_mining_data(&mut self, dag_cache: &Arc<DagCache>) {

@@ -50,6 +50,7 @@ pub fn total_fees(dag_cache: &Arc<DagCache>, period: u64) -> u64 {
 /// Returns a vector of (timestamp, average_fee) tuples sorted by timestamp
 /// suitable for time series charting
 /// Only includes complete buckets that are entirely within the lookback period
+#[allow(dead_code)]
 pub fn average_fee_by_time_bucket(
     dag_cache: &Arc<DagCache>,
     bucket: u64,

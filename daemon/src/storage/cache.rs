@@ -285,4 +285,16 @@ impl Reader for Cache {
     async fn get_hash_rate_90d_change(&self) -> CacheEntry<Decimal> {
         self.hash_rate_90d_change.read().await.clone()
     }
+
+    async fn get_feerate_low(&self) -> CacheEntry<Decimal> {
+        self.fee_rate_low.read().await.clone()
+    }
+
+    async fn get_feerate_normal(&self) -> CacheEntry<Decimal> {
+        self.fee_rate_normal.read().await.clone()
+    }
+
+    async fn get_feerate_priority(&self) -> CacheEntry<Decimal> {
+        self.fee_rate_priority.read().await.clone()
+    }
 }

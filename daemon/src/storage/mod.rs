@@ -407,6 +407,10 @@ pub trait Reader {
     async fn get_hash_rate_7d_change(&self) -> CacheEntry<Decimal>;
     async fn get_hash_rate_30d_change(&self) -> CacheEntry<Decimal>;
     async fn get_hash_rate_90d_change(&self) -> CacheEntry<Decimal>;
+
+    async fn get_feerate_low(&self) -> CacheEntry<Decimal>;
+    async fn get_feerate_normal(&self) -> CacheEntry<Decimal>;
+    async fn get_feerate_priority(&self) -> CacheEntry<Decimal>;
 }
 
 impl Reader for Storage {
@@ -456,5 +460,17 @@ impl Reader for Storage {
 
     async fn get_hash_rate_90d_change(&self) -> CacheEntry<Decimal> {
         self.cache.get_hash_rate_90d_change().await
+    }
+
+    async fn get_feerate_low(&self) -> CacheEntry<Decimal> {
+        self.cache.get_feerate_low().await
+    }
+
+    async fn get_feerate_normal(&self) -> CacheEntry<Decimal> {
+        self.cache.get_feerate_normal().await
+    }
+
+    async fn get_feerate_priority(&self) -> CacheEntry<Decimal> {
+        self.cache.get_feerate_priority().await
     }
 }
