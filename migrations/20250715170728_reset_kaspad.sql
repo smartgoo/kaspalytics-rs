@@ -30,7 +30,8 @@ CREATE TABLE kaspad.blocks (
     is_chain_block BOOLEAN,
     PRIMARY KEY (block_hash, block_time)
 );
-SELECT create_hypertable('kaspad.blocks', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.blocks', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.blocks', INTERVAL '10 days', if_not_exists => TRUE);
 
 -- Block parents (hypertable)
 CREATE TABLE kaspad.blocks_parents (
@@ -39,7 +40,8 @@ CREATE TABLE kaspad.blocks_parents (
     block_time TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (block_hash, parent_hash, block_time)
 );
-SELECT create_hypertable('kaspad.blocks_parents', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.blocks_parents', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.blocks_parents', INTERVAL '10 days', if_not_exists => TRUE);
 
 -- Blocks to transactions mapping (hypertable)
 CREATE TABLE kaspad.blocks_transactions (
@@ -49,7 +51,8 @@ CREATE TABLE kaspad.blocks_transactions (
     block_time TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (block_hash, transaction_id, block_time)
 );
-SELECT create_hypertable('kaspad.blocks_transactions', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.blocks_transactions', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.blocks_transactions', INTERVAL '10 days', if_not_exists => TRUE);
 
 -- Transactions (hypertable)
 CREATE TABLE kaspad.transactions (
@@ -68,7 +71,8 @@ CREATE TABLE kaspad.transactions (
     payload BYTEA,
     PRIMARY KEY (transaction_id, block_time)
 );
-SELECT create_hypertable('kaspad.transactions', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.transactions', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.transactions', INTERVAL '10 days', if_not_exists => TRUE);
 
 -- Transaction inputs (hypertable)
 CREATE TABLE kaspad.transactions_inputs (
@@ -87,7 +91,8 @@ CREATE TABLE kaspad.transactions_inputs (
     block_time TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (transaction_id, "index", block_time)
 );
-SELECT create_hypertable('kaspad.transactions_inputs', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.transactions_inputs', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.transactions_inputs', INTERVAL '10 days', if_not_exists => TRUE);
 
 -- Transaction outputs (hypertable)
 CREATE TABLE kaspad.transactions_outputs (
@@ -100,7 +105,8 @@ CREATE TABLE kaspad.transactions_outputs (
     block_time TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (transaction_id, "index", block_time)
 );
-SELECT create_hypertable('kaspad.transactions_outputs', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.transactions_outputs', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.transactions_outputs', INTERVAL '10 days', if_not_exists => TRUE);
 
 -- Address transactions (hypertable enforcing uniqueness within partition)
 CREATE TABLE kaspad.address_transactions (
@@ -111,7 +117,8 @@ CREATE TABLE kaspad.address_transactions (
     utxo_amount BIGINT, -- TODO remove?
     PRIMARY KEY (address, transaction_id, block_time)
 );
-SELECT create_hypertable('kaspad.address_transactions', 'block_time', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+SELECT create_hypertable('kaspad.address_transactions', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT add_retention_policy('kaspad.address_transactions', INTERVAL '10 days', if_not_exists => TRUE);
 -- Retain non-time-based indexes
 CREATE INDEX ON kaspad.address_transactions (transaction_id);
 
