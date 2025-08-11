@@ -50,7 +50,7 @@ impl Writer {
 
         for block in batch.blocks {
             for parent in block.parent_hashes.iter() {
-                blocks_parents_queue.push(DbBlockParent::new(block.hash, *parent));
+                blocks_parents_queue.push(DbBlockParent::new(block.hash, *parent, block.timestamp));
             }
 
             for (index, transaction_id) in block.transactions.iter().enumerate() {
@@ -58,6 +58,7 @@ impl Writer {
                     block.hash,
                     *transaction_id,
                     index as u16,
+                    block.timestamp,
                 ))
             }
 
@@ -66,7 +67,7 @@ impl Writer {
 
         for tx in batch.transactions {
             for (index, input) in tx.inputs.iter().enumerate() {
-                input_queue.push(DbTransactionInput::new(tx.id, index as u32, input));
+                input_queue.push(DbTransactionInput::new(tx.id, index as u32, input, tx.block_time));
 
                 if input.utxo_entry.is_some() {
                     address_transaction_queue.push(DbAddressTransaction::new(
@@ -87,7 +88,7 @@ impl Writer {
             }
 
             for (index, output) in tx.outputs.iter().enumerate() {
-                output_queue.push(DbTransactionOutput::new(tx.id, index as u32, output));
+                output_queue.push(DbTransactionOutput::new(tx.id, index as u32, output, tx.block_time));
 
                 address_transaction_queue.push(DbAddressTransaction::new(
                     output.script_public_key_address.clone(),
@@ -181,7 +182,7 @@ impl Writer {
             // It must finish processing all messages in channel
             // channel returns None when closed and no remaining messages
 
-            // self.handle(blocks).await;
+            self.handle(blocks).await;
         }
 
         // Shutdown logger

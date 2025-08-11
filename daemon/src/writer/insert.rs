@@ -109,20 +109,23 @@ pub async fn insert_blocks_parents_unnest(
     for chunk in blocks_parents.chunks(CHUNK_SIZE) {
         let mut block_hashes = Vec::with_capacity(chunk.len());
         let mut parent_hashes = Vec::with_capacity(chunk.len());
+        let mut block_times = Vec::with_capacity(chunk.len());
 
         for relationship in chunk.iter() {
             block_hashes.push(relationship.block_hash.clone());
             parent_hashes.push(relationship.parent_hash.clone());
+            block_times.push(relationship.block_time);
         }
 
         let mut qb = QueryBuilder::new(
             "INSERT INTO kaspad.blocks_parents
             (
-                block_hash, parent_hash
+                block_hash, parent_hash, block_time
             ) 
             SELECT * FROM UNNEST (
                 $1::bytea[],    -- block_hash
-                $2::bytea[]     -- parent_hash
+                $2::bytea[],    -- parent_hash
+                $3::timestamptz[] -- block_time
             )
             ON CONFLICT DO NOTHING",
         );
@@ -130,6 +133,7 @@ pub async fn insert_blocks_parents_unnest(
         qb.build()
             .bind(block_hashes)
             .bind(parent_hashes)
+            .bind(block_times)
             .execute(&mut **tx)
             .await?;
     }
@@ -149,22 +153,25 @@ pub async fn insert_blocks_transactions_unnest(
         let mut block_hashes = Vec::with_capacity(chunk.len());
         let mut transaction_ids = Vec::with_capacity(chunk.len());
         let mut indexes = Vec::with_capacity(chunk.len());
+        let mut block_times = Vec::with_capacity(chunk.len());
 
         for relationship in chunk.iter() {
             block_hashes.push(relationship.block_hash.clone());
             transaction_ids.push(relationship.transaction_id.clone());
             indexes.push(relationship.index);
+            block_times.push(relationship.block_time);
         }
 
         let mut qb = QueryBuilder::new(
             "INSERT INTO kaspad.blocks_transactions
             (
-                block_hash, transaction_id, index
+                block_hash, transaction_id, index, block_time
             ) 
             SELECT * FROM UNNEST (
                 $1::bytea[],    -- block_hash
                 $2::bytea[],    -- transaction_id
-                $3::smallint[]  -- index
+                $3::smallint[], -- index
+                $4::timestamptz[] -- block_time
             )
             ON CONFLICT DO NOTHING",
         );
@@ -173,6 +180,7 @@ pub async fn insert_blocks_transactions_unnest(
             .bind(block_hashes)
             .bind(transaction_ids)
             .bind(indexes)
+            .bind(block_times)
             .execute(&mut **tx)
             .await?;
     }
@@ -289,6 +297,7 @@ pub async fn insert_inputs_unnest(
         let mut utxo_is_coinbases = Vec::with_capacity(CHUNK_SIZE);
         let mut utxo_script_public_key_types = Vec::with_capacity(CHUNK_SIZE);
         let mut utxo_script_public_key_addresses = Vec::with_capacity(CHUNK_SIZE);
+        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
 
         for input in chunk.iter() {
             // block_hashes.push(input.block_hash.clone());
@@ -303,6 +312,7 @@ pub async fn insert_inputs_unnest(
             utxo_is_coinbases.push(input.utxo_is_coinbase);
             utxo_script_public_key_types.push(input.utxo_script_public_key_type);
             utxo_script_public_key_addresses.push(input.utxo_script_public_key_address.clone());
+            block_times.push(input.block_time);
         }
 
         let mut qb = QueryBuilder::new(
@@ -311,7 +321,7 @@ pub async fn insert_inputs_unnest(
                 (
                     transaction_id, index, previous_outpoint_transaction_id,
                     previous_outpoint_index, signature_script, sig_op_count, utxo_amount, utxo_script_public_key,
-                    utxo_is_coinbase, utxo_script_public_key_type, utxo_script_public_key_address
+                    utxo_is_coinbase, utxo_script_public_key_type, utxo_script_public_key_address, block_time
                 )
                 SELECT * FROM UNNEST (
                     $1::bytea[],    -- transaction_id
@@ -324,7 +334,8 @@ pub async fn insert_inputs_unnest(
                     $8::bytea[],    -- utxo_script_public_key
                     $9::boolean[],  -- utxo_is_coinbase
                     $10::smallint[],-- utxo_script_public_key_type
-                    $11::varchar[]  -- utxo_script_public_key_address
+                    $11::varchar[], -- utxo_script_public_key_address
+                    $12::timestamptz[] -- block_time
                 )
                 ON CONFLICT DO NOTHING
             "#,
@@ -342,6 +353,7 @@ pub async fn insert_inputs_unnest(
             .bind(utxo_is_coinbases)
             .bind(utxo_script_public_key_types)
             .bind(utxo_script_public_key_addresses)
+            .bind(block_times)
             .execute(&mut **tx)
             .await?;
     }
@@ -365,6 +377,7 @@ pub async fn insert_outputs_unnest(
         let mut script_public_keys = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_key_types = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_key_addresses = Vec::with_capacity(CHUNK_SIZE);
+        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
 
         for output in chunk.iter() {
             transaction_ids.push(output.transaction_id.clone());
@@ -373,6 +386,7 @@ pub async fn insert_outputs_unnest(
             script_public_keys.push(output.script_public_key.clone());
             script_public_key_types.push(output.script_public_key_type);
             script_public_key_addresses.push(output.script_public_key_address.clone());
+            block_times.push(output.block_time);
         }
 
         let mut qb = QueryBuilder::new(
@@ -380,7 +394,7 @@ pub async fn insert_outputs_unnest(
                 INSERT INTO kaspad.transactions_outputs
                 (
                     transaction_id, index, amount, script_public_key, script_public_key_type,
-                    script_public_key_address
+                    script_public_key_address, block_time
                 )
                 SELECT * FROM UNNEST (
                     $1::bytea[],    -- transaction_id
@@ -388,7 +402,8 @@ pub async fn insert_outputs_unnest(
                     $3::bigint[],   -- amount
                     $4::bytea[],    -- script_public_key
                     $5::smallint[], -- script_public_key_type
-                    $6::varchar[]   -- script_public_key_address
+                    $6::varchar[],  -- script_public_key_address
+                    $7::timestamptz[] -- block_time
                 )
                 ON CONFLICT DO NOTHING
             "#,
@@ -401,6 +416,7 @@ pub async fn insert_outputs_unnest(
             .bind(script_public_keys)
             .bind(script_public_key_types)
             .bind(script_public_key_addresses)
+            .bind(block_times)
             .execute(&mut **tx)
             .await?;
     }

@@ -51,13 +51,15 @@ impl From<CacheBlock> for DbBlock {
 pub struct DbBlockParent {
     pub block_hash: Vec<u8>,
     pub parent_hash: Vec<u8>,
+    pub block_time: DateTime<Utc>,
 }
 
 impl DbBlockParent {
-    pub fn new(block_hash: Hash, parent_hash: Hash) -> Self {
+    pub fn new(block_hash: Hash, parent_hash: Hash, block_time: u64) -> Self {
         Self {
             block_hash: block_hash.as_bytes().to_vec(),
             parent_hash: parent_hash.as_bytes().to_vec(),
+            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
         }
     }
 }
@@ -66,14 +68,16 @@ pub struct DbBlockTransaction {
     pub block_hash: Vec<u8>,
     pub transaction_id: Vec<u8>,
     pub index: i16,
+    pub block_time: DateTime<Utc>,
 }
 
 impl DbBlockTransaction {
-    pub fn new(block_hash: Hash, transaction_id: Hash, index: u16) -> Self {
+    pub fn new(block_hash: Hash, transaction_id: Hash, index: u16, block_time: u64) -> Self {
         Self {
             block_hash: block_hash.as_bytes().to_vec(),
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i16,
+            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
         }
     }
 }
@@ -149,10 +153,11 @@ pub struct DbTransactionInput {
     pub utxo_is_coinbase: Option<bool>,
     pub utxo_script_public_key_type: Option<i16>,
     pub utxo_script_public_key_address: Option<String>,
+    pub block_time: DateTime<Utc>,
 }
 
 impl DbTransactionInput {
-    pub fn new(transaction_id: Hash, index: u32, input: &CacheTransactionInput) -> Self {
+    pub fn new(transaction_id: Hash, index: u32, input: &CacheTransactionInput, block_time: u64) -> Self {
         let (
             utxo_amount,
             utxo_script_public_key,
@@ -205,6 +210,7 @@ impl DbTransactionInput {
             utxo_is_coinbase,
             utxo_script_public_key_type,
             utxo_script_public_key_address,
+            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
         }
     }
 }
@@ -216,10 +222,11 @@ pub struct DbTransactionOutput {
     pub script_public_key: Vec<u8>,
     pub script_public_key_type: i16,
     pub script_public_key_address: String,
+    pub block_time: DateTime<Utc>,
 }
 
 impl DbTransactionOutput {
-    pub fn new(transaction_id: Hash, index: u32, output: &CacheTransactionOutput) -> Self {
+    pub fn new(transaction_id: Hash, index: u32, output: &CacheTransactionOutput, block_time: u64) -> Self {
         DbTransactionOutput {
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i16,
@@ -227,6 +234,7 @@ impl DbTransactionOutput {
             script_public_key: output.script_public_key.script().to_vec(),
             script_public_key_type: output.script_public_key_type.clone() as i16,
             script_public_key_address: output.script_public_key_address.clone(),
+            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
         }
     }
 }
