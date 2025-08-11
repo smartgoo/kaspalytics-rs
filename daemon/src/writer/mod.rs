@@ -156,7 +156,7 @@ impl Writer {
             // It must finish processing all messages in channel
             // channel returns None when closed and no remaining messages
 
-            self.handle(blocks).await;
+            // self.handle(blocks).await;
         }
 
         // Shutdown logger
