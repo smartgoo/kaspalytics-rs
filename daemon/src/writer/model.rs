@@ -157,7 +157,12 @@ pub struct DbTransactionInput {
 }
 
 impl DbTransactionInput {
-    pub fn new(transaction_id: Hash, index: u32, input: &CacheTransactionInput, block_time: u64) -> Self {
+    pub fn new(
+        transaction_id: Hash,
+        index: u32,
+        input: &CacheTransactionInput,
+        block_time: u64,
+    ) -> Self {
         let (
             utxo_amount,
             utxo_script_public_key,
@@ -226,7 +231,12 @@ pub struct DbTransactionOutput {
 }
 
 impl DbTransactionOutput {
-    pub fn new(transaction_id: Hash, index: u32, output: &CacheTransactionOutput, block_time: u64) -> Self {
+    pub fn new(
+        transaction_id: Hash,
+        index: u32,
+        output: &CacheTransactionOutput,
+        block_time: u64,
+    ) -> Self {
         DbTransactionOutput {
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i16,

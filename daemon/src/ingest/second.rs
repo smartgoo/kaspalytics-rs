@@ -24,9 +24,10 @@ pub struct SecondMetrics {
     pub total_fees: u64,
 
     // Count of various protocol transactions
-    pub kasia_transaction_count: u64,
     pub krc_transaction_count: u64,
     pub kns_transaction_count: u64,
+    pub kasia_transaction_count: u64,
+    pub kasplex_transaction_count: u64,
 
     pub updated_at: DateTime<Utc>,
 }
@@ -82,13 +83,13 @@ impl SecondMetrics {
         self.updated_at = Utc::now();
     }
 
-    pub fn increment_kasia_transaction_count(&mut self) {
-        self.kasia_transaction_count += 1;
+    pub fn increment_kns_transaction_count(&mut self) {
+        self.kns_transaction_count += 1;
         self.updated_at = Utc::now();
     }
 
-    pub fn decrement_kasia_transaction_count(&mut self) {
-        self.kasia_transaction_count -= 1;
+    pub fn decrement_kns_transaction_count(&mut self) {
+        self.kns_transaction_count -= 1;
         self.updated_at = Utc::now();
     }
 
@@ -102,13 +103,23 @@ impl SecondMetrics {
         self.updated_at = Utc::now();
     }
 
-    pub fn increment_kns_transaction_count(&mut self) {
-        self.kns_transaction_count += 1;
+    pub fn increment_kasia_transaction_count(&mut self) {
+        self.kasia_transaction_count += 1;
         self.updated_at = Utc::now();
     }
 
-    pub fn decrement_kns_transaction_count(&mut self) {
-        self.kns_transaction_count -= 1;
+    pub fn decrement_kasia_transaction_count(&mut self) {
+        self.kasia_transaction_count -= 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn increment_kasplex_transaction_count(&mut self) {
+        self.kasplex_transaction_count += 1;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn decrement_kasplex_transaction_count(&mut self) {
+        self.kasplex_transaction_count -= 1;
         self.updated_at = Utc::now();
     }
 }

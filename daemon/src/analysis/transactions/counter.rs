@@ -98,14 +98,6 @@ pub fn accepted_count_per_hour_24h(dag_cache: &Arc<DagCache>) -> HashMap<u64, u6
     effective_count_per_hour
 }
 
-pub fn kasia_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.kasia_transaction_count)
-        .sum()
-}
-
 pub fn krc_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache
         .seconds_iter()
@@ -119,5 +111,21 @@ pub fn kns_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.kns_transaction_count)
+        .sum()
+}
+
+pub fn kasia_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.kasia_transaction_count)
+        .sum()
+}
+
+pub fn kasplex_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.kasplex_transaction_count)
         .sum()
 }

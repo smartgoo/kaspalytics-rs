@@ -106,9 +106,16 @@ fn detect_transaction_protocol(
     dag_cache: Arc<DagCache>,
     transaction: &RpcTransaction,
 ) -> Option<TransactionProtocol> {
-    // Check for Kasia protocol in transactionpayload
-    if payload_to_string(transaction.payload.clone()).contains("ciph_msg") {
+    let payload_str = payload_to_string(transaction.payload.clone());
+
+    // Check for Kasia protocol in transaction payload
+    if payload_str.contains("ciph_msg") {
         return Some(TransactionProtocol::Kasia);
+    }
+
+    // Check for Kasplex L2 protocol in transaction payload
+    if payload_str.contains("kasplex") {
+        return Some(TransactionProtocol::Kasplex);
     }
 
     // Check inputs for Kasplex or KNS inscription
@@ -268,14 +275,17 @@ fn add_transaction_acceptance(
 
                 // Increment Protocol count for given second
                 match tx.protocol {
-                    Some(TransactionProtocol::Kasia) => {
-                        v.increment_kasia_transaction_count();
-                    }
                     Some(TransactionProtocol::Krc) => {
                         v.increment_krc_transaction_count();
                     }
                     Some(TransactionProtocol::Kns) => {
                         v.increment_kns_transaction_count();
+                    }
+                    Some(TransactionProtocol::Kasia) => {
+                        v.increment_kasia_transaction_count();
+                    }
+                    Some(TransactionProtocol::Kasplex) => {
+                        v.increment_kasplex_transaction_count();
                     }
                     None => {}
                 }
@@ -411,40 +421,21 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
                 v.decrement_total_fees(tx.fee.unwrap());
 
                 match tx.protocol {
-                    Some(TransactionProtocol::Kasia) => {
-                        v.decrement_kasia_transaction_count();
-                    }
                     Some(TransactionProtocol::Krc) => {
                         v.decrement_krc_transaction_count();
                     }
                     Some(TransactionProtocol::Kns) => {
                         v.decrement_kns_transaction_count();
                     }
+                    Some(TransactionProtocol::Kasia) => {
+                        v.decrement_kasia_transaction_count();
+                    }
+                    Some(TransactionProtocol::Kasplex) => {
+                        v.decrement_kasplex_transaction_count();
+                    }
                     None => {}
                 }
             });
-
-        // match tx.protocol {
-        //     Some(TransactionProtocol::Kasia) => {
-        //         dag_cache
-        //             .seconds
-        //             .entry(tx_timestamp / 1000)
-        //             .and_modify(|v| v.decrement_kasia_transaction_count());
-        //     }
-        //     Some(TransactionProtocol::Krc) => {
-        //         dag_cache
-        //             .seconds
-        //             .entry(tx_timestamp / 1000)
-        //             .and_modify(|v| v.decrement_krc_transaction_count());
-        //     }
-        //     Some(TransactionProtocol::Kns) => {
-        //         dag_cache
-        //             .seconds
-        //             .entry(tx_timestamp / 1000)
-        //             .and_modify(|v| v.decrement_kns_transaction_count());
-        //     }
-        //     None => {}
-        // }
     }
 }
 

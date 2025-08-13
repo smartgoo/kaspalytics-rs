@@ -67,7 +67,12 @@ impl Writer {
 
         for tx in batch.transactions {
             for (index, input) in tx.inputs.iter().enumerate() {
-                input_queue.push(DbTransactionInput::new(tx.id, index as u32, input, tx.block_time));
+                input_queue.push(DbTransactionInput::new(
+                    tx.id,
+                    index as u32,
+                    input,
+                    tx.block_time,
+                ));
 
                 if input.utxo_entry.is_some() {
                     address_transaction_queue.push(DbAddressTransaction::new(
@@ -88,7 +93,12 @@ impl Writer {
             }
 
             for (index, output) in tx.outputs.iter().enumerate() {
-                output_queue.push(DbTransactionOutput::new(tx.id, index as u32, output, tx.block_time));
+                output_queue.push(DbTransactionOutput::new(
+                    tx.id,
+                    index as u32,
+                    output,
+                    tx.block_time,
+                ));
 
                 address_transaction_queue.push(DbAddressTransaction::new(
                     output.script_public_key_address.clone(),

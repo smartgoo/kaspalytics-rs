@@ -7,4 +7,5 @@ pub enum TransactionProtocol {
     Krc = 0,
     Kns,
     Kasia,
+    Kasplex,
 }

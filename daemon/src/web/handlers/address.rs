@@ -5,13 +5,18 @@ use axum::{
     Json,
 };
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_rpc_core::RpcUtxosByAddressesEntry;
 use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct BalanceResponse {
     address: String,
     balance: u64,
+}
+
+#[derive(Serialize)]
+pub struct UtxoCountResponse {
+    address: String,
+    count: usize,
 }
 
 pub async fn get_balance(
@@ -34,7 +39,7 @@ pub async fn get_balance(
 pub async fn get_utxos_by_address(
     Path(address): Path<String>,
     State(state): State<AppState>,
-) -> Result<Json<Vec<RpcUtxosByAddressesEntry>>, (StatusCode, String)> {
+) -> Result<Json<UtxoCountResponse>, (StatusCode, String)> {
     let parsed_address = kaspa_addresses::Address::try_from(address.as_str())
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid address: {}", e)))?;
 
@@ -45,5 +50,6 @@ pub async fn get_utxos_by_address(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(data))
+    let count = data.len();
+    Ok(Json(UtxoCountResponse { address, count }))
 }

@@ -40,6 +40,7 @@ pub struct Listener {
 }
 
 impl Listener {
+    #[allow(clippy::result_large_err)]
     pub fn try_new(
         network_id: NetworkId,
         url: Option<String>,

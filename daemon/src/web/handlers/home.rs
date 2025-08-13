@@ -46,9 +46,10 @@ enum SseKey {
     // Tx Counts
     UniqueAcceptedTransactionCount24h,
     UniqueAcceptedTransactionCountPerHour24h,
-    KasiaTransactionCount24h,
     KrcTransactionCount24h,
     KnsTransactionCount24h,
+    KasiaTransactionCount24h,
+    KasplexTransactionCount24h,
 
     // Fees
     FeeMean60s,
@@ -332,11 +333,6 @@ impl SseData {
         );
 
         self.set(
-            SseKey::KasiaTransactionCount24h,
-            SseField::from(tx_counter::kasia_transaction_count(dag_cache, threshold)),
-        );
-
-        self.set(
             SseKey::KrcTransactionCount24h,
             SseField::from(tx_counter::krc_transaction_count(dag_cache, threshold)),
         );
@@ -344,6 +340,16 @@ impl SseData {
         self.set(
             SseKey::KnsTransactionCount24h,
             SseField::from(tx_counter::kns_transaction_count(dag_cache, threshold)),
+        );
+
+        self.set(
+            SseKey::KasiaTransactionCount24h,
+            SseField::from(tx_counter::kasia_transaction_count(dag_cache, threshold)),
+        );
+
+        self.set(
+            SseKey::KasplexTransactionCount24h,
+            SseField::from(tx_counter::kasplex_transaction_count(dag_cache, threshold)),
         );
     }
 
