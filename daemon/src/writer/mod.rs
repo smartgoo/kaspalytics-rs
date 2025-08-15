@@ -46,7 +46,7 @@ impl Writer {
         let mut transaction_queue = Vec::new();
         let mut input_queue = Vec::new();
         let mut output_queue = Vec::new();
-        let mut address_transaction_queue = Vec::new();
+        // let mut address_transaction_queue = Vec::new();
 
         for block in batch.blocks {
             for parent in block.parent_hashes.iter() {
@@ -74,22 +74,22 @@ impl Writer {
                     tx.block_time,
                 ));
 
-                if input.utxo_entry.is_some() {
-                    address_transaction_queue.push(DbAddressTransaction::new(
-                        input
-                            .utxo_entry
-                            .as_ref()
-                            .unwrap()
-                            .script_public_key_address
-                            .as_ref()
-                            .unwrap()
-                            .clone(),
-                        tx.id,
-                        tx.block_time,
-                        1,
-                        input.utxo_entry.as_ref().unwrap().amount,
-                    ));
-                }
+                // if input.utxo_entry.is_some() {
+                //     address_transaction_queue.push(DbAddressTransaction::new(
+                //         input
+                //             .utxo_entry
+                //             .as_ref()
+                //             .unwrap()
+                //             .script_public_key_address
+                //             .as_ref()
+                //             .unwrap()
+                //             .clone(),
+                //         tx.id,
+                //         tx.block_time,
+                //         1,
+                //         input.utxo_entry.as_ref().unwrap().amount,
+                //     ));
+                // }
             }
 
             for (index, output) in tx.outputs.iter().enumerate() {
@@ -100,13 +100,13 @@ impl Writer {
                     tx.block_time,
                 ));
 
-                address_transaction_queue.push(DbAddressTransaction::new(
-                    output.script_public_key_address.clone(),
-                    tx.id,
-                    tx.block_time,
-                    2,
-                    output.value,
-                ));
+                // address_transaction_queue.push(DbAddressTransaction::new(
+                //     output.script_public_key_address.clone(),
+                //     tx.id,
+                //     tx.block_time,
+                //     2,
+                //     output.value,
+                // ));
             }
 
             transaction_queue.push(DbTransaction::from(tx));
@@ -133,9 +133,9 @@ impl Writer {
         insert::insert_outputs_unnest(output_queue, &mut tx)
             .await
             .unwrap();
-        insert::insert_address_transactions_unnest(address_transaction_queue, &mut tx)
-            .await
-            .unwrap();
+        // insert::insert_address_transactions_unnest(address_transaction_queue, &mut tx)
+        //     .await
+        //     .unwrap();
 
         tx.commit().await.unwrap();
         let insert_end = start.elapsed().as_millis() - insert_start;
