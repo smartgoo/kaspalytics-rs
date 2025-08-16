@@ -138,7 +138,7 @@ WITH NO DATA;
 SELECT add_retention_policy(
     'kaspad.protocol_activity_per_minute', 
     INTERVAL '10 days', 
-    if_not_exists => TRUE,
+    if_not_exists => TRUE
 );
 
 SELECT add_continuous_aggregate_policy(
@@ -146,7 +146,7 @@ SELECT add_continuous_aggregate_policy(
     start_offset => INTERVAL '10 days',
     end_offset => INTERVAL '30 seconds',
     schedule_interval => INTERVAL '30 seconds',
-    if_not_exists => TRUE,
+    if_not_exists => TRUE
 );
 
 CREATE MATERIALIZED VIEW kaspad.address_spending_per_minute
