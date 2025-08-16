@@ -64,9 +64,12 @@ CREATE TABLE kaspad.transactions (
     protocol_id INTEGER,
     total_input_amount BIGINT,
     total_output_amount BIGINT,
+    fee BIGINT,
     payload BYTEA,
     PRIMARY KEY (transaction_id, block_time)
 );
+CREATE INDEX ON kaspad.transactions (fee) WHERE subnetwork_id = 0;
+CREATE INDEX ON kaspad.transactions (total_output_amount) WHERE subnetwork_id = 0;
 SELECT create_hypertable('kaspad.transactions', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
 SELECT add_retention_policy('kaspad.transactions', INTERVAL '10 days', if_not_exists => TRUE);
 
@@ -104,18 +107,6 @@ CREATE TABLE kaspad.transactions_outputs (
 CREATE INDEX ON kaspad.transactions_outputs (script_public_key_address);
 SELECT create_hypertable('kaspad.transactions_outputs', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
 SELECT add_retention_policy('kaspad.transactions_outputs', INTERVAL '10 days', if_not_exists => TRUE);
-
--- CREATE TABLE kaspad.address_transactions (
---     address VARCHAR NOT NULL,
---     transaction_id BYTEA NOT NULL,
---     block_time TIMESTAMPTZ NOT NULL, -- TODO remove?
---     direction SMALLINT, -- TODO remove?
---     utxo_amount BIGINT, -- TODO remove?
---     PRIMARY KEY (address, transaction_id, block_time)
--- );
--- CREATE INDEX ON kaspad.address_transactions (transaction_id);
--- SELECT create_hypertable('kaspad.address_transactions', 'block_time', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE);
--- SELECT add_retention_policy('kaspad.address_transactions', INTERVAL '10 days', if_not_exists => TRUE);
 
 CREATE TABLE kaspad.subnetwork_ids (
     id SERIAL PRIMARY KEY,
@@ -163,7 +154,7 @@ WITH (timescaledb.continuous) AS
 SELECT 
     time_bucket('1 minute', block_time) AS minute_bucket,
     utxo_script_public_key_address AS address,
-    COUNT(*) AS transaction_count,
+    COUNT(DISTINCT transaction_id) AS transaction_count,
     SUM(utxo_amount) AS total_spent
 FROM kaspad.transactions_inputs
 WHERE utxo_script_public_key_address IS NOT NULL
@@ -185,8 +176,10 @@ WITH (timescaledb.continuous) AS
 SELECT 
     time_bucket('1 minute', block_time) AS minute_bucket,
     script_public_key_address AS address,
-    COUNT(*) AS transaction_count,
-    SUM(amount) AS total_received
+    COUNT(DISTINCT transaction_id) AS transaction_count,
+    COUNT(DISTINCT transaction_id) FILTER (WHERE is_coinbase = false) AS transaction_count_standard,
+    SUM(amount) AS total_received,
+    SUM(amount) FILTER (WHERE is_coinbase = false) AS total_received_standard
 FROM kaspad.transactions_outputs
 WHERE script_public_key_address IS NOT NULL
 GROUP BY minute_bucket, script_public_key_address

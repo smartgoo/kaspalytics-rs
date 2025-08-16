@@ -210,6 +210,7 @@ pub async fn insert_transactions_unnest(
         let mut protocol_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut total_input_amounts = Vec::with_capacity(CHUNK_SIZE);
         let mut total_output_amounts = Vec::with_capacity(CHUNK_SIZE);
+        let mut fees = Vec::with_capacity(CHUNK_SIZE);
         let mut payloads = Vec::with_capacity(CHUNK_SIZE);
 
         for tx in chunk.iter() {
@@ -225,6 +226,13 @@ pub async fn insert_transactions_unnest(
             protocol_ids.push(tx.protocol_id);
             total_input_amounts.push(tx.total_input_amount);
             total_output_amounts.push(tx.total_output_amount);
+
+            if tx.subnetwork_id == 0 {
+                fees.push(Some(tx.total_input_amount - tx.total_output_amount));
+            } else {
+                fees.push(None);
+            }
+
             payloads.push(tx.payload.clone());
         }
 
@@ -233,7 +241,7 @@ pub async fn insert_transactions_unnest(
             (
                 transaction_id, version, lock_time, subnetwork_id, gas,
                 mass, compute_mass, accepting_block_hash, block_time, protocol_id,
-                total_input_amount, total_output_amount, payload
+                total_input_amount, total_output_amount, fee, payload
             ) 
             SELECT * FROM UNNEST (
                 $1::bytea[],        -- transaction_id
@@ -248,7 +256,8 @@ pub async fn insert_transactions_unnest(
                 $10::integer[],     -- protocol
                 $11::bigint[],      -- total_input_amount
                 $12::bigint[],      -- total_output_amount
-                $13::bytea[]        --payload
+                $13::bigint[],      -- fee
+                $14::bytea[]        -- payload
             )
             ON CONFLICT DO NOTHING
             ",
@@ -267,6 +276,7 @@ pub async fn insert_transactions_unnest(
             .bind(protocol_ids)
             .bind(total_input_amounts)
             .bind(total_output_amounts)
+            .bind(fees)
             .bind(payloads)
             .execute(&mut **tx)
             .await?;
