@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::analysis::transactions::protocol::TransactionProtocol;
 use crate::ingest::cache::{DagCache, Reader};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -98,34 +99,31 @@ pub fn accepted_count_per_hour_24h(dag_cache: &Arc<DagCache>) -> HashMap<u64, u6
     effective_count_per_hour
 }
 
-pub fn krc_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+pub fn protocol_transaction_count(
+    dag_cache: &Arc<DagCache>,
+    protocol: TransactionProtocol,
+    threshold: u64,
+) -> u64 {
     dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.krc_transaction_count)
+        .map(|entry| entry.get_protocol_transaction_count(&protocol))
         .sum()
+}
+
+// Legacy compatibility functions - deprecated, use protocol_transaction_count instead
+pub fn krc_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    protocol_transaction_count(dag_cache, TransactionProtocol::Krc, threshold)
 }
 
 pub fn kns_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.kns_transaction_count)
-        .sum()
+    protocol_transaction_count(dag_cache, TransactionProtocol::Kns, threshold)
 }
 
 pub fn kasia_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.kasia_transaction_count)
-        .sum()
+    protocol_transaction_count(dag_cache, TransactionProtocol::Kasia, threshold)
 }
 
 pub fn kasplex_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.kasplex_transaction_count)
-        .sum()
+    protocol_transaction_count(dag_cache, TransactionProtocol::Kasplex, threshold)
 }

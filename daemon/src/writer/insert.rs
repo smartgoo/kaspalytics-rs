@@ -1,4 +1,4 @@
-use crate::writer::model::{DbAddressTransaction, DbBlockParent, DbBlockTransaction};
+use crate::writer::model::{DbBlockParent, DbBlockTransaction};
 
 use super::{DbBlock, DbTransaction, DbTransactionInput, DbTransactionOutput};
 use sqlx::{Postgres, QueryBuilder, Transaction};
@@ -374,6 +374,7 @@ pub async fn insert_outputs_unnest(
         let mut transaction_ids = Vec::with_capacity(CHUNK_SIZE);
         let mut indexes = Vec::with_capacity(CHUNK_SIZE);
         let mut amounts = Vec::with_capacity(CHUNK_SIZE);
+        let mut is_coinbases = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_keys = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_key_types = Vec::with_capacity(CHUNK_SIZE);
         let mut script_public_key_addresses = Vec::with_capacity(CHUNK_SIZE);
@@ -383,6 +384,7 @@ pub async fn insert_outputs_unnest(
             transaction_ids.push(output.transaction_id.clone());
             indexes.push(output.index);
             amounts.push(output.amount);
+            is_coinbases.push(output.is_coinbase);
             script_public_keys.push(output.script_public_key.clone());
             script_public_key_types.push(output.script_public_key_type);
             script_public_key_addresses.push(output.script_public_key_address.clone());
@@ -393,17 +395,18 @@ pub async fn insert_outputs_unnest(
             r#"
                 INSERT INTO kaspad.transactions_outputs
                 (
-                    transaction_id, index, amount, script_public_key, script_public_key_type,
-                    script_public_key_address, block_time
+                    transaction_id, index, amount, is_coinbase, script_public_key,
+                    script_public_key_type, script_public_key_address, block_time
                 )
                 SELECT * FROM UNNEST (
                     $1::bytea[],    -- transaction_id
                     $2::smallint[], -- index
                     $3::bigint[],   -- amount
-                    $4::bytea[],    -- script_public_key
-                    $5::smallint[], -- script_public_key_type
-                    $6::varchar[],  -- script_public_key_address
-                    $7::timestamptz[] -- block_time
+                    $4::boolean[],  -- is_coinbase
+                    $5::bytea[],    -- script_public_key
+                    $6::smallint[], -- script_public_key_type
+                    $7::varchar[],  -- script_public_key_address
+                    $8::timestamptz[] -- block_time
                 )
                 ON CONFLICT DO NOTHING
             "#,
@@ -413,64 +416,11 @@ pub async fn insert_outputs_unnest(
             .bind(transaction_ids)
             .bind(indexes)
             .bind(amounts)
+            .bind(is_coinbases)
             .bind(script_public_keys)
             .bind(script_public_key_types)
             .bind(script_public_key_addresses)
             .bind(block_times)
-            .execute(&mut **tx)
-            .await?;
-    }
-
-    Ok(())
-}
-
-pub async fn insert_address_transactions_unnest(
-    outputs: Vec<DbAddressTransaction>,
-    tx: &mut Transaction<'_, Postgres>,
-) -> Result<(), sqlx::Error> {
-    if outputs.is_empty() {
-        return Ok(());
-    }
-
-    // TODO take ownership in iter chunks
-    for chunk in outputs.chunks(1000) {
-        let mut addresses: Vec<String> = Vec::with_capacity(CHUNK_SIZE);
-        let mut transaction_ids: Vec<Vec<u8>> = Vec::with_capacity(CHUNK_SIZE);
-        let mut block_times = Vec::with_capacity(CHUNK_SIZE);
-        let mut directions: Vec<i16> = Vec::with_capacity(CHUNK_SIZE);
-        let mut amounts: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
-
-        for e in chunk.iter() {
-            addresses.push(e.address.clone());
-            transaction_ids.push(e.transaction_id.clone());
-            block_times.push(e.block_time);
-            directions.push(e.direction as i16);
-            amounts.push(e.utxo_amount);
-        }
-
-        let mut qb = QueryBuilder::new(
-            r#"
-                INSERT INTO kaspad.address_transactions
-                (
-                    address, transaction_id, block_time, direction, utxo_amount
-                )
-                SELECT * FROM UNNEST (
-                    $1::varchar[],      -- address
-                    $2::bytea[],        -- transaction_id
-                    $3::timestamptz[],  -- block_time
-                    $4::smallint[],     -- direction
-                    $5::bigint[]        -- utxo_amount
-                )
-                ON CONFLICT DO NOTHING
-            "#,
-        );
-
-        qb.build()
-            .bind(addresses)
-            .bind(transaction_ids)
-            .bind(block_times)
-            .bind(directions)
-            .bind(amounts)
             .execute(&mut **tx)
             .await?;
     }

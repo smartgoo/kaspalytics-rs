@@ -2,7 +2,7 @@ pub mod inscription;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum TransactionProtocol {
     Krc = 0,
     Kns,

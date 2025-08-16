@@ -94,6 +94,7 @@ CREATE TABLE kaspad.transactions_outputs (
     transaction_id BYTEA NOT NULL,
     "index" SMALLINT,
     amount BIGINT,
+    is_coinbase BOOLEAN,
     script_public_key BYTEA,
     script_public_key_type SMALLINT,
     script_public_key_address VARCHAR,

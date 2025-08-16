@@ -224,6 +224,7 @@ pub struct DbTransactionOutput {
     pub transaction_id: Vec<u8>,
     pub index: i16,
     pub amount: i64,
+    pub is_coinbase: bool,
     pub script_public_key: Vec<u8>,
     pub script_public_key_type: i16,
     pub script_public_key_address: String,
@@ -236,41 +237,17 @@ impl DbTransactionOutput {
         index: u32,
         output: &CacheTransactionOutput,
         block_time: u64,
+        is_coinbase: bool,
     ) -> Self {
         DbTransactionOutput {
             transaction_id: transaction_id.as_bytes().to_vec(),
             index: index as i16,
             amount: output.value as i64,
+            is_coinbase,
             script_public_key: output.script_public_key.script().to_vec(),
             script_public_key_type: output.script_public_key_type.clone() as i16,
             script_public_key_address: output.script_public_key_address.clone(),
             block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
-        }
-    }
-}
-
-pub struct DbAddressTransaction {
-    pub address: String,
-    pub transaction_id: Vec<u8>,
-    pub block_time: DateTime<Utc>,
-    pub direction: u8,
-    pub utxo_amount: i64,
-}
-
-impl DbAddressTransaction {
-    pub fn new(
-        address: String,
-        transaction_id: Hash,
-        block_time: u64,
-        direction: u8,
-        utxo_amount: u64,
-    ) -> Self {
-        DbAddressTransaction {
-            address,
-            transaction_id: transaction_id.as_bytes().to_vec(),
-            block_time: DateTime::<Utc>::from_timestamp_millis(block_time as i64).unwrap(),
-            direction,
-            utxo_amount: utxo_amount as i64,
         }
     }
 }

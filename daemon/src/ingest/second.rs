@@ -1,6 +1,8 @@
+use crate::analysis::transactions::protocol::TransactionProtocol;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SecondMetrics {
@@ -24,10 +26,7 @@ pub struct SecondMetrics {
     pub total_fees: u64,
 
     // Count of various protocol transactions
-    pub krc_transaction_count: u64,
-    pub kns_transaction_count: u64,
-    pub kasia_transaction_count: u64,
-    pub kasplex_transaction_count: u64,
+    pub protocol_transaction_counts: HashMap<TransactionProtocol, u64>,
 
     pub updated_at: DateTime<Utc>,
 }
@@ -83,43 +82,60 @@ impl SecondMetrics {
         self.updated_at = Utc::now();
     }
 
-    pub fn increment_kns_transaction_count(&mut self) {
-        self.kns_transaction_count += 1;
+    pub fn increment_protocol_transaction_count(&mut self, protocol: TransactionProtocol) {
+        *self
+            .protocol_transaction_counts
+            .entry(protocol)
+            .or_insert(0) += 1;
         self.updated_at = Utc::now();
+    }
+
+    pub fn decrement_protocol_transaction_count(&mut self, protocol: TransactionProtocol) {
+        if let Some(count) = self.protocol_transaction_counts.get_mut(&protocol) {
+            if *count > 0 {
+                *count -= 1;
+            }
+        }
+        self.updated_at = Utc::now();
+    }
+
+    pub fn get_protocol_transaction_count(&self, protocol: &TransactionProtocol) -> u64 {
+        self.protocol_transaction_counts
+            .get(protocol)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    // Legacy compatibility methods - deprecated, use increment_protocol_transaction_count instead
+    pub fn increment_kns_transaction_count(&mut self) {
+        self.increment_protocol_transaction_count(TransactionProtocol::Kns);
     }
 
     pub fn decrement_kns_transaction_count(&mut self) {
-        self.kns_transaction_count -= 1;
-        self.updated_at = Utc::now();
+        self.decrement_protocol_transaction_count(TransactionProtocol::Kns);
     }
 
     pub fn increment_krc_transaction_count(&mut self) {
-        self.krc_transaction_count += 1;
-        self.updated_at = Utc::now();
+        self.increment_protocol_transaction_count(TransactionProtocol::Krc);
     }
 
     pub fn decrement_krc_transaction_count(&mut self) {
-        self.krc_transaction_count -= 1;
-        self.updated_at = Utc::now();
+        self.decrement_protocol_transaction_count(TransactionProtocol::Krc);
     }
 
     pub fn increment_kasia_transaction_count(&mut self) {
-        self.kasia_transaction_count += 1;
-        self.updated_at = Utc::now();
+        self.increment_protocol_transaction_count(TransactionProtocol::Kasia);
     }
 
     pub fn decrement_kasia_transaction_count(&mut self) {
-        self.kasia_transaction_count -= 1;
-        self.updated_at = Utc::now();
+        self.decrement_protocol_transaction_count(TransactionProtocol::Kasia);
     }
 
     pub fn increment_kasplex_transaction_count(&mut self) {
-        self.kasplex_transaction_count += 1;
-        self.updated_at = Utc::now();
+        self.increment_protocol_transaction_count(TransactionProtocol::Kasplex);
     }
 
     pub fn decrement_kasplex_transaction_count(&mut self) {
-        self.kasplex_transaction_count -= 1;
-        self.updated_at = Utc::now();
+        self.decrement_protocol_transaction_count(TransactionProtocol::Kasplex);
     }
 }

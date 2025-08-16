@@ -1,7 +1,7 @@
 use super::super::AppState;
 use crate::analysis::{
     mining,
-    transactions::{counter as tx_counter, fees},
+    transactions::{counter as tx_counter, fees, protocol::TransactionProtocol},
 };
 use crate::ingest::cache::DagCache;
 use crate::storage::cache::CacheEntry;
@@ -46,10 +46,7 @@ enum SseKey {
     // Tx Counts
     UniqueAcceptedTransactionCount24h,
     UniqueAcceptedTransactionCountPerHour24h,
-    KrcTransactionCount24h,
-    KnsTransactionCount24h,
-    KasiaTransactionCount24h,
-    KasplexTransactionCount24h,
+    ProtocolTransactionCounts24h,
 
     // Fees
     FeeMean60s,
@@ -332,24 +329,36 @@ impl SseData {
             )),
         );
 
-        self.set(
-            SseKey::KrcTransactionCount24h,
-            SseField::from(tx_counter::krc_transaction_count(dag_cache, threshold)),
+        // Collect all protocol transaction counts in a HashMap
+        let mut protocol_counts = HashMap::new();
+        protocol_counts.insert(
+            "Krc",
+            tx_counter::protocol_transaction_count(dag_cache, TransactionProtocol::Krc, threshold),
+        );
+        protocol_counts.insert(
+            "Kns",
+            tx_counter::protocol_transaction_count(dag_cache, TransactionProtocol::Kns, threshold),
+        );
+        protocol_counts.insert(
+            "Kasia",
+            tx_counter::protocol_transaction_count(
+                dag_cache,
+                TransactionProtocol::Kasia,
+                threshold,
+            ),
+        );
+        protocol_counts.insert(
+            "Kasplex",
+            tx_counter::protocol_transaction_count(
+                dag_cache,
+                TransactionProtocol::Kasplex,
+                threshold,
+            ),
         );
 
         self.set(
-            SseKey::KnsTransactionCount24h,
-            SseField::from(tx_counter::kns_transaction_count(dag_cache, threshold)),
-        );
-
-        self.set(
-            SseKey::KasiaTransactionCount24h,
-            SseField::from(tx_counter::kasia_transaction_count(dag_cache, threshold)),
-        );
-
-        self.set(
-            SseKey::KasplexTransactionCount24h,
-            SseField::from(tx_counter::kasplex_transaction_count(dag_cache, threshold)),
+            SseKey::ProtocolTransactionCounts24h,
+            SseField::from(serde_json::to_string(&protocol_counts).unwrap()),
         );
     }
 

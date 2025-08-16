@@ -2,6 +2,7 @@ mod insert;
 mod model;
 
 use crate::ingest::model::PruningBatch;
+use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspalytics_utils::log::LogTarget;
 use log::{debug, info};
 use model::*;
@@ -98,15 +99,8 @@ impl Writer {
                     index as u32,
                     output,
                     tx.block_time,
+                    tx.subnetwork_id == SUBNETWORK_ID_COINBASE,
                 ));
-
-                // address_transaction_queue.push(DbAddressTransaction::new(
-                //     output.script_public_key_address.clone(),
-                //     tx.id,
-                //     tx.block_time,
-                //     2,
-                //     output.value,
-                // ));
             }
 
             transaction_queue.push(DbTransaction::from(tx));

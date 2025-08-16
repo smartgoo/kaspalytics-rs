@@ -10,7 +10,10 @@ pub struct Database {
 
 impl Database {
     pub fn new(url: String) -> Self {
-        let database_name = &url.split('/').next_back().expect("Invalid connection string");
+        let database_name = &url
+            .split('/')
+            .next_back()
+            .expect("Invalid connection string");
 
         Self {
             url: url.to_string(),
