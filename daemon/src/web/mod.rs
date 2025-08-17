@@ -163,7 +163,11 @@ impl WebServer {
             .route("/api/v1/block/{hash}", get(handlers::block::get_block))
             .route(
                 "/api/v1/transaction/{id}",
-                get(handlers::transaction::get_transaction),
+                get(handlers::transaction::id::get_transaction),
+            )
+            .route(
+                "/api/v1/transaction/{id}/confirmations",
+                get(handlers::transaction::confirmations::get_confirmation_count),
             )
             .route(
                 "/api/v1/explorer/search/{value}",
