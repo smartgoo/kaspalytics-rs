@@ -84,8 +84,7 @@ pub async fn get_confirmation_count(
         sqlx::query(transaction_query)
             .bind(&transaction_id_bytes)
             .fetch_optional(&state.context.pg_pool),
-        sqlx::query(sink_blue_score_query)
-            .fetch_optional(&state.context.pg_pool)
+        sqlx::query(sink_blue_score_query).fetch_optional(&state.context.pg_pool)
     )
     .map_err(|e| {
         log::error!(
