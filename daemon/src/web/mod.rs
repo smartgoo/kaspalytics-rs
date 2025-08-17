@@ -157,6 +157,10 @@ impl WebServer {
                 "/api/v1/transaction/{id}",
                 get(handlers::transaction::get_transaction),
             )
+            .route(
+                "/api/v1/explorer/search/{value}",
+                get(handlers::explorer::search_value),
+            )
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))

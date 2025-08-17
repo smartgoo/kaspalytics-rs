@@ -37,7 +37,7 @@ pub struct TransactionData {
     pub payload: String,
     pub mass: i64,
     pub compute_mass: i64,
-    pub protocol_id: Option<i64>,
+    pub protocol_id: Option<i32>,
     pub accepting_block_hash: String,
     #[serde(rename = "isCoinbase")]
     pub is_coinbase: bool,
@@ -480,7 +480,7 @@ pub async fn get_transaction(
         payload: transaction_row.get("payload"),
         mass: transaction_row.get("mass"),
         compute_mass: transaction_row.get("compute_mass"),
-        protocol_id: transaction_row.get("protocol_id"),
+        protocol_id: transaction_row.try_get("protocol_id").ok(),
         accepting_block_hash: transaction_row.get("accepting_block_hash"),
         is_coinbase,
         total_input_amount,

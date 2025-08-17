@@ -83,11 +83,12 @@ fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, hex::FromHexError> {
     hex::decode(hex)
 }
 
-fn protocol_id_to_string(protocol_id: Option<i64>) -> Option<String> {
+fn protocol_id_to_string(protocol_id: Option<i32>) -> Option<String> {
     match protocol_id {
         Some(0) => Some("KRC".to_string()),
         Some(1) => Some("KNS".to_string()),
         Some(2) => Some("Kasia".to_string()),
+        Some(3) => Some("Kasplex L2".to_string()),
         _ => None,
     }
 }
@@ -162,7 +163,7 @@ fn convert_cache_block_to_response(
             .unwrap_or_default(),
         bits: cache_block.bits,
         nonce: cache_block.nonce,
-        blue_work: hex::encode(&cache_block.blue_work.to_le_bytes()),
+        blue_work: hex::encode(cache_block.blue_work.to_le_bytes()),
         daa_score: cache_block.daa_score,
         blue_score: cache_block.blue_score,
         difficulty: cache_block.difficulty,
@@ -383,7 +384,7 @@ pub async fn get_block(
                 std::cmp::max(0, total_input_amount - total_output_amount) as u64
             };
 
-            let protocol_id: Option<i64> = tx.try_get("protocol_id").ok();
+            let protocol_id: Option<i32> = tx.try_get("protocol_id").ok();
             let protocol = protocol_id_to_string(protocol_id);
 
             BlockTransaction {
