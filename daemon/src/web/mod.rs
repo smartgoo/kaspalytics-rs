@@ -142,11 +142,19 @@ impl WebServer {
             )
             .route(
                 "/api/v1/address/{address}",
-                get(handlers::address::get_balance),
+                get(handlers::address::balance::get_balance),
             )
             .route(
                 "/api/v1/address/{address}/utxos",
-                get(handlers::address::get_utxos_by_address),
+                get(handlers::address::utxos::get_utxos_by_address),
+            )
+            .route(
+                "/api/v1/address/{address}/transactions",
+                get(handlers::address::transactions::get_address_transactions),
+            )
+            .route(
+                "/api/v1/address/{address}/transactions-count-chart",
+                get(handlers::address::transaction_count_chart::get_transaction_count_chart),
             )
             .route(
                 "/api/v1/blocks/oldest-timestamp",
