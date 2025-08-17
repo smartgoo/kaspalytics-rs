@@ -173,6 +173,10 @@ impl WebServer {
                 "/api/v1/explorer/search/{value}",
                 get(handlers::explorer::search_value),
             )
+            .route(
+                "/api/v1/lists/protocol-activity",
+                get(handlers::lists::protocol_activity::get_protocol_activity),
+            )
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))
