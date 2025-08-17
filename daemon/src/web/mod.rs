@@ -177,6 +177,18 @@ impl WebServer {
                 "/api/v1/lists/protocol-activity",
                 get(handlers::lists::protocol_activity::get_protocol_activity),
             )
+            .route(
+                "/api/v1/lists/largest-fees",
+                get(handlers::lists::largest_fees::get_largest_fees),
+            )
+            .route(
+                "/api/v1/lists/largest-transactions",
+                get(handlers::lists::largest_transactions::get_largest_transactions),
+            )
+            .route(
+                "/api/v1/lists/most-active-addresses",
+                get(handlers::lists::active_addresses::get_most_active_addresses),
+            )
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))
