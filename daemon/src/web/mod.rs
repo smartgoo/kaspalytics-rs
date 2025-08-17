@@ -148,6 +148,14 @@ impl WebServer {
                 "/api/v1/address/{address}/utxos",
                 get(handlers::address::get_utxos_by_address),
             )
+            .route(
+                "/api/v1/blocks/oldest-timestamp",
+                get(handlers::blocks::get_oldest_timestamp),
+            )
+            .route(
+                "/api/v1/transaction/{id}",
+                get(handlers::transaction::get_transaction),
+            )
             .with_state(self.state.clone())
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))
