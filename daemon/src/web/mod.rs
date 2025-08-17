@@ -2,7 +2,7 @@ mod handlers;
 
 use crate::AppContext;
 use axum::http::{HeaderValue, Request, Response};
-use axum::{routing::get, Router};
+use axum::{middleware, routing::get, Router};
 use http::Method;
 use kaspalytics_utils::{config::Env, log::LogTarget};
 use log::{error, info, warn};
@@ -16,6 +16,33 @@ use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 use tracing::{Level, Span};
+
+async fn cache_control_middleware(
+    request: Request<axum::body::Body>,
+    next: middleware::Next,
+) -> Response<axum::body::Body> {
+    let uri_path = request.uri().path().to_string();
+    let response = next.run(request).await;
+
+    // Check if this is a 404 response for block/transaction/explorer endpoints
+    if response.status() == http::StatusCode::NOT_FOUND
+        && (uri_path.contains("/block/")
+            || uri_path.contains("/transaction/")
+            || uri_path.contains("/explorer/"))
+    {
+        let (mut parts, body) = response.into_parts();
+
+        // Override cache-control for not found responses
+        parts.headers.insert(
+            "cache-control",
+            HeaderValue::from_static("public, max-age=5, s-maxage=5"),
+        );
+
+        return Response::from_parts(parts, body);
+    }
+
+    response
+}
 
 #[derive(Clone)]
 struct AppState {
@@ -142,13 +169,58 @@ impl WebServer {
             )
             .route(
                 "/api/v1/address/{address}",
-                get(handlers::address::get_balance),
+                get(handlers::address::balance::get_balance),
             )
             .route(
                 "/api/v1/address/{address}/utxos",
-                get(handlers::address::get_utxos_by_address),
+                get(handlers::address::utxos::get_utxos_by_address),
+            )
+            .route(
+                "/api/v1/address/{address}/transactions",
+                get(handlers::address::transactions::get_address_transactions),
+            )
+            .route(
+                "/api/v1/address/{address}/transactions-count-chart",
+                get(handlers::address::transaction_count_chart::get_transaction_count_chart),
+            )
+            .route(
+                "/api/v1/blocks/oldest-timestamp",
+                get(handlers::block::oldest_timestamp::get_oldest_timestamp),
+            )
+            .route(
+                "/api/v1/block/{hash}",
+                get(handlers::block::hash::get_block),
+            )
+            .route(
+                "/api/v1/transaction/{id}",
+                get(handlers::transaction::id::get_transaction),
+            )
+            .route(
+                "/api/v1/transaction/{id}/confirmations",
+                get(handlers::transaction::confirmations::get_confirmation_count),
+            )
+            .route(
+                "/api/v1/explorer/search/{value}",
+                get(handlers::explorer::search_value),
+            )
+            .route(
+                "/api/v1/lists/protocol-activity",
+                get(handlers::lists::protocol_activity::get_protocol_activity),
+            )
+            .route(
+                "/api/v1/lists/largest-fees",
+                get(handlers::lists::largest_fees::get_largest_fees),
+            )
+            .route(
+                "/api/v1/lists/largest-transactions",
+                get(handlers::lists::largest_transactions::get_largest_transactions),
+            )
+            .route(
+                "/api/v1/lists/most-active-addresses",
+                get(handlers::lists::active_addresses::get_most_active_addresses),
             )
             .with_state(self.state.clone())
+            .layer(middleware::from_fn(cache_control_middleware))
             .layer(self.cors_layer())
             .layer(RequestBodyLimitLayer::new(64 * 1024))
             .layer(self.trace_layer());
