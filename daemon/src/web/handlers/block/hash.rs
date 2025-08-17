@@ -1,17 +1,18 @@
-use super::super::AppState;
+use super::super::super::AppState;
 use crate::ingest::cache::Reader;
+use crate::web::cache::{get_cached_json, set_cached_json};
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, Uri},
     Json,
 };
 use chrono::{DateTime, Utc};
 use kaspa_hashes::Hash;
 use kaspalytics_utils::log::LogTarget;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BlockResponse {
     #[serde(rename = "blockHash")]
     pub block_hash: String,
@@ -23,7 +24,7 @@ pub struct BlockResponse {
     pub error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BlockData {
     pub hash: String,
     pub version: i16,
@@ -57,7 +58,7 @@ pub struct BlockData {
     pub transaction_count: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BlockTransaction {
     #[serde(rename = "txId")]
     pub tx_id: String,
@@ -187,7 +188,46 @@ fn convert_cache_block_to_response(
 pub async fn get_block(
     Path(block_hash): Path<String>,
     State(state): State<AppState>,
+    uri: Uri,
 ) -> Result<(HeaderMap, Json<BlockResponse>), (StatusCode, Json<BlockResponse>)> {
+    // Check web cache first - use actual request URI as cache key
+    let key = uri.to_string();
+    if let Some(cached_json) = get_cached_json(&state.context.web_cache, &key).await {
+        log::debug!(
+            target: LogTarget::Web.as_str(),
+            "Block {} found in web cache",
+            block_hash
+        );
+
+        // Try to deserialize the cached JSON
+        match serde_json::from_str::<BlockResponse>(&cached_json) {
+            Ok(cached_response) => {
+                // Add cache headers to indicate this is a cached response
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "Cache-Control",
+                    HeaderValue::from_static("public, max-age=300, s-maxage=300"),
+                );
+                headers.insert(
+                    "Vercel-CDN-Cache-Control",
+                    HeaderValue::from_static("public, max-age=300"),
+                );
+                headers.insert("X-Cache", HeaderValue::from_static("HIT"));
+
+                return Ok((headers, Json(cached_response)));
+            }
+            Err(e) => {
+                log::warn!(
+                    target: LogTarget::Web.as_str(),
+                    "Failed to deserialize cached block {}: {}",
+                    block_hash,
+                    e
+                );
+                // Continue to fetch from database/DagCache
+            }
+        }
+    }
+
     // Validate block hash format
     if !is_valid_block_hash(&block_hash) {
         let response = BlockResponse {
@@ -239,6 +279,11 @@ pub async fn get_block(
         );
         let response = convert_cache_block_to_response(block_hash.clone(), &cache_block, &state);
 
+        // Store successful response in web cache
+        if let Ok(json) = serde_json::to_string(&response) {
+            set_cached_json(&state.context.web_cache, key.clone(), json).await;
+        }
+
         // Add cache headers
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -249,6 +294,7 @@ pub async fn get_block(
             "Vercel-CDN-Cache-Control",
             HeaderValue::from_static("public, max-age=300"),
         );
+        headers.insert("X-Cache", HeaderValue::from_static("MISS"));
 
         return Ok((headers, Json(response)));
     }
@@ -431,6 +477,11 @@ pub async fn get_block(
         error: None,
     };
 
+    // Store successful response in web cache
+    if let Ok(json) = serde_json::to_string(&response) {
+        set_cached_json(&state.context.web_cache, key, json).await;
+    }
+
     // Add cache headers
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -441,6 +492,7 @@ pub async fn get_block(
         "Vercel-CDN-Cache-Control",
         HeaderValue::from_static("public, max-age=300"),
     );
+    headers.insert("X-Cache", HeaderValue::from_static("MISS"));
 
     Ok((headers, Json(response)))
 }

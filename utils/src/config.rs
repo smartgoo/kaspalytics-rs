@@ -44,6 +44,10 @@ pub struct Config {
     pub web_listen_ip: String,
     pub web_port: u16,
     pub allowed_origins: Vec<String>,
+
+    // Cache configuration
+    pub cache_ttl_seconds: u64,
+    pub cache_memory_limit_mb: u64,
 }
 
 impl Config {
@@ -103,6 +107,16 @@ impl Config {
             .map(|s| s.trim().to_string())
             .collect();
 
+        let cache_ttl_seconds = env::var("CACHE_TTL_SECONDS")
+            .unwrap_or("300".to_string())
+            .parse::<u64>()
+            .unwrap_or(300);
+
+        let cache_memory_limit_mb = env::var("cache_memory_limit_mb")
+            .unwrap_or("500".to_string())
+            .parse::<u64>()
+            .unwrap_or(500);
+
         Config {
             env,
             log_level,
@@ -119,6 +133,8 @@ impl Config {
             web_listen_ip,
             web_port,
             allowed_origins,
+            cache_ttl_seconds,
+            cache_memory_limit_mb,
         }
     }
 }

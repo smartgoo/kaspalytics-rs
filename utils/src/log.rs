@@ -32,7 +32,7 @@ impl LogTarget {
 }
 
 fn create_stdout_appender() -> ConsoleAppender {
-    let pattern = "{d(%Y-%m-%d %H:%M:%S%.3f %Z)} - {h({l})} - {m} (({f}:{L})){n}";
+    let pattern = "{d(%Y-%m-%d %H:%M:%S%.3f %Z)} [{h({l})}] - {m} (({f}:{L})){n}";
     ConsoleAppender::builder()
         .encoder(Box::new(PatternEncoder::new(pattern)))
         .build()

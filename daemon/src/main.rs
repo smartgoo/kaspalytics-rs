@@ -26,6 +26,7 @@ struct AppContext {
     rpc_client: Arc<KaspaRpcClient>,
     dag_cache: Arc<DagCache>,
     storage: Arc<Storage>,
+    web_cache: Arc<web::cache::WebCache>,
 }
 
 #[tokio::main]
@@ -95,6 +96,12 @@ async fn main() {
         }
     };
 
+    // Initialize web cache
+    let web_cache = Arc::new(web::cache::create_web_cache(
+        config.cache_ttl_seconds,
+        config.cache_memory_limit_mb,
+    ));
+
     let context = Arc::new(AppContext {
         config: config.clone(),
         shutdown_flag: Arc::new(AtomicBool::new(false)),
@@ -102,6 +109,7 @@ async fn main() {
         rpc_client,
         dag_cache,
         storage: Arc::new(Storage::new(Arc::new(Cache::default()), pg_pool)),
+        web_cache,
     });
 
     let (writer_tx, writer_rx) = tokio::sync::mpsc::channel(100);

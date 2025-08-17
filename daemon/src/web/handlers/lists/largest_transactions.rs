@@ -37,6 +37,7 @@ fn get_interval_expression(timeframe: &str) -> Option<&'static str> {
         "15m" => Some("INTERVAL '15 MINUTES'"),
         "1h" => Some("INTERVAL '1 HOUR'"),
         "24h" => Some("INTERVAL '24 HOURS'"),
+        "3d" => Some("INTERVAL '3 DAYS'"),
         "7d" => Some("INTERVAL '7 DAYS'"),
         _ => None,
     }

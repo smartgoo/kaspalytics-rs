@@ -1,7 +1,8 @@
 use super::super::super::AppState;
+use crate::web::cache::{get_cached_json, set_cached_json};
 use axum::{
     extract::{Path, Query, State},
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, Uri},
     Json,
 };
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
@@ -17,7 +18,7 @@ pub struct ChartQuery {
     include_coinbase: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TransactionCountChartResponse {
     pub status: String,
     #[serde(rename = "chartData")]
@@ -26,13 +27,13 @@ pub struct TransactionCountChartResponse {
     pub error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChartData {
     pub datasets: Vec<Dataset>,
     pub labels: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Dataset {
     pub label: String,
     pub data: Vec<u32>,
@@ -46,7 +47,7 @@ pub struct Dataset {
     pub tension: f32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BucketData {
     pub timestamp: String,
     #[serde(rename = "Transactions")]
@@ -137,10 +138,30 @@ pub async fn get_transaction_count_chart(
     Path(address): Path<String>,
     Query(params): Query<ChartQuery>,
     State(state): State<AppState>,
+    uri: Uri,
 ) -> Result<
     (HeaderMap, Json<TransactionCountChartResponse>),
     (StatusCode, Json<TransactionCountChartResponse>),
 > {
+    // Check web cache first - use actual request URI as cache key
+    let key = uri.to_string();
+    if let Some(cached_json) = get_cached_json(&state.context.web_cache, &key).await {
+        // Try to deserialize the cached JSON
+        if let Ok(cached_response) =
+            serde_json::from_str::<TransactionCountChartResponse>(&cached_json)
+        {
+            // Add cache headers to indicate this is a cached response
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "Cache-Control",
+                HeaderValue::from_static("public, max-age=15, s-maxage=15"),
+            );
+            headers.insert("X-Cache", HeaderValue::from_static("HIT"));
+
+            return Ok((headers, Json(cached_response)));
+        }
+    }
+
     // Validate address format
     if !is_valid_kaspa_address(&address) {
         let response = TransactionCountChartResponse {
@@ -306,16 +327,22 @@ pub async fn get_transaction_count_chart(
         error: None,
     };
 
+    // Store successful response in web cache
+    if let Ok(json) = serde_json::to_string(&response) {
+        set_cached_json(&state.context.web_cache, key, json).await;
+    }
+
     // Add cache headers
     let mut headers = HeaderMap::new();
     headers.insert(
         "Cache-Control",
-        HeaderValue::from_static("public, max-age=30, s-maxage=30"),
+        HeaderValue::from_static("public, max-age=15, s-maxage=15"),
     );
     headers.insert(
         "Vercel-CDN-Cache-Control",
-        HeaderValue::from_static("public, max-age=30"),
+        HeaderValue::from_static("public, max-age=15"),
     );
+    headers.insert("X-Cache", HeaderValue::from_static("MISS"));
 
     Ok((headers, Json(response)))
 }

@@ -1,3 +1,4 @@
+pub mod cache;
 mod handlers;
 
 use crate::AppContext;
@@ -158,9 +159,12 @@ impl WebServer {
             )
             .route(
                 "/api/v1/blocks/oldest-timestamp",
-                get(handlers::blocks::get_oldest_timestamp),
+                get(handlers::block::oldest_timestamp::get_oldest_timestamp),
             )
-            .route("/api/v1/block/{hash}", get(handlers::block::get_block))
+            .route(
+                "/api/v1/block/{hash}",
+                get(handlers::block::hash::get_block),
+            )
             .route(
                 "/api/v1/transaction/{id}",
                 get(handlers::transaction::id::get_transaction),
