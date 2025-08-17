@@ -79,78 +79,149 @@ fn is_valid_kaspa_address(address: &str) -> bool {
     KaspaAddress::try_from(address).is_ok()
 }
 
-fn get_single_query(time_interval: &str) -> String {
-    format!(
-        r#"
-        WITH address_activity AS (
-          SELECT 
+// Optimized query that avoids expensive ROW_NUMBER() and reduces data scanning
+fn get_optimized_single_query() -> &'static str {
+    r#"
+    WITH recent_inputs AS (
+        SELECT DISTINCT
             transaction_id,
             block_time,
-            SUM(CASE WHEN io_type = 'input' THEN -amount ELSE amount END) as net_change
-          FROM (
-            SELECT 
-              transaction_id, 
-              block_time, 
-              CASE WHEN utxo_amount IS NOT NULL THEN utxo_amount ELSE 0 END as amount, 
-              'input' as io_type
-            FROM kaspad.transactions_inputs 
-            WHERE utxo_script_public_key_address = $1 
-              AND block_time >= NOW() - INTERVAL '{}'
-            UNION ALL
-            SELECT 
-              transaction_id, 
-              block_time, 
-              CASE WHEN amount IS NOT NULL THEN amount ELSE 0 END as amount, 
-              'output' as io_type
-            FROM kaspad.transactions_outputs 
-            WHERE script_public_key_address = $1 
-              AND block_time >= NOW() - INTERVAL '{}'
-          ) combined
-          GROUP BY transaction_id, block_time
+            -COALESCE(utxo_amount, 0) as amount_change
+        FROM kaspad.transactions_inputs
+        WHERE utxo_script_public_key_address = $1
+        AND block_time >= NOW() - INTERVAL '30 days'
+    ),
+    recent_outputs AS (
+        SELECT DISTINCT
+            transaction_id,
+            block_time,
+            COALESCE(amount, 0) as amount_change
+        FROM kaspad.transactions_outputs
+        WHERE script_public_key_address = $1
+        AND block_time >= NOW() - INTERVAL '30 days'
+    ),
+    combined_activity AS (
+        SELECT transaction_id, block_time, amount_change FROM recent_inputs
+        UNION ALL
+        SELECT transaction_id, block_time, amount_change FROM recent_outputs
+    ),
+    aggregated_txs AS (
+        SELECT 
+            transaction_id,
+            block_time,
+            SUM(amount_change) as net_change
+        FROM combined_activity
+        GROUP BY transaction_id, block_time
+    )
+    SELECT 
+        encode(a.transaction_id, 'hex') as transaction_id,
+        a.block_time,
+        a.net_change as amount_change,
+        t.protocol_id,
+        t.subnetwork_id
+    FROM aggregated_txs a
+    LEFT JOIN kaspad.transactions t ON a.transaction_id = t.transaction_id
+    ORDER BY a.block_time DESC, a.transaction_id DESC
+    LIMIT $2 OFFSET $3
+    "#
+}
+
+// Fallback query for addresses with sparse activity (extends time window)
+fn get_extended_query(time_interval: &str) -> String {
+    format!(
+        r#"
+        WITH extended_inputs AS (
+            SELECT DISTINCT
+                transaction_id,
+                block_time,
+                -COALESCE(utxo_amount, 0) as amount_change
+            FROM kaspad.transactions_inputs
+            WHERE utxo_script_public_key_address = $1
+            AND block_time >= NOW() - INTERVAL '{}'
         ),
-        paginated AS (
-          SELECT 
-            *,
-            ROW_NUMBER() OVER (ORDER BY block_time DESC, encode(transaction_id, 'hex') DESC) as rn
-          FROM address_activity
+        extended_outputs AS (
+            SELECT DISTINCT
+                transaction_id,
+                block_time,
+                COALESCE(amount, 0) as amount_change
+            FROM kaspad.transactions_outputs
+            WHERE script_public_key_address = $1
+            AND block_time >= NOW() - INTERVAL '{}'
+        ),
+        combined_activity AS (
+            SELECT transaction_id, block_time, amount_change FROM extended_inputs
+            UNION ALL
+            SELECT transaction_id, block_time, amount_change FROM extended_outputs
+        ),
+        aggregated_txs AS (
+            SELECT 
+                transaction_id,
+                block_time,
+                SUM(amount_change) as net_change
+            FROM combined_activity
+            GROUP BY transaction_id, block_time
         )
         SELECT 
-          encode(p.transaction_id, 'hex') as transaction_id,
-          p.block_time,
-          p.net_change as amount_change,
-          t.protocol_id,
-          t.subnetwork_id,
-          p.rn
-        FROM paginated p
-        LEFT JOIN kaspad.transactions t ON p.transaction_id = t.transaction_id
-          AND t.block_time >= p.block_time - INTERVAL '1 hour'
-          AND t.block_time <= p.block_time + INTERVAL '1 hour'
-        WHERE p.rn BETWEEN $2 AND $3
-        ORDER BY p.block_time DESC, p.transaction_id DESC
+            encode(a.transaction_id, 'hex') as transaction_id,
+            a.block_time,
+            a.net_change as amount_change,
+            t.protocol_id,
+            t.subnetwork_id
+        FROM aggregated_txs a
+        LEFT JOIN kaspad.transactions t ON a.transaction_id = t.transaction_id
+        ORDER BY a.block_time DESC, a.transaction_id DESC
+        LIMIT $2 OFFSET $3
         "#,
         time_interval, time_interval
     )
 }
 
-fn get_count_query(time_interval: &str) -> String {
+// Optimized count query that avoids UNION and uses more efficient counting
+fn get_optimized_count_query() -> &'static str {
+    r#"
+    WITH input_txs AS (
+        SELECT COUNT(DISTINCT transaction_id) as count
+        FROM kaspad.transactions_inputs
+        WHERE utxo_script_public_key_address = $1
+        AND block_time >= NOW() - INTERVAL '30 days'
+    ),
+    output_txs AS (
+        SELECT COUNT(DISTINCT transaction_id) as count
+        FROM kaspad.transactions_outputs
+        WHERE script_public_key_address = $1
+        AND block_time >= NOW() - INTERVAL '30 days'
+    ),
+    unique_txs AS (
+        SELECT transaction_id
+        FROM kaspad.transactions_inputs
+        WHERE utxo_script_public_key_address = $1
+        AND block_time >= NOW() - INTERVAL '30 days'
+        UNION
+        SELECT transaction_id
+        FROM kaspad.transactions_outputs
+        WHERE script_public_key_address = $1
+        AND block_time >= NOW() - INTERVAL '30 days'
+    )
+    SELECT COUNT(*) as total_count FROM unique_txs
+    "#
+}
+
+// Fallback count query for extended time windows
+fn get_extended_count_query(time_interval: &str) -> String {
     format!(
         r#"
-        WITH address_activity AS (
-          SELECT 
-            transaction_id
-          FROM (
-            SELECT DISTINCT transaction_id
-            FROM kaspad.transactions_inputs 
-            WHERE utxo_script_public_key_address = $1 
-              AND block_time >= NOW() - INTERVAL '{}'
+        WITH unique_txs AS (
+            SELECT transaction_id
+            FROM kaspad.transactions_inputs
+            WHERE utxo_script_public_key_address = $1
+            AND block_time >= NOW() - INTERVAL '{}'
             UNION
-            SELECT DISTINCT transaction_id
-            FROM kaspad.transactions_outputs 
-            WHERE script_public_key_address = $1 
-              AND block_time >= NOW() - INTERVAL '{}'
-          ) combined
+            SELECT transaction_id
+            FROM kaspad.transactions_outputs
+            WHERE script_public_key_address = $1
+            AND block_time >= NOW() - INTERVAL '{}'
         )
-        SELECT COUNT(*) as total_count FROM address_activity
+        SELECT COUNT(*) as total_count FROM unique_txs
         "#,
         time_interval, time_interval
     )
@@ -212,72 +283,86 @@ pub async fn get_address_transactions(
     // Start balance fetch in parallel
     let balance_future = fetch_balance_from_rpc(&address, &state);
 
-    // Progressive time window fallback
-    let time_windows = ["30 days", "90 days", "365 days"];
+    // Try optimized query first (30 days), then fallback to extended windows
     let mut transactions_result = None;
-    let mut used_time_window = time_windows[0];
+    let mut used_extended_query = false;
 
-    // Try progressively larger time windows
-    for &time_window in &time_windows {
-        let single_query = get_single_query(time_window);
-        let start_row = (offset + 1) as i64;
-        let end_row = (offset + limit + 1) as i64;
-
-        match sqlx::query(&single_query)
-            .bind(&address)
-            .bind(start_row)
-            .bind(end_row)
-            .fetch_all(&state.context.pg_pool)
-            .await
-        {
-            Ok(result) => {
-                let has_enough_data = result.len() >= limit as usize;
-                let is_last_window = time_window == time_windows[time_windows.len() - 1];
-
-                if has_enough_data || is_last_window {
-                    transactions_result = Some(result);
-                    used_time_window = time_window;
-                    break;
-                }
-
-                if !result.is_empty() {
-                    transactions_result = Some(result);
-                    used_time_window = time_window;
-                    break;
-                }
+    // First attempt: optimized query for recent activity (30 days)
+    match sqlx::query(get_optimized_single_query())
+        .bind(&address)
+        .bind((limit + 1) as i64) // Get one extra to check if there's a next page
+        .bind(offset as i64)
+        .fetch_all(&state.context.pg_pool)
+        .await
+    {
+        Ok(result) => {
+            if result.len() >= limit as usize || page == 1 {
+                // We have enough data or it's the first page
+                transactions_result = Some(result);
             }
-            Err(e) => {
-                if time_window == time_windows[time_windows.len() - 1] {
-                    log::error!(
-                        target: LogTarget::WebErr.as_str(),
-                        "Database error fetching address transactions for {}: {}",
-                        address,
-                        e
-                    );
-                    let response = AddressTransactionsResponse {
-                        address: address.clone(),
-                        address_data: AddressData {
+        }
+        Err(e) => {
+            log::warn!(
+                target: LogTarget::WebErr.as_str(),
+                "Optimized query failed for address {}, trying fallback: {}",
+                address,
+                e
+            );
+        }
+    }
+
+    // Fallback: try extended time windows if optimized query didn't return enough data
+    if transactions_result.is_none() {
+        let extended_windows = ["90 days", "365 days"];
+
+        for &time_window in &extended_windows {
+            match sqlx::query(&get_extended_query(time_window))
+                .bind(&address)
+                .bind((limit + 1) as i64)
+                .bind(offset as i64)
+                .fetch_all(&state.context.pg_pool)
+                .await
+            {
+                Ok(result) => {
+                    if !result.is_empty() || time_window == "365 days" {
+                        transactions_result = Some(result);
+                        used_extended_query = true;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if time_window == "365 days" {
+                        log::error!(
+                            target: LogTarget::WebErr.as_str(),
+                            "All queries failed for address {}: {}",
+                            address,
+                            e
+                        );
+                        let response = AddressTransactionsResponse {
                             address: address.clone(),
-                            balance: 0,
-                            address_type: "P2PK".to_string(),
-                            first_seen: None,
-                            last_activity: None,
-                            known: None,
-                        },
-                        transactions: vec![],
-                        pagination: Pagination {
-                            current_page: page,
-                            total_pages: 1,
-                            total_transactions: None,
-                            limit,
-                            has_next_page: false,
-                            has_prev_page: page > 1,
-                        },
-                        status: "error".to_string(),
-                        error: Some("Failed to fetch address data".to_string()),
-                        message: None,
-                    };
-                    return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(response)));
+                            address_data: AddressData {
+                                address: address.clone(),
+                                balance: 0,
+                                address_type: "P2PK".to_string(),
+                                first_seen: None,
+                                last_activity: None,
+                                known: None,
+                            },
+                            transactions: vec![],
+                            pagination: Pagination {
+                                current_page: page,
+                                total_pages: 1,
+                                total_transactions: None,
+                                limit,
+                                has_next_page: false,
+                                has_prev_page: page > 1,
+                            },
+                            status: "error".to_string(),
+                            error: Some("Failed to fetch address data".to_string()),
+                            message: None,
+                        };
+                        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(response)));
+                    }
                 }
             }
         }
@@ -286,7 +371,11 @@ pub async fn get_address_transactions(
     let transactions_rows = transactions_result.unwrap_or_default();
 
     // Execute parallel queries for count, balance, and known address
-    let count_query = get_count_query(used_time_window);
+    let count_query = if used_extended_query {
+        get_extended_count_query("365 days")
+    } else {
+        get_optimized_count_query().to_string()
+    };
     let known_address_query = "SELECT label, type FROM known_addresses WHERE address = $1 LIMIT 1";
 
     // Handle balance fetch separately since it has different error type
@@ -333,7 +422,7 @@ pub async fn get_address_transactions(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
     })?;
 
-    // Process results
+    // Process results - we fetched limit+1 to check for next page
     let has_next_page = transactions_rows.len() > limit as usize;
     let actual_transactions: Vec<_> = transactions_rows.into_iter().take(limit as usize).collect();
 
