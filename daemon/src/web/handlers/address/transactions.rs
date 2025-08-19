@@ -26,14 +26,14 @@ struct CachedAddressData {
 type AddressCache = Arc<RwLock<HashMap<String, CachedAddressData>>>;
 
 // Raw transaction data from database queries
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TransactionInput {
     transaction_id: Vec<u8>,
     block_time: DateTime<Utc>,
     amount: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TransactionOutput {
     transaction_id: Vec<u8>,
     block_time: DateTime<Utc>,
@@ -344,165 +344,299 @@ pub async fn get_address_transactions(
     // Start address data fetch in parallel (cached)
     let address_data_future = get_cached_address_data(&address, &state);
 
-    // Define time window - we want transactions BEFORE the given timestamp
-    // Use a reasonable search window (e.g., 24 hours) to find the most recent transactions
-    let start_time = end_time - chrono::Duration::hours(24);
-
-    log::info!(
-        target: LogTarget::Web.as_str(),
-        "Time window for address {}: {} to {} (duration: {}min) - timestamp-based query",
-        address,
-        start_time.to_rfc3339(),
-        end_time.to_rfc3339(),
-        end_time.signed_duration_since(start_time).num_minutes()
-    );
-
-    // Execute separate concurrent queries for inputs and outputs
-    let queries_start = Instant::now();
-    log::info!(
-        target: LogTarget::Web.as_str(),
-        "Starting concurrent queries for address {}: inputs, outputs, and address data",
-        address
-    );
-    
-    let (address_data, inputs_result, outputs_result) = match tokio::try_join!(
-        address_data_future,
-        async {
-            let input_start = Instant::now();
-            let result = sqlx::query(get_inputs_query())
-                .bind(&address)
-                .bind(start_time)
-                .bind(end_time)
-                .fetch_all(&state.context.pg_pool)
-                .await;
-            let input_duration = input_start.elapsed();
-            log::info!(
-                target: LogTarget::Web.as_str(),
-                "Input query for address {} completed in {}ms, rows: {}",
-                address,
-                input_duration.as_millis(),
-                result.as_ref().map(|r| r.len()).unwrap_or(0)
-            );
-            result
-        },
-        async {
-            let output_start = Instant::now();
-            let result = sqlx::query(get_outputs_query())
-                .bind(&address)
-                .bind(start_time)
-                .bind(end_time)
-                .fetch_all(&state.context.pg_pool)
-                .await;
-            let output_duration = output_start.elapsed();
-            log::info!(
-                target: LogTarget::Web.as_str(),
-                "Output query for address {} completed in {}ms, rows: {}",
-                address,
-                output_duration.as_millis(),
-                result.as_ref().map(|r| r.len()).unwrap_or(0)
-            );
-            result
-        }
-    ) {
-        Ok((address_data, inputs_result, outputs_result)) => {
-            (address_data, inputs_result, outputs_result)
-        },
-        Err(e) => {
-            log::error!(
-                target: LogTarget::Web.as_str(),
-                "Parallel time-window queries failed for address {}: {}",
-                address,
-                e
-            );
-            let response = AddressTransactionsResponse {
-                address: address.clone(),
-                address_data: AddressData {
-                    address: address.clone(),
-                    balance: 0,
-                    address_type: "P2PK".to_string(),
-                    known: None,
-                },
-                transactions: vec![],
-                status: "error".to_string(),
-                error: Some("Failed to fetch address data".to_string()),
-                message: None,
-            };
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(response)));
-        }
+    // Get oldest available timestamp to know when to stop looking back
+    let oldest_timestamp_future = async {
+        sqlx::query("SELECT MIN(block_time) as oldest_block_timestamp FROM kaspad.blocks")
+            .fetch_optional(&state.context.pg_pool)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|row| row.try_get::<DateTime<Utc>, _>("oldest_block_timestamp").ok())
     };
+
+    // Execute address data and oldest timestamp queries in parallel
+    let (address_data_result, oldest_timestamp_result) = tokio::join!(
+        address_data_future,
+        oldest_timestamp_future
+    );
+
+    let address_data = address_data_result.map_err(|e| {
+        log::error!(
+            target: LogTarget::Web.as_str(),
+            "Failed to fetch address data for {}: {}",
+            address,
+            e
+        );
+        let response = AddressTransactionsResponse {
+            address: address.clone(),
+            address_data: AddressData {
+                address: address.clone(),
+                balance: 0,
+                address_type: "P2PK".to_string(),
+                known: None,
+            },
+            transactions: vec![],
+            status: "error".to_string(),
+            error: Some("Failed to fetch address data".to_string()),
+            message: None,
+        };
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+    })?;
+
+    // Determine the earliest time we should query (either oldest data or reasonable limit)
+    let oldest_available = oldest_timestamp_result.unwrap_or_else(|| {
+        // Fallback to 30 days ago if we can't determine oldest timestamp
+        end_time - chrono::Duration::days(30)
+    });
+    
+    // Set a reasonable maximum lookback period (30 days from end_time)
+    let max_lookback_time = end_time - chrono::Duration::days(30);
+    let earliest_query_time = oldest_available.max(max_lookback_time);
+
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Starting chunked iteration for address {}: end_time={}, earliest_query_time={}, chunk_size=6h",
+        address,
+        end_time.to_rfc3339(),
+        earliest_query_time.to_rfc3339()
+    );
+
+    // Iteratively query in 6-hour chunks going backwards until we have enough transactions
+    let chunk_duration = chrono::Duration::hours(6);
+    let mut all_inputs: Vec<TransactionInput> = Vec::new();
+    let mut all_outputs: Vec<TransactionOutput> = Vec::new();
+    let mut current_end_time = end_time;
+    let mut chunk_count = 0;
+    let target_transactions = limit as usize;
+    let queries_start = Instant::now();
+
+    loop {
+        let current_start_time = (current_end_time - chunk_duration).max(earliest_query_time);
+        chunk_count += 1;
+        
+        log::info!(
+            target: LogTarget::Web.as_str(),
+            "Chunk {} for address {}: {} to {} (duration: {}min)",
+            chunk_count,
+            address,
+            current_start_time.to_rfc3339(),
+            current_end_time.to_rfc3339(),
+            current_end_time.signed_duration_since(current_start_time).num_minutes()
+        );
+
+        // Query this chunk
+        let chunk_start = Instant::now();
+        let (chunk_inputs_result, chunk_outputs_result) = match tokio::try_join!(
+            async {
+                let input_start = Instant::now();
+                let result = sqlx::query(get_inputs_query())
+                    .bind(&address)
+                    .bind(current_start_time)
+                    .bind(current_end_time)
+                    .fetch_all(&state.context.pg_pool)
+                    .await;
+                let input_duration = input_start.elapsed();
+                log::debug!(
+                    target: LogTarget::Web.as_str(),
+                    "Chunk {} input query for address {} completed in {}ms, rows: {}",
+                    chunk_count,
+                    address,
+                    input_duration.as_millis(),
+                    result.as_ref().map(|r| r.len()).unwrap_or(0)
+                );
+                result
+            },
+            async {
+                let output_start = Instant::now();
+                let result = sqlx::query(get_outputs_query())
+                    .bind(&address)
+                    .bind(current_start_time)
+                    .bind(current_end_time)
+                    .fetch_all(&state.context.pg_pool)
+                    .await;
+                let output_duration = output_start.elapsed();
+                log::debug!(
+                    target: LogTarget::Web.as_str(),
+                    "Chunk {} output query for address {} completed in {}ms, rows: {}",
+                    chunk_count,
+                    address,
+                    output_duration.as_millis(),
+                    result.as_ref().map(|r| r.len()).unwrap_or(0)
+                );
+                result
+            }
+        ) {
+            Ok((inputs_result, outputs_result)) => (inputs_result, outputs_result),
+            Err(e) => {
+                log::error!(
+                    target: LogTarget::Web.as_str(),
+                    "Chunk {} queries failed for address {}: {}",
+                    chunk_count,
+                    address,
+                    e
+                );
+                let response = AddressTransactionsResponse {
+                    address: address.clone(),
+                    address_data,
+                    transactions: vec![],
+                    status: "error".to_string(),
+                    error: Some("Failed to fetch transaction data".to_string()),
+                    message: None,
+                };
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(response)));
+            }
+        };
+
+        let chunk_duration_ms = chunk_start.elapsed();
+        
+        // Parse and accumulate results from this chunk
+        let chunk_inputs: Vec<TransactionInput> = chunk_inputs_result
+            .iter()
+            .map(|row| TransactionInput {
+                transaction_id: row.get("transaction_id"),
+                block_time: row.get("block_time"),
+                amount: row.get("amount"),
+            })
+            .collect();
+
+        let chunk_outputs: Vec<TransactionOutput> = chunk_outputs_result
+            .iter()
+            .map(|row| TransactionOutput {
+                transaction_id: row.get("transaction_id"),
+                block_time: row.get("block_time"),
+                amount: row.get("amount"),
+            })
+            .collect();
+
+        let chunk_input_count = chunk_inputs.len();
+        let chunk_output_count = chunk_outputs.len();
+        
+        all_inputs.extend(chunk_inputs);
+        all_outputs.extend(chunk_outputs);
+
+        // Quick aggregation check to see if we have enough transactions
+        let quick_agg_start = Instant::now();
+        let aggregated = aggregate_transactions(
+            all_inputs.clone(), 
+            all_outputs.clone(), 
+            HashMap::new(), 
+            (target_transactions * 2) as u32  // Get extra for filtering
+        );
+        
+        // Filter by end_time and count
+        let filtered_count = aggregated.iter()
+            .filter(|tx| tx.block_time <= end_time)
+            .count();
+        let quick_agg_duration = quick_agg_start.elapsed();
+
+        log::info!(
+            target: LogTarget::Web.as_str(),
+            "Chunk {} completed for address {} in {}ms: +{} inputs, +{} outputs, total_aggregated={}, filtered_count={} (agg_check: {}ms)",
+            chunk_count,
+            address,
+            chunk_duration_ms.as_millis(),
+            chunk_input_count,
+            chunk_output_count,
+            aggregated.len(),
+            filtered_count,
+            quick_agg_duration.as_millis()
+        );
+
+        // Check termination conditions
+        let should_continue = filtered_count < target_transactions 
+            && current_start_time > earliest_query_time
+            && chunk_count < 120; // Safety limit: max 120 chunks (30 days worth)
+
+        if !should_continue {
+            if filtered_count >= target_transactions {
+                log::info!(
+                    target: LogTarget::Web.as_str(),
+                    "Found enough transactions for address {} after {} chunks: {} >= {}",
+                    address, chunk_count, filtered_count, target_transactions
+                );
+            } else if current_start_time <= earliest_query_time {
+                log::info!(
+                    target: LogTarget::Web.as_str(),
+                    "Reached data availability limit for address {} after {} chunks at {}",
+                    address, chunk_count, earliest_query_time.to_rfc3339()
+                );
+            } else {
+                log::warn!(
+                    target: LogTarget::Web.as_str(),
+                    "Hit safety limit for address {} after {} chunks",
+                    address, chunk_count
+                );
+            }
+            break;
+        }
+
+        // Move to the next chunk (going backwards in time)
+        current_end_time = current_start_time;
+    }
     
     let queries_duration = queries_start.elapsed();
     log::info!(
         target: LogTarget::Web.as_str(),
-        "All concurrent queries completed for address {} in {}ms",
+        "Chunked iteration completed for address {} in {}ms: {} chunks, {} total inputs, {} total outputs",
         address,
-        queries_duration.as_millis()
+        queries_duration.as_millis(),
+        chunk_count,
+        all_inputs.len(),
+        all_outputs.len()
     );
 
-    // Process query results with Rust-side aggregation
+    // Process accumulated query results with Rust-side aggregation
     let aggregation_start = Instant::now();
     log::info!(
         target: LogTarget::Web.as_str(),
-        "Starting Rust-side aggregation for address {}: {} input rows, {} output rows",
+        "Starting final aggregation for address {}: {} input rows, {} output rows from {} chunks",
         address,
-        inputs_result.len(),
-        outputs_result.len()
+        all_inputs.len(),
+        all_outputs.len(),
+        chunk_count
     );
-    
-    // Parse inputs and outputs from separate queries
-    let parse_start = Instant::now();
-    let inputs: Vec<TransactionInput> = inputs_result
-        .iter()
-        .map(|row| TransactionInput {
-            transaction_id: row.get("transaction_id"),
-            block_time: row.get("block_time"),
-            amount: row.get("amount"),
-        })
-        .collect();
 
-    let outputs: Vec<TransactionOutput> = outputs_result
-        .iter()
-        .map(|row| TransactionOutput {
-            transaction_id: row.get("transaction_id"),
-            block_time: row.get("block_time"),
-            amount: row.get("amount"),
-        })
-        .collect();
+    // Pre-aggregate to identify top transactions before fetching metadata
+    let pre_agg_start = Instant::now();
+    let pre_aggregated = aggregate_transactions(all_inputs, all_outputs, HashMap::new(), limit * 3); // Get extra for filtering
     
-    let parse_duration = parse_start.elapsed();
+    // Filter transactions to only include those BEFORE the given timestamp,
+    // sort by time descending, and take only the requested limit
+    let mut filtered_txs = pre_aggregated;
+    filtered_txs.retain(|tx| tx.block_time <= end_time);
+    filtered_txs.sort_by(|a, b| b.block_time.cmp(&a.block_time));
+    let top_txs: Vec<AggregatedTransaction> = filtered_txs.into_iter().take(limit as usize).collect();
+    
+    let pre_agg_duration = pre_agg_start.elapsed();
     log::info!(
         target: LogTarget::Web.as_str(),
-        "Row parsing for address {} completed in {}ms",
+        "Pre-aggregation for address {} completed in {}ms: {} top transactions identified",
         address,
-        parse_duration.as_millis()
+        pre_agg_duration.as_millis(),
+        top_txs.len()
     );
 
-    // Collect unique transaction IDs for metadata fetch
+    // Collect unique transaction IDs from only the top transactions for metadata fetch
     let dedup_start = Instant::now();
-    let mut tx_ids: std::collections::HashSet<Vec<u8>> = std::collections::HashSet::new();
-    for input in &inputs {
-        tx_ids.insert(input.transaction_id.clone());
-    }
-    for output in &outputs {
-        tx_ids.insert(output.transaction_id.clone());
-    }
-
-    let tx_ids_vec: Vec<Vec<u8>> = tx_ids.into_iter().collect();
+    let tx_ids_vec: Vec<Vec<u8>> = top_txs.iter()
+        .map(|tx| tx.transaction_id.clone())
+        .collect();
+    
     let dedup_duration = dedup_start.elapsed();
     log::info!(
         target: LogTarget::Web.as_str(),
-        "Transaction deduplication for address {} completed in {}ms: {} unique transactions",
+        "Transaction ID collection for address {} completed in {}ms: {} transactions for metadata fetch",
         address,
         dedup_duration.as_millis(),
         tx_ids_vec.len()
     );
 
-    // Fetch metadata for all transactions
+    // Fetch metadata for only the top transactions
     let metadata_start = Instant::now();
     let metadata_rows = if !tx_ids_vec.is_empty() {
         let result = sqlx::query(get_transaction_metadata_query())
             .bind(&tx_ids_vec)
-            .bind(start_time)
+            .bind(earliest_query_time)
             .bind(end_time)
             .fetch_all(&state.context.pg_pool)
             .await
@@ -511,7 +645,7 @@ pub async fn get_address_transactions(
         let metadata_duration = metadata_start.elapsed();
         log::info!(
             target: LogTarget::Web.as_str(),
-            "Metadata query for address {} completed in {}ms: {} metadata rows",
+            "Metadata query for address {} completed in {}ms: {} metadata rows (optimized)",
             address,
             metadata_duration.as_millis(),
             result.len()
@@ -538,15 +672,17 @@ pub async fn get_address_transactions(
         })
         .collect();
 
-    // Aggregate in Rust and get most recent transactions before the timestamp
+    // Apply metadata to the top transactions
     let final_agg_start = Instant::now();
-    let mut aggregated = aggregate_transactions(inputs, outputs, metadata, limit * 3); // Get extra for filtering
-    
-    // Filter transactions to only include those BEFORE the given timestamp,
-    // sort by time descending, and take only the requested limit
-    aggregated.retain(|tx| tx.block_time <= end_time);
-    aggregated.sort_by(|a, b| b.block_time.cmp(&a.block_time));
-    let final_txs: Vec<AggregatedTransaction> = aggregated.into_iter().take(limit as usize).collect();
+    let final_txs: Vec<AggregatedTransaction> = top_txs.into_iter()
+        .map(|mut tx| {
+            if let Some(meta) = metadata.get(&tx.transaction_id) {
+                tx.protocol_id = meta.protocol_id;
+                tx.subnetwork_id = meta.subnetwork_id;
+            }
+            tx
+        })
+        .collect();
     
     let final_agg_duration = final_agg_start.elapsed();
     let total_aggregation_duration = aggregation_start.elapsed();
