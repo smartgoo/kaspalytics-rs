@@ -8,13 +8,58 @@ use chrono::{DateTime, Utc};
 use kaspa_addresses::Address as KaspaAddress;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspalytics_utils::log::LogTarget;
-use rust_decimal::Decimal;
+
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
+// Simple in-memory cache for address metadata
+#[derive(Clone)]
+struct CachedAddressData {
+    data: AddressData,
+    cached_at: Instant,
+}
+
+type AddressCache = Arc<RwLock<HashMap<String, CachedAddressData>>>;
+
+// Raw transaction data from database queries
+#[derive(Debug)]
+struct TransactionInput {
+    transaction_id: Vec<u8>,
+    block_time: DateTime<Utc>,
+    amount: i64,
+}
+
+#[derive(Debug)]
+struct TransactionOutput {
+    transaction_id: Vec<u8>,
+    block_time: DateTime<Utc>,
+    amount: i64,
+}
+
+#[derive(Debug)]
+struct TransactionMetadata {
+    protocol_id: Option<i32>,
+    subnetwork_id: Option<i32>,
+}
+
+// Aggregated transaction for final response
+#[derive(Debug)]
+struct AggregatedTransaction {
+    transaction_id: Vec<u8>,
+    block_time: DateTime<Utc>,
+    net_change: i64,
+    protocol_id: Option<i32>,
+    subnetwork_id: Option<i32>,
+}
 
 #[derive(Deserialize)]
-pub struct PaginationQuery {
-    page: Option<u32>,
+pub struct TransactionQuery {
+    timestamp: u64,  // Unix timestamp in milliseconds
+    limit: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -23,7 +68,6 @@ pub struct AddressTransactionsResponse {
     #[serde(rename = "addressData")]
     pub address_data: AddressData,
     pub transactions: Vec<AddressTransaction>,
-    pub pagination: Pagination,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -31,20 +75,16 @@ pub struct AddressTransactionsResponse {
     pub message: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct AddressData {
     pub address: String,
     pub balance: u64,
     #[serde(rename = "addressType")]
     pub address_type: String,
-    #[serde(rename = "firstSeen")]
-    pub first_seen: Option<DateTime<Utc>>,
-    #[serde(rename = "lastActivity")]
-    pub last_activity: Option<DateTime<Utc>>,
     pub known: Option<KnownAddress>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct KnownAddress {
     pub label: String,
     #[serde(rename = "type")]
@@ -60,194 +100,207 @@ pub struct AddressTransaction {
     pub subnetwork_id: Option<i32>,
 }
 
-#[derive(Serialize)]
-pub struct Pagination {
-    #[serde(rename = "currentPage")]
-    pub current_page: u32,
-    #[serde(rename = "totalPages")]
-    pub total_pages: u32,
-    #[serde(rename = "totalTransactions")]
-    pub total_transactions: Option<u64>,
-    pub limit: u32,
-    #[serde(rename = "hasNextPage")]
-    pub has_next_page: bool,
-    #[serde(rename = "hasPrevPage")]
-    pub has_prev_page: bool,
-}
 
 fn is_valid_kaspa_address(address: &str) -> bool {
     KaspaAddress::try_from(address).is_ok()
 }
 
-// Optimized query that avoids expensive ROW_NUMBER() and reduces data scanning
-fn get_optimized_single_query() -> &'static str {
+
+
+
+
+// Separate input query - optimized for TimescaleDB index scans
+fn get_inputs_query() -> &'static str {
     r#"
-    WITH recent_inputs AS (
-        SELECT DISTINCT
-            transaction_id,
-            block_time,
-            -COALESCE(utxo_amount, 0) as amount_change
-        FROM kaspad.transactions_inputs
-        WHERE utxo_script_public_key_address = $1
-        AND block_time >= NOW() - INTERVAL '30 days'
-    ),
-    recent_outputs AS (
-        SELECT DISTINCT
-            transaction_id,
-            block_time,
-            COALESCE(amount, 0) as amount_change
-        FROM kaspad.transactions_outputs
-        WHERE script_public_key_address = $1
-        AND block_time >= NOW() - INTERVAL '30 days'
-    ),
-    combined_activity AS (
-        SELECT transaction_id, block_time, amount_change FROM recent_inputs
-        UNION ALL
-        SELECT transaction_id, block_time, amount_change FROM recent_outputs
-    ),
-    aggregated_txs AS (
-        SELECT 
-            transaction_id,
-            block_time,
-            SUM(amount_change) as net_change
-        FROM combined_activity
-        GROUP BY transaction_id, block_time
-    )
     SELECT 
-        encode(a.transaction_id, 'hex') as transaction_id,
-        a.block_time,
-        a.net_change as amount_change,
-        t.protocol_id,
-        t.subnetwork_id
-    FROM aggregated_txs a
-    LEFT JOIN kaspad.transactions t ON a.transaction_id = t.transaction_id
-    ORDER BY a.block_time DESC, a.transaction_id DESC
-    LIMIT $2 OFFSET $3
+        transaction_id,
+        block_time,
+        COALESCE(utxo_amount, 0) as amount
+    FROM kaspad.transactions_inputs
+    WHERE utxo_script_public_key_address = $1
+    AND block_time >= $2::timestamptz
+    AND block_time < $3::timestamptz
+    ORDER BY block_time DESC, transaction_id DESC
     "#
 }
 
-// Fallback query for addresses with sparse activity (extends time window)
-fn get_extended_query(time_interval: &str) -> String {
-    format!(
-        r#"
-        WITH extended_inputs AS (
-            SELECT DISTINCT
-                transaction_id,
-                block_time,
-                -COALESCE(utxo_amount, 0) as amount_change
-            FROM kaspad.transactions_inputs
-            WHERE utxo_script_public_key_address = $1
-            AND block_time >= NOW() - INTERVAL '{}'
-        ),
-        extended_outputs AS (
-            SELECT DISTINCT
-                transaction_id,
-                block_time,
-                COALESCE(amount, 0) as amount_change
-            FROM kaspad.transactions_outputs
-            WHERE script_public_key_address = $1
-            AND block_time >= NOW() - INTERVAL '{}'
-        ),
-        combined_activity AS (
-            SELECT transaction_id, block_time, amount_change FROM extended_inputs
-            UNION ALL
-            SELECT transaction_id, block_time, amount_change FROM extended_outputs
-        ),
-        aggregated_txs AS (
-            SELECT 
-                transaction_id,
-                block_time,
-                SUM(amount_change) as net_change
-            FROM combined_activity
-            GROUP BY transaction_id, block_time
-        )
-        SELECT 
-            encode(a.transaction_id, 'hex') as transaction_id,
-            a.block_time,
-            a.net_change as amount_change,
-            t.protocol_id,
-            t.subnetwork_id
-        FROM aggregated_txs a
-        LEFT JOIN kaspad.transactions t ON a.transaction_id = t.transaction_id
-        ORDER BY a.block_time DESC, a.transaction_id DESC
-        LIMIT $2 OFFSET $3
-        "#,
-        time_interval, time_interval
-    )
-}
-
-// Optimized count query that avoids UNION and uses more efficient counting
-fn get_optimized_count_query() -> &'static str {
+// Separate output query - optimized for TimescaleDB index scans  
+fn get_outputs_query() -> &'static str {
     r#"
-    WITH input_txs AS (
-        SELECT COUNT(DISTINCT transaction_id) as count
-        FROM kaspad.transactions_inputs
-        WHERE utxo_script_public_key_address = $1
-        AND block_time >= NOW() - INTERVAL '30 days'
-    ),
-    output_txs AS (
-        SELECT COUNT(DISTINCT transaction_id) as count
+    SELECT 
+            transaction_id,
+            block_time,
+        COALESCE(amount, 0) as amount
         FROM kaspad.transactions_outputs
         WHERE script_public_key_address = $1
-        AND block_time >= NOW() - INTERVAL '30 days'
-    ),
-    unique_txs AS (
-        SELECT transaction_id
-        FROM kaspad.transactions_inputs
-        WHERE utxo_script_public_key_address = $1
-        AND block_time >= NOW() - INTERVAL '30 days'
-        UNION
-        SELECT transaction_id
-        FROM kaspad.transactions_outputs
-        WHERE script_public_key_address = $1
-        AND block_time >= NOW() - INTERVAL '30 days'
-    )
-    SELECT COUNT(*) as total_count FROM unique_txs
+    AND block_time >= $2::timestamptz
+    AND block_time < $3::timestamptz
+    ORDER BY block_time DESC, transaction_id DESC
     "#
 }
 
-// Fallback count query for extended time windows
-fn get_extended_count_query(time_interval: &str) -> String {
-    format!(
-        r#"
-        WITH unique_txs AS (
-            SELECT transaction_id
-            FROM kaspad.transactions_inputs
-            WHERE utxo_script_public_key_address = $1
-            AND block_time >= NOW() - INTERVAL '{}'
-            UNION
-            SELECT transaction_id
-            FROM kaspad.transactions_outputs
-            WHERE script_public_key_address = $1
-            AND block_time >= NOW() - INTERVAL '{}'
-        )
-        SELECT COUNT(*) as total_count FROM unique_txs
-        "#,
-        time_interval, time_interval
-    )
+// Transaction metadata query - fetch protocol and subnetwork info
+fn get_transaction_metadata_query() -> &'static str {
+    r#"
+        SELECT 
+            transaction_id,
+            block_time,
+        protocol_id,
+        subnetwork_id
+    FROM kaspad.transactions
+    WHERE transaction_id = ANY($1)
+    AND block_time >= $2::timestamptz
+    AND block_time < $3::timestamptz
+    "#
 }
 
-async fn fetch_balance_from_rpc(
+
+
+
+
+
+
+// Cache for address metadata (balance, known addresses, etc.)
+static ADDRESS_CACHE: std::sync::OnceLock<AddressCache> = std::sync::OnceLock::new();
+
+fn get_address_cache() -> &'static AddressCache {
+    ADDRESS_CACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+}
+
+const CACHE_TTL: Duration = Duration::from_secs(30); // 30 second cache
+
+async fn get_cached_address_data(
     address: &str,
     state: &AppState,
-) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
-    let parsed_address = KaspaAddress::try_from(address)?;
-    let balance = state
-        .context
-        .rpc_client
-        .get_balance_by_address(parsed_address)
-        .await?;
-    Ok(balance)
+) -> Result<AddressData, sqlx::Error> {
+    // Check cache first
+    {
+        let cache = get_address_cache().read().await;
+        if let Some(cached) = cache.get(address) {
+            if cached.cached_at.elapsed() < CACHE_TTL {
+                return Ok(cached.data.clone());
+            }
+        }
+    }
+
+    // Fetch fresh data
+    let balance_future = async {
+        let parsed_address = KaspaAddress::try_from(address).map_err(|_| sqlx::Error::Protocol("Invalid address".into()))?;
+        state.context.rpc_client.get_balance_by_address(parsed_address).await.map_err(|_| sqlx::Error::Protocol("RPC error".into()))
+    };
+
+    let known_future = sqlx::query("SELECT label, type FROM known_addresses WHERE address = $1 LIMIT 1")
+        .bind(address)
+        .fetch_optional(&state.context.pg_pool);
+
+    let (balance_result, known_result) = tokio::try_join!(balance_future, known_future)?;
+
+    let known = known_result.map(|row| KnownAddress {
+        label: row.get("label"),
+        address_type: row.get("type"),
+    });
+
+    let address_data = AddressData {
+        address: address.to_string(),
+        balance: balance_result,
+        address_type: "P2PK".to_string(),
+        known,
+    };
+
+    // Update cache
+    {
+        let mut cache = get_address_cache().write().await;
+        cache.insert(address.to_string(), CachedAddressData {
+            data: address_data.clone(),
+            cached_at: Instant::now(),
+        });
+    }
+
+    Ok(address_data)
+}
+
+// Aggregate inputs and outputs into distinct transactions with net changes
+fn aggregate_transactions(
+    inputs: Vec<TransactionInput>,
+    outputs: Vec<TransactionOutput>,
+    metadata: HashMap<Vec<u8>, TransactionMetadata>,
+    limit: u32,
+) -> Vec<AggregatedTransaction> {
+    use std::collections::BTreeMap;
+    
+    // Use BTreeMap to maintain time ordering
+    let mut tx_map: BTreeMap<(DateTime<Utc>, Vec<u8>), i64> = BTreeMap::new();
+    
+    // Process inputs (negative amounts)
+    let input_processing_start = Instant::now();
+    for input in inputs.iter() {
+        let key = (input.block_time, input.transaction_id.clone());
+        *tx_map.entry(key).or_insert(0) -= input.amount;
+    }
+    let input_processing_duration = input_processing_start.elapsed();
+    
+    // Process outputs (positive amounts)
+    let output_processing_start = Instant::now();
+    for output in outputs.iter() {
+        let key = (output.block_time, output.transaction_id.clone());
+        *tx_map.entry(key).or_insert(0) += output.amount;
+    }
+    let output_processing_duration = output_processing_start.elapsed();
+    
+    log::debug!(
+        target: LogTarget::Web.as_str(),
+        "Aggregation processing: inputs={}ms ({}rows), outputs={}ms ({}rows), unique_txs={}",
+        input_processing_duration.as_millis(),
+        inputs.len(),
+        output_processing_duration.as_millis(),
+        outputs.len(),
+        tx_map.len()
+    );
+    
+    // Convert to aggregated transactions, sorted by time (newest first)
+    let mut aggregated: Vec<AggregatedTransaction> = tx_map
+        .into_iter()
+        .rev() // Reverse to get newest first
+        .take(limit as usize) // Take up to the limit
+        .map(|((block_time, transaction_id), net_change)| {
+            let meta = metadata.get(&transaction_id);
+            AggregatedTransaction {
+                transaction_id,
+                block_time,
+                net_change,
+                protocol_id: meta.and_then(|m| m.protocol_id),
+                subnetwork_id: meta.and_then(|m| m.subnetwork_id),
+            }
+        })
+        .collect();
+    
+    // Sort by time descending, then by transaction_id descending for deterministic ordering
+    aggregated.sort_by(|a, b| {
+        b.block_time.cmp(&a.block_time)
+            .then_with(|| b.transaction_id.cmp(&a.transaction_id))
+    });
+    
+    aggregated
 }
 
 pub async fn get_address_transactions(
     Path(address): Path<String>,
-    Query(params): Query<PaginationQuery>,
+    Query(params): Query<TransactionQuery>,
     State(state): State<AppState>,
 ) -> Result<
     (HeaderMap, Json<AddressTransactionsResponse>),
     (StatusCode, Json<AddressTransactionsResponse>),
 > {
+    let request_start = Instant::now();
+    
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Starting transaction query for address: {}, timestamp: {}, limit: {:?}",
+        address,
+        params.timestamp,
+        params.limit
+    );
+
     // Validate address format
     if !is_valid_kaspa_address(&address) {
         let response = AddressTransactionsResponse {
@@ -256,19 +309,9 @@ pub async fn get_address_transactions(
                 address: address.clone(),
                 balance: 0,
                 address_type: "P2PK".to_string(),
-                first_seen: None,
-                last_activity: None,
                 known: None,
             },
             transactions: vec![],
-            pagination: Pagination {
-                current_page: 1,
-                total_pages: 1,
-                total_transactions: None,
-                limit: 50,
-                has_next_page: false,
-                has_prev_page: false,
-            },
             status: "invalid_format".to_string(),
             error: Some("Invalid address format".to_string()),
             message: None,
@@ -276,241 +319,264 @@ pub async fn get_address_transactions(
         return Err((StatusCode::BAD_REQUEST, Json(response)));
     }
 
-    let page = params.page.unwrap_or(1).max(1);
-    let limit = 50u32;
-    let offset = (page - 1) * limit;
+    // Simple parameter processing
+    let limit = params.limit.unwrap_or(50).min(100).max(1);
+    
+    // Convert timestamp from milliseconds to DateTime<Utc>
+    let end_time = DateTime::from_timestamp(params.timestamp as i64 / 1000, ((params.timestamp % 1000) * 1_000_000) as u32)
+        .ok_or_else(|| {
+            let response = AddressTransactionsResponse {
+                address: address.clone(),
+                address_data: AddressData {
+                    address: address.clone(),
+                    balance: 0,
+                    address_type: "P2PK".to_string(),
+                    known: None,
+                },
+                transactions: vec![],
+                status: "invalid_timestamp".to_string(),
+                error: Some("Invalid timestamp format".to_string()),
+                message: None,
+            };
+            (StatusCode::BAD_REQUEST, Json(response))
+        })?;
 
-    // Start balance fetch in parallel
-    let balance_future = fetch_balance_from_rpc(&address, &state);
+    // Start address data fetch in parallel (cached)
+    let address_data_future = get_cached_address_data(&address, &state);
 
-    // Try optimized query first (30 days), then fallback to extended windows
-    let mut transactions_result = None;
-    let mut used_extended_query = false;
+    // Define time window - we want transactions BEFORE the given timestamp
+    // Use a reasonable search window (e.g., 24 hours) to find the most recent transactions
+    let start_time = end_time - chrono::Duration::hours(24);
 
-    // First attempt: optimized query for recent activity (30 days)
-    match sqlx::query(get_optimized_single_query())
-        .bind(&address)
-        .bind((limit + 1) as i64) // Get one extra to check if there's a next page
-        .bind(offset as i64)
-        .fetch_all(&state.context.pg_pool)
-        .await
-    {
-        Ok(result) => {
-            if result.len() >= limit as usize || page == 1 {
-                // We have enough data or it's the first page
-                transactions_result = Some(result);
-            }
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Time window for address {}: {} to {} (duration: {}min) - timestamp-based query",
+        address,
+        start_time.to_rfc3339(),
+        end_time.to_rfc3339(),
+        end_time.signed_duration_since(start_time).num_minutes()
+    );
+
+    // Execute separate concurrent queries for inputs and outputs
+    let queries_start = Instant::now();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Starting concurrent queries for address {}: inputs, outputs, and address data",
+        address
+    );
+    
+    let (address_data, inputs_result, outputs_result) = match tokio::try_join!(
+        address_data_future,
+        async {
+            let input_start = Instant::now();
+            let result = sqlx::query(get_inputs_query())
+                .bind(&address)
+                .bind(start_time)
+                .bind(end_time)
+                .fetch_all(&state.context.pg_pool)
+                .await;
+            let input_duration = input_start.elapsed();
+            log::info!(
+                target: LogTarget::Web.as_str(),
+                "Input query for address {} completed in {}ms, rows: {}",
+                address,
+                input_duration.as_millis(),
+                result.as_ref().map(|r| r.len()).unwrap_or(0)
+            );
+            result
+        },
+        async {
+            let output_start = Instant::now();
+            let result = sqlx::query(get_outputs_query())
+                .bind(&address)
+                .bind(start_time)
+                .bind(end_time)
+                .fetch_all(&state.context.pg_pool)
+                .await;
+            let output_duration = output_start.elapsed();
+            log::info!(
+                target: LogTarget::Web.as_str(),
+                "Output query for address {} completed in {}ms, rows: {}",
+                address,
+                output_duration.as_millis(),
+                result.as_ref().map(|r| r.len()).unwrap_or(0)
+            );
+            result
         }
+    ) {
+        Ok((address_data, inputs_result, outputs_result)) => {
+            (address_data, inputs_result, outputs_result)
+        },
         Err(e) => {
-            log::warn!(
-                target: LogTarget::WebErr.as_str(),
-                "Optimized query failed for address {}, trying fallback: {}",
+            log::error!(
+                target: LogTarget::Web.as_str(),
+                "Parallel time-window queries failed for address {}: {}",
                 address,
                 e
             );
-        }
-    }
-
-    // Fallback: try extended time windows if optimized query didn't return enough data
-    if transactions_result.is_none() {
-        let extended_windows = ["90 days", "365 days"];
-
-        for &time_window in &extended_windows {
-            match sqlx::query(&get_extended_query(time_window))
-                .bind(&address)
-                .bind((limit + 1) as i64)
-                .bind(offset as i64)
-                .fetch_all(&state.context.pg_pool)
-                .await
-            {
-                Ok(result) => {
-                    if !result.is_empty() || time_window == "365 days" {
-                        transactions_result = Some(result);
-                        used_extended_query = true;
-                        break;
-                    }
-                }
-                Err(e) => {
-                    if time_window == "365 days" {
-                        log::error!(
-                            target: LogTarget::WebErr.as_str(),
-                            "All queries failed for address {}: {}",
-                            address,
-                            e
-                        );
-                        let response = AddressTransactionsResponse {
-                            address: address.clone(),
-                            address_data: AddressData {
-                                address: address.clone(),
-                                balance: 0,
-                                address_type: "P2PK".to_string(),
-                                first_seen: None,
-                                last_activity: None,
-                                known: None,
-                            },
-                            transactions: vec![],
-                            pagination: Pagination {
-                                current_page: page,
-                                total_pages: 1,
-                                total_transactions: None,
-                                limit,
-                                has_next_page: false,
-                                has_prev_page: page > 1,
-                            },
-                            status: "error".to_string(),
-                            error: Some("Failed to fetch address data".to_string()),
-                            message: None,
-                        };
-                        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(response)));
-                    }
-                }
-            }
-        }
-    }
-
-    let transactions_rows = transactions_result.unwrap_or_default();
-
-    // Execute parallel queries for count, balance, and known address
-    let count_query = if used_extended_query {
-        get_extended_count_query("365 days")
-    } else {
-        get_optimized_count_query().to_string()
-    };
-    let known_address_query = "SELECT label, type FROM known_addresses WHERE address = $1 LIMIT 1";
-
-    // Handle balance fetch separately since it has different error type
-    let balance_result = balance_future.await;
-
-    let (count_result, known_result) = tokio::try_join!(
-        sqlx::query(&count_query)
-            .bind(&address)
-            .fetch_one(&state.context.pg_pool),
-        sqlx::query(known_address_query)
-            .bind(&address)
-            .fetch_optional(&state.context.pg_pool)
-    )
-    .map_err(|e| {
-        log::error!(
-            target: LogTarget::WebErr.as_str(),
-            "Error in parallel queries for address {}: {}",
-            address,
-            e
-        );
-        let response = AddressTransactionsResponse {
-            address: address.clone(),
-            address_data: AddressData {
+            let response = AddressTransactionsResponse {
                 address: address.clone(),
-                balance: 0,
-                address_type: "P2PK".to_string(),
-                first_seen: None,
-                last_activity: None,
-                known: None,
-            },
-            transactions: vec![],
-            pagination: Pagination {
-                current_page: page,
-                total_pages: 1,
-                total_transactions: None,
-                limit,
-                has_next_page: false,
-                has_prev_page: page > 1,
-            },
-            status: "error".to_string(),
-            error: Some("Failed to fetch address data".to_string()),
-            message: None,
-        };
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
-    })?;
+                address_data: AddressData {
+                    address: address.clone(),
+                    balance: 0,
+                    address_type: "P2PK".to_string(),
+                    known: None,
+                },
+                transactions: vec![],
+                status: "error".to_string(),
+                error: Some("Failed to fetch address data".to_string()),
+                message: None,
+            };
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(response)));
+        }
+    };
+    
+    let queries_duration = queries_start.elapsed();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "All concurrent queries completed for address {} in {}ms",
+        address,
+        queries_duration.as_millis()
+    );
 
-    // Process results - we fetched limit+1 to check for next page
-    let has_next_page = transactions_rows.len() > limit as usize;
-    let actual_transactions: Vec<_> = transactions_rows.into_iter().take(limit as usize).collect();
-
-    let transactions: Vec<AddressTransaction> = actual_transactions
-        .into_iter()
-        .map(|row| AddressTransaction {
+    // Process query results with Rust-side aggregation
+    let aggregation_start = Instant::now();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Starting Rust-side aggregation for address {}: {} input rows, {} output rows",
+        address,
+        inputs_result.len(),
+        outputs_result.len()
+    );
+    
+    // Parse inputs and outputs from separate queries
+    let parse_start = Instant::now();
+    let inputs: Vec<TransactionInput> = inputs_result
+        .iter()
+        .map(|row| TransactionInput {
             transaction_id: row.get("transaction_id"),
             block_time: row.get("block_time"),
-            amount_change: row
-                .try_get::<Decimal, _>("amount_change")
-                .map(|d| d.to_string().parse::<i64>().unwrap_or(0))
-                .unwrap_or(0),
-            protocol_id: row.try_get("protocol_id").ok(),
-            subnetwork_id: row.try_get("subnetwork_id").ok(),
+            amount: row.get("amount"),
         })
         .collect();
 
-    let has_prev_page = page > 1;
+    let outputs: Vec<TransactionOutput> = outputs_result
+        .iter()
+        .map(|row| TransactionOutput {
+            transaction_id: row.get("transaction_id"),
+            block_time: row.get("block_time"),
+            amount: row.get("amount"),
+        })
+        .collect();
+    
+    let parse_duration = parse_start.elapsed();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Row parsing for address {} completed in {}ms",
+        address,
+        parse_duration.as_millis()
+    );
 
-    // Handle case where user requested a page beyond available data
-    if transactions.is_empty() && page > 1 {
-        let response = AddressTransactionsResponse {
-            address: address.clone(),
-            address_data: AddressData {
-                address: address.clone(),
-                balance: 0,
-                address_type: "P2PK".to_string(),
-                first_seen: None,
-                last_activity: None,
-                known: None,
-            },
-            transactions: vec![],
-            pagination: Pagination {
-                current_page: page,
-                total_pages: page.saturating_sub(1).max(1),
-                total_transactions: None,
-                limit,
-                has_next_page: false,
-                has_prev_page: true,
-            },
-            status: "success".to_string(),
-            error: None,
-            message: Some("No more transactions available at this page".to_string()),
-        };
-
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "Cache-Control",
-            HeaderValue::from_static("public, max-age=10, s-maxage=10"),
-        );
-
-        return Ok((headers, Json(response)));
+    // Collect unique transaction IDs for metadata fetch
+    let dedup_start = Instant::now();
+    let mut tx_ids: std::collections::HashSet<Vec<u8>> = std::collections::HashSet::new();
+    for input in &inputs {
+        tx_ids.insert(input.transaction_id.clone());
+    }
+    for output in &outputs {
+        tx_ids.insert(output.transaction_id.clone());
     }
 
-    // Build response
-    let fetched_balance = balance_result.unwrap_or(0);
-    let total_count: i64 = count_result.get("total_count");
-    let total_transactions = total_count as u64;
-    let total_pages = ((total_transactions as f64) / (limit as f64)).ceil() as u32;
+    let tx_ids_vec: Vec<Vec<u8>> = tx_ids.into_iter().collect();
+    let dedup_duration = dedup_start.elapsed();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Transaction deduplication for address {} completed in {}ms: {} unique transactions",
+        address,
+        dedup_duration.as_millis(),
+        tx_ids_vec.len()
+    );
 
-    let known = known_result.map(|row| KnownAddress {
-        label: row.get("label"),
-        address_type: row.get("type"),
-    });
-
-    let address_data = AddressData {
-        address: address.clone(),
-        balance: fetched_balance,
-        address_type: "P2PK".to_string(),
-        first_seen: None,
-        last_activity: None,
-        known,
+    // Fetch metadata for all transactions
+    let metadata_start = Instant::now();
+    let metadata_rows = if !tx_ids_vec.is_empty() {
+        let result = sqlx::query(get_transaction_metadata_query())
+            .bind(&tx_ids_vec)
+            .bind(start_time)
+            .bind(end_time)
+            .fetch_all(&state.context.pg_pool)
+            .await
+            .unwrap_or_default();
+        
+        let metadata_duration = metadata_start.elapsed();
+        log::info!(
+            target: LogTarget::Web.as_str(),
+            "Metadata query for address {} completed in {}ms: {} metadata rows",
+            address,
+            metadata_duration.as_millis(),
+            result.len()
+        );
+        result
+    } else {
+        log::info!(
+            target: LogTarget::Web.as_str(),
+            "No transactions found for address {}, skipping metadata fetch",
+            address
+        );
+        vec![]
     };
 
-    let pagination = Pagination {
-        current_page: page,
-        total_pages: total_pages.max(1),
-        total_transactions: Some(total_transactions),
-        limit,
-        has_next_page,
-        has_prev_page,
-    };
+    let metadata: HashMap<Vec<u8>, TransactionMetadata> = metadata_rows
+        .iter()
+        .map(|row| {
+            let tx_id: Vec<u8> = row.get("transaction_id");
+            let meta = TransactionMetadata {
+                protocol_id: row.try_get("protocol_id").ok(),
+                subnetwork_id: row.try_get("subnetwork_id").ok(),
+            };
+            (tx_id, meta)
+        })
+        .collect();
 
+    // Aggregate in Rust and get most recent transactions before the timestamp
+    let final_agg_start = Instant::now();
+    let mut aggregated = aggregate_transactions(inputs, outputs, metadata, limit * 3); // Get extra for filtering
+    
+    // Filter transactions to only include those BEFORE the given timestamp,
+    // sort by time descending, and take only the requested limit
+    aggregated.retain(|tx| tx.block_time <= end_time);
+    aggregated.sort_by(|a, b| b.block_time.cmp(&a.block_time));
+    let final_txs: Vec<AggregatedTransaction> = aggregated.into_iter().take(limit as usize).collect();
+    
+    let final_agg_duration = final_agg_start.elapsed();
+    let total_aggregation_duration = aggregation_start.elapsed();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Final aggregation for address {} completed in {}ms (total aggregation: {}ms): {} transactions",
+        address,
+        final_agg_duration.as_millis(),
+        total_aggregation_duration.as_millis(),
+        final_txs.len()
+    );
+
+    // Convert to final response format
+    let transactions: Vec<AddressTransaction> = final_txs
+        .iter()
+        .map(|tx| AddressTransaction {
+            transaction_id: hex::encode(&tx.transaction_id),
+            block_time: tx.block_time,
+            amount_change: tx.net_change,
+            protocol_id: tx.protocol_id,
+            subnetwork_id: tx.subnetwork_id,
+        })
+        .collect();
+
+    // Build response with cached address data
+    let transaction_count = transactions.len();
     let response = AddressTransactionsResponse {
         address: address.clone(),
         address_data,
         transactions,
-        pagination,
         status: "success".to_string(),
         error: None,
         message: None,
@@ -521,6 +587,16 @@ pub async fn get_address_transactions(
     headers.insert(
         "Cache-Control",
         HeaderValue::from_static("public, max-age=10, s-maxage=10"),
+    );
+
+    let total_request_duration = request_start.elapsed();
+    log::info!(
+        target: LogTarget::Web.as_str(),
+        "Transaction query completed for address {}: total_duration={}ms, transactions_returned={}, status={}",
+        address,
+        total_request_duration.as_millis(),
+        transaction_count,
+        response.status
     );
 
     Ok((headers, Json(response)))
