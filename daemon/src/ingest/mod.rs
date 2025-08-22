@@ -5,6 +5,7 @@ mod pipeline;
 mod second;
 
 use cache::{CacheStateError, DagCache, Manager, Reader, Writer};
+use chrono::Utc;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::GetBlockDagInfoResponse;
 use kaspa_wrpc_client::KaspaRpcClient;
@@ -204,8 +205,8 @@ impl DagIngest {
                 dag_cache.set_synced(false);
 
                 // Get tip hashes to check synced at end of iter
-                let GetBlockDagInfoResponse { tip_hashes, .. } =
-                    rpc_client.get_block_dag_info().await?;
+                // let GetBlockDagInfoResponse { tip_hashes, .. } =
+                //     rpc_client.get_block_dag_info().await?;
 
                 // Get VSPC
                 let vspc = rpc_client
@@ -236,25 +237,38 @@ impl DagIngest {
                     dag_cache
                         .set_last_known_chain_block(acceptance.accepting_chain_block_header.hash);
 
-                    if tip_hashes.contains(&acceptance.accepting_chain_block_header.hash) {
-                        dag_cache.set_synced(true);
-                    }
-
+                    let accepting_block_ts = acceptance.accepting_chain_block_header.timestamp;
                     pipeline::add_chain_block_acceptance_pipeline(dag_cache.clone(), acceptance);
+
+                    // if tip_hashes.contains(&acceptance.accepting_chain_block_header.hash) {
+                    //     dag_cache.set_synced(true);
+                    // }
+                    // Sleep when we get to a VSPC block that is within 5 seconds of current time
+                    // This indicates we are near DAG Tip, trying to stay a little behind it
+                    let ts = Utc::now().timestamp_millis();
+                    if (ts - accepting_block_ts as i64) < 5000 {
+                        info!(
+                            target: LogTarget::Daemon.as_str(),
+                            "{} - {} = {}ms behind",
+                            ts,
+                            accepting_block_ts,
+                            ts - accepting_block_ts as i64,
+                        );
+
+                        dag_cache.set_synced(true);
+
+                        break;
+                    }
                 }
 
                 if dag_cache.synced() {
                     interval.tick().await;
                 } else {
-                    let tip_timestamp = dag_cache.tip_timestamp() / 1000;
+                    let tip_timestamp = dag_cache.tip_timestamp();
                     info!(
                         target: LogTarget::Daemon.as_str(),
-                        "vspc_task {}s behind, not sleeping",
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs()
-                            - tip_timestamp,
+                        "vspc_task {}ms behind, not sleeping",
+                        Utc::now().timestamp_millis() - tip_timestamp as i64,
                     );
                 }
             }
