@@ -11,10 +11,10 @@ use kaspalytics_utils::log::LogTarget;
 
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 
 // Simple in-memory cache for address metadata
 #[derive(Clone)]
@@ -58,7 +58,7 @@ struct AggregatedTransaction {
 
 #[derive(Deserialize)]
 pub struct TransactionQuery {
-    timestamp: u64,  // Unix timestamp in milliseconds
+    timestamp: u64, // Unix timestamp in milliseconds
     limit: Option<u32>,
 }
 
@@ -100,14 +100,9 @@ pub struct AddressTransaction {
     pub subnetwork_id: Option<i32>,
 }
 
-
 fn is_valid_kaspa_address(address: &str) -> bool {
     KaspaAddress::try_from(address).is_ok()
 }
-
-
-
-
 
 // Separate input query - optimized for TimescaleDB index scans
 fn get_inputs_query() -> &'static str {
@@ -124,7 +119,7 @@ fn get_inputs_query() -> &'static str {
     "#
 }
 
-// Separate output query - optimized for TimescaleDB index scans  
+// Separate output query - optimized for TimescaleDB index scans
 fn get_outputs_query() -> &'static str {
     r#"
     SELECT 
@@ -154,12 +149,6 @@ fn get_transaction_metadata_query() -> &'static str {
     "#
 }
 
-
-
-
-
-
-
 // Cache for address metadata (balance, known addresses, etc.)
 static ADDRESS_CACHE: std::sync::OnceLock<AddressCache> = std::sync::OnceLock::new();
 
@@ -185,13 +174,20 @@ async fn get_cached_address_data(
 
     // Fetch fresh data
     let balance_future = async {
-        let parsed_address = KaspaAddress::try_from(address).map_err(|_| sqlx::Error::Protocol("Invalid address".into()))?;
-        state.context.rpc_client.get_balance_by_address(parsed_address).await.map_err(|_| sqlx::Error::Protocol("RPC error".into()))
+        let parsed_address = KaspaAddress::try_from(address)
+            .map_err(|_| sqlx::Error::Protocol("Invalid address".into()))?;
+        state
+            .context
+            .rpc_client
+            .get_balance_by_address(parsed_address)
+            .await
+            .map_err(|_| sqlx::Error::Protocol("RPC error".into()))
     };
 
-    let known_future = sqlx::query("SELECT label, type FROM known_addresses WHERE address = $1 LIMIT 1")
-        .bind(address)
-        .fetch_optional(&state.context.pg_pool);
+    let known_future =
+        sqlx::query("SELECT label, type FROM known_addresses WHERE address = $1 LIMIT 1")
+            .bind(address)
+            .fetch_optional(&state.context.pg_pool);
 
     let (balance_result, known_result) = tokio::try_join!(balance_future, known_future)?;
 
@@ -210,10 +206,13 @@ async fn get_cached_address_data(
     // Update cache
     {
         let mut cache = get_address_cache().write().await;
-        cache.insert(address.to_string(), CachedAddressData {
-            data: address_data.clone(),
-            cached_at: Instant::now(),
-        });
+        cache.insert(
+            address.to_string(),
+            CachedAddressData {
+                data: address_data.clone(),
+                cached_at: Instant::now(),
+            },
+        );
     }
 
     Ok(address_data)
@@ -227,10 +226,10 @@ fn aggregate_transactions(
     limit: u32,
 ) -> Vec<AggregatedTransaction> {
     use std::collections::BTreeMap;
-    
+
     // Use BTreeMap to maintain time ordering
     let mut tx_map: BTreeMap<(DateTime<Utc>, Vec<u8>), i64> = BTreeMap::new();
-    
+
     // Process inputs (negative amounts)
     let input_processing_start = Instant::now();
     for input in inputs.iter() {
@@ -238,7 +237,7 @@ fn aggregate_transactions(
         *tx_map.entry(key).or_insert(0) -= input.amount;
     }
     let input_processing_duration = input_processing_start.elapsed();
-    
+
     // Process outputs (positive amounts)
     let output_processing_start = Instant::now();
     for output in outputs.iter() {
@@ -246,7 +245,7 @@ fn aggregate_transactions(
         *tx_map.entry(key).or_insert(0) += output.amount;
     }
     let output_processing_duration = output_processing_start.elapsed();
-    
+
     log::debug!(
         target: LogTarget::Web.as_str(),
         "Aggregation processing: inputs={}ms ({}rows), outputs={}ms ({}rows), unique_txs={}",
@@ -256,7 +255,7 @@ fn aggregate_transactions(
         outputs.len(),
         tx_map.len()
     );
-    
+
     // Convert to aggregated transactions, sorted by time (newest first)
     let mut aggregated: Vec<AggregatedTransaction> = tx_map
         .into_iter()
@@ -273,13 +272,14 @@ fn aggregate_transactions(
             }
         })
         .collect();
-    
+
     // Sort by time descending, then by transaction_id descending for deterministic ordering
     aggregated.sort_by(|a, b| {
-        b.block_time.cmp(&a.block_time)
+        b.block_time
+            .cmp(&a.block_time)
             .then_with(|| b.transaction_id.cmp(&a.transaction_id))
     });
-    
+
     aggregated
 }
 
@@ -292,7 +292,7 @@ pub async fn get_address_transactions(
     (StatusCode, Json<AddressTransactionsResponse>),
 > {
     let request_start = Instant::now();
-    
+
     log::info!(
         target: LogTarget::Web.as_str(),
         "Starting transaction query for address: {}, timestamp: {}, limit: {:?}",
@@ -320,26 +320,29 @@ pub async fn get_address_transactions(
     }
 
     // Simple parameter processing
-    let limit = params.limit.unwrap_or(50).min(100).max(1);
-    
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+
     // Convert timestamp from milliseconds to DateTime<Utc>
-    let end_time = DateTime::from_timestamp(params.timestamp as i64 / 1000, ((params.timestamp % 1000) * 1_000_000) as u32)
-        .ok_or_else(|| {
-            let response = AddressTransactionsResponse {
+    let end_time = DateTime::from_timestamp(
+        params.timestamp as i64 / 1000,
+        ((params.timestamp % 1000) * 1_000_000) as u32,
+    )
+    .ok_or_else(|| {
+        let response = AddressTransactionsResponse {
+            address: address.clone(),
+            address_data: AddressData {
                 address: address.clone(),
-                address_data: AddressData {
-                    address: address.clone(),
-                    balance: 0,
-                    address_type: "P2PK".to_string(),
-                    known: None,
-                },
-                transactions: vec![],
-                status: "invalid_timestamp".to_string(),
-                error: Some("Invalid timestamp format".to_string()),
-                message: None,
-            };
-            (StatusCode::BAD_REQUEST, Json(response))
-        })?;
+                balance: 0,
+                address_type: "P2PK".to_string(),
+                known: None,
+            },
+            transactions: vec![],
+            status: "invalid_timestamp".to_string(),
+            error: Some("Invalid timestamp format".to_string()),
+            message: None,
+        };
+        (StatusCode::BAD_REQUEST, Json(response))
+    })?;
 
     // Start address data fetch in parallel (cached)
     let address_data_future = get_cached_address_data(&address, &state);
@@ -351,14 +354,15 @@ pub async fn get_address_transactions(
             .await
             .ok()
             .flatten()
-            .and_then(|row| row.try_get::<DateTime<Utc>, _>("oldest_block_timestamp").ok())
+            .and_then(|row| {
+                row.try_get::<DateTime<Utc>, _>("oldest_block_timestamp")
+                    .ok()
+            })
     };
 
     // Execute address data and oldest timestamp queries in parallel
-    let (address_data_result, oldest_timestamp_result) = tokio::join!(
-        address_data_future,
-        oldest_timestamp_future
-    );
+    let (address_data_result, oldest_timestamp_result) =
+        tokio::join!(address_data_future, oldest_timestamp_future);
 
     let address_data = address_data_result.map_err(|e| {
         log::error!(
@@ -388,7 +392,7 @@ pub async fn get_address_transactions(
         // Fallback to 30 days ago if we can't determine oldest timestamp
         end_time - chrono::Duration::days(30)
     });
-    
+
     // Set a reasonable maximum lookback period (30 days from end_time)
     let max_lookback_time = end_time - chrono::Duration::days(30);
     let earliest_query_time = oldest_available.max(max_lookback_time);
@@ -413,7 +417,7 @@ pub async fn get_address_transactions(
     loop {
         let current_start_time = (current_end_time - chunk_duration).max(earliest_query_time);
         chunk_count += 1;
-        
+
         log::info!(
             target: LogTarget::Web.as_str(),
             "Chunk {} for address {}: {} to {} (duration: {}min)",
@@ -488,7 +492,7 @@ pub async fn get_address_transactions(
         };
 
         let chunk_duration_ms = chunk_start.elapsed();
-        
+
         // Parse and accumulate results from this chunk
         let chunk_inputs: Vec<TransactionInput> = chunk_inputs_result
             .iter()
@@ -510,21 +514,22 @@ pub async fn get_address_transactions(
 
         let chunk_input_count = chunk_inputs.len();
         let chunk_output_count = chunk_outputs.len();
-        
+
         all_inputs.extend(chunk_inputs);
         all_outputs.extend(chunk_outputs);
 
         // Quick aggregation check to see if we have enough transactions
         let quick_agg_start = Instant::now();
         let aggregated = aggregate_transactions(
-            all_inputs.clone(), 
-            all_outputs.clone(), 
-            HashMap::new(), 
-            (target_transactions * 2) as u32  // Get extra for filtering
+            all_inputs.clone(),
+            all_outputs.clone(),
+            HashMap::new(),
+            (target_transactions * 2) as u32, // Get extra for filtering
         );
-        
+
         // Filter by end_time and count
-        let filtered_count = aggregated.iter()
+        let filtered_count = aggregated
+            .iter()
             .filter(|tx| tx.block_time <= end_time)
             .count();
         let quick_agg_duration = quick_agg_start.elapsed();
@@ -543,7 +548,7 @@ pub async fn get_address_transactions(
         );
 
         // Check termination conditions
-        let should_continue = filtered_count < target_transactions 
+        let should_continue = filtered_count < target_transactions
             && current_start_time > earliest_query_time
             && chunk_count < 120; // Safety limit: max 120 chunks (30 days worth)
 
@@ -573,7 +578,7 @@ pub async fn get_address_transactions(
         // Move to the next chunk (going backwards in time)
         current_end_time = current_start_time;
     }
-    
+
     let queries_duration = queries_start.elapsed();
     log::info!(
         target: LogTarget::Web.as_str(),
@@ -599,14 +604,15 @@ pub async fn get_address_transactions(
     // Pre-aggregate to identify top transactions before fetching metadata
     let pre_agg_start = Instant::now();
     let pre_aggregated = aggregate_transactions(all_inputs, all_outputs, HashMap::new(), limit * 3); // Get extra for filtering
-    
+
     // Filter transactions to only include those BEFORE the given timestamp,
     // sort by time descending, and take only the requested limit
     let mut filtered_txs = pre_aggregated;
     filtered_txs.retain(|tx| tx.block_time <= end_time);
     filtered_txs.sort_by(|a, b| b.block_time.cmp(&a.block_time));
-    let top_txs: Vec<AggregatedTransaction> = filtered_txs.into_iter().take(limit as usize).collect();
-    
+    let top_txs: Vec<AggregatedTransaction> =
+        filtered_txs.into_iter().take(limit as usize).collect();
+
     let pre_agg_duration = pre_agg_start.elapsed();
     log::info!(
         target: LogTarget::Web.as_str(),
@@ -618,10 +624,8 @@ pub async fn get_address_transactions(
 
     // Collect unique transaction IDs from only the top transactions for metadata fetch
     let dedup_start = Instant::now();
-    let tx_ids_vec: Vec<Vec<u8>> = top_txs.iter()
-        .map(|tx| tx.transaction_id.clone())
-        .collect();
-    
+    let tx_ids_vec: Vec<Vec<u8>> = top_txs.iter().map(|tx| tx.transaction_id.clone()).collect();
+
     let dedup_duration = dedup_start.elapsed();
     log::info!(
         target: LogTarget::Web.as_str(),
@@ -641,7 +645,7 @@ pub async fn get_address_transactions(
             .fetch_all(&state.context.pg_pool)
             .await
             .unwrap_or_default();
-        
+
         let metadata_duration = metadata_start.elapsed();
         log::info!(
             target: LogTarget::Web.as_str(),
@@ -674,7 +678,8 @@ pub async fn get_address_transactions(
 
     // Apply metadata to the top transactions
     let final_agg_start = Instant::now();
-    let final_txs: Vec<AggregatedTransaction> = top_txs.into_iter()
+    let final_txs: Vec<AggregatedTransaction> = top_txs
+        .into_iter()
         .map(|mut tx| {
             if let Some(meta) = metadata.get(&tx.transaction_id) {
                 tx.protocol_id = meta.protocol_id;
@@ -683,7 +688,7 @@ pub async fn get_address_transactions(
             tx
         })
         .collect();
-    
+
     let final_agg_duration = final_agg_start.elapsed();
     let total_aggregation_duration = aggregation_start.elapsed();
     log::info!(

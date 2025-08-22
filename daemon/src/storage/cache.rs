@@ -262,6 +262,10 @@ impl Reader for Cache {
         self.daa_score.read().await.clone()
     }
 
+    async fn get_sink_blue_score(&self) -> CacheEntry<u64> {
+        self.sink_blue_score.read().await.clone()
+    }
+
     async fn get_circulating_supply(&self) -> CacheEntry<u64> {
         self.circulating_supply.read().await.clone()
     }
