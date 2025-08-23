@@ -240,23 +240,10 @@ impl DagIngest {
                     let accepting_block_ts = acceptance.accepting_chain_block_header.timestamp;
                     pipeline::add_chain_block_acceptance_pipeline(dag_cache.clone(), acceptance);
 
-                    // if tip_hashes.contains(&acceptance.accepting_chain_block_header.hash) {
-                    //     dag_cache.set_synced(true);
-                    // }
                     // Sleep when we get to a VSPC block that is within 5 seconds of current time
                     // This indicates we are near DAG Tip, trying to stay a little behind it
-                    let ts = Utc::now().timestamp_millis();
-                    if (ts - accepting_block_ts as i64) < 5000 {
-                        info!(
-                            target: LogTarget::Daemon.as_str(),
-                            "{} - {} = {}ms behind",
-                            ts,
-                            accepting_block_ts,
-                            ts - accepting_block_ts as i64,
-                        );
-
+                    if (Utc::now().timestamp_millis() - accepting_block_ts as i64) < 5000 {
                         dag_cache.set_synced(true);
-
                         break;
                     }
                 }
