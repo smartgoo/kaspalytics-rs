@@ -11,6 +11,13 @@ use kaspalytics_utils::log::LogTarget;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
+fn serialize_u64_as_string<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockResponse {
     #[serde(rename = "blockHash")]
@@ -35,6 +42,7 @@ pub struct BlockData {
     pub utxo_commitment: String,
     pub timestamp: DateTime<Utc>,
     pub bits: u32,
+    #[serde(serialize_with = "serialize_u64_as_string")]
     pub nonce: u64,
     #[serde(rename = "blueWork")]
     pub blue_work: String,
