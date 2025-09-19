@@ -294,7 +294,7 @@ impl DagIngest {
                 let tip_timestamp = dag_cache.tip_timestamp();
                 info!(
                     target: LogTarget::Daemon.as_str(),
-                    "DagIngest Monitor last known chain block {:?}, tip timestamp {}ms behind",
+                    "DagIngest Monitor: last known chain block {:?}, tip timestamp {}ms behind",
                     dag_cache.last_known_chain_block().unwrap(),
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)

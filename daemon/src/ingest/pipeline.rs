@@ -73,7 +73,18 @@ pub fn block_add_pipeline(dag_cache: Arc<DagCache>, block: &RpcBlock) {
     //     block.header.hash,
     // );
 
-    let (node_version, _) = parse_coinbase_tx_payload(&block.transactions[0].payload).unwrap();
+    let node_version = match parse_coinbase_tx_payload(&block.transactions[0].payload) {
+        Ok((version, _)) => Some(version),
+        Err(err) => {
+            warn!(
+                target: LogTarget::Daemon.as_str(),
+                "Failed to parse coinbase transaction payload for block {}: {}",
+                block.header.hash,
+                err
+            );
+            None
+        }
+    };
 
     // Increment second counters
     dag_cache
@@ -85,10 +96,12 @@ pub fn block_add_pipeline(dag_cache: Arc<DagCache>, block: &RpcBlock) {
             e.increment_block_count();
 
             // Increment mining node version count
-            e.mining_node_version_block_counts
-                .entry(node_version)
-                .and_modify(|v| *v += 1)
-                .or_insert(1);
+            if let Some(version) = node_version {
+                e.mining_node_version_block_counts
+                    .entry(version)
+                    .and_modify(|v| *v += 1)
+                    .or_insert(1);
+            }
             e
         });
 
@@ -418,7 +431,10 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
             .entry(tx_timestamp / 1000)
             .and_modify(|v| {
                 v.decrement_unique_accepted_transaction_count();
-                v.decrement_total_fees(tx.fee.unwrap());
+
+                if tx.fee.is_some() {
+                    v.decrement_total_fees(tx.fee.unwrap());
+                }
 
                 match tx.protocol {
                     Some(TransactionProtocol::Krc) => {
