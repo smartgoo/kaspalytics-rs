@@ -134,7 +134,7 @@ async fn main() {
 
     let run_result = tokio::try_join!(
         tokio::spawn(async move {
-            ingest.run().await;
+            ingest.run().await.unwrap();
         }),
         tokio::spawn(async move {
             writer.run().await;
