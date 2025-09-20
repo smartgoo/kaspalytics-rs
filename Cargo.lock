@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "kaspa-addresses"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "borsh",
  "js-sys",
@@ -2015,7 +2015,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "arc-swap",
  "async-channel 2.3.1",
@@ -2056,7 +2056,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-client"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "ahash 0.8.12",
  "cfg-if",
@@ -2085,7 +2085,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-core"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -2121,7 +2121,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-notify"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "async-channel 2.3.1",
  "cfg-if",
@@ -2141,7 +2141,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensus-wasm"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "cfg-if",
  "faster-hex",
@@ -2166,7 +2166,7 @@ dependencies = [
 [[package]]
 name = "kaspa-consensusmanager"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "duration-string",
  "futures",
@@ -2186,7 +2186,7 @@ dependencies = [
 [[package]]
 name = "kaspa-core"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2206,7 +2206,7 @@ dependencies = [
 [[package]]
 name = "kaspa-database"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "bincode",
  "enum-primitive-derive",
@@ -2229,7 +2229,7 @@ dependencies = [
 [[package]]
 name = "kaspa-hashes"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "blake2b_simd",
  "borsh",
@@ -2248,7 +2248,7 @@ dependencies = [
 [[package]]
 name = "kaspa-index-core"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2268,7 +2268,7 @@ dependencies = [
 [[package]]
 name = "kaspa-math"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "borsh",
  "faster-hex",
@@ -2288,7 +2288,7 @@ dependencies = [
 [[package]]
 name = "kaspa-merkle"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "kaspa-hashes",
 ]
@@ -2296,7 +2296,7 @@ dependencies = [
 [[package]]
 name = "kaspa-mining-errors"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "kaspa-consensus-core",
  "thiserror 1.0.69",
@@ -2305,7 +2305,7 @@ dependencies = [
 [[package]]
 name = "kaspa-muhash"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "kaspa-hashes",
  "kaspa-math",
@@ -2316,7 +2316,7 @@ dependencies = [
 [[package]]
 name = "kaspa-notify"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2348,7 +2348,7 @@ dependencies = [
 [[package]]
 name = "kaspa-pow"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "js-sys",
  "kaspa-consensus-client",
@@ -2364,7 +2364,7 @@ dependencies = [
 [[package]]
 name = "kaspa-rpc-core"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2406,7 +2406,7 @@ dependencies = [
 [[package]]
 name = "kaspa-rpc-macros"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro-error",
@@ -2419,7 +2419,7 @@ dependencies = [
 [[package]]
 name = "kaspa-txscript"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "blake2b_simd",
  "borsh",
@@ -2450,7 +2450,7 @@ dependencies = [
 [[package]]
 name = "kaspa-txscript-errors"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "secp256k1",
  "thiserror 1.0.69",
@@ -2459,7 +2459,7 @@ dependencies = [
 [[package]]
 name = "kaspa-utils"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "arc-swap",
  "async-channel 2.3.1",
@@ -2489,7 +2489,7 @@ dependencies = [
 [[package]]
 name = "kaspa-utxoindex"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "futures",
  "kaspa-consensus-core",
@@ -2509,7 +2509,7 @@ dependencies = [
 [[package]]
 name = "kaspa-wasm-core"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "faster-hex",
  "hexplay",
@@ -2521,7 +2521,7 @@ dependencies = [
 [[package]]
 name = "kaspa-wrpc-client"
 version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=9b26529de7f31f64c41ed30346a477a42436ce4d#9b26529de7f31f64c41ed30346a477a42436ce4d"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
 dependencies = [
  "async-std",
  "async-trait",

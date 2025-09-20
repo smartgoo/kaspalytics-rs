@@ -27,17 +27,17 @@ dotenvy = "0.15.7"
 futures = "0.3.31"
 hex = "0.4.3"
 http = "1.3.1"
-kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-grpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-hashes = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
-kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "9b26529de7f31f64c41ed30346a477a42436ce4d" }
+kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-grpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-hashes = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
+kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "bda81216921d16cd3ce7e649129a6efcf8c081b7" }
 kaspalyticsd = { version = "0.1.0", path = "daemon" }
 kaspalytics-cli = { version = "0.1.0", path = "cli" }
 kaspalytics-utils = { version = "0.1.0", path = "utils" }
