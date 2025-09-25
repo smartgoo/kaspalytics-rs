@@ -72,6 +72,7 @@ fn build_today_query() -> String {
         FROM kaspad.protocol_activity_per_minute
         WHERE minute_bucket >= date_trunc('day', now() at time zone 'utc')
           AND minute_bucket < date_trunc('day', now() at time zone 'utc') + INTERVAL '1 day'
+          AND protocol_id != 3
         GROUP BY protocol_id
         ORDER BY transaction_count DESC
     "#
@@ -103,6 +104,7 @@ fn build_interval_query(interval_expression: &str) -> String {
         FROM kaspad.protocol_activity_per_minute
         WHERE minute_bucket >= (now() at time zone 'utc' - {})
           AND minute_bucket <= (now() at time zone 'utc')
+          AND protocol_id != 3
         GROUP BY protocol_id
         ORDER BY transaction_count DESC
         "#,
