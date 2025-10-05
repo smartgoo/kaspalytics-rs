@@ -30,6 +30,7 @@ pub struct Cache {
     fee_rate_normal: RwLock<CacheEntry<Decimal>>,
     fee_rate_low: RwLock<CacheEntry<Decimal>>,
     mempool_entries: RwLock<CacheEntry<Vec<RpcMempoolEntry>>>,
+    mempool_transaction_count: RwLock<CacheEntry<u64>>,
 
     // Hash rate change
     hash_rate_7d_change: RwLock<CacheEntry<Decimal>>,
@@ -235,6 +236,19 @@ impl Writer for Cache {
 
         Ok(())
     }
+
+    async fn set_mempool_transaction_count(
+        &self,
+        value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result <(), Error> {
+        *self.mempool_transaction_count.write().await = CacheEntry::<u64> {
+            value,
+            timestamp: timestamp.unwrap_or(Utc::now()),
+        };
+
+        Ok(())
+    }
 }
 
 impl Reader for Cache {
@@ -300,5 +314,9 @@ impl Reader for Cache {
 
     async fn get_feerate_priority(&self) -> CacheEntry<Decimal> {
         self.fee_rate_priority.read().await.clone()
+    }
+
+    async fn get_mempool_transaction_count(&self) -> CacheEntry<u64> {
+        self.mempool_transaction_count.read().await.clone()
     }
 }

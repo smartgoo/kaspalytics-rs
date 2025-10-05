@@ -67,6 +67,7 @@ enum SseKey {
     MinerNodeVersionCount1h,
     CsAging,
     AddressByKasBalance,
+    MempoolTransactionCount,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -152,7 +153,7 @@ impl SseData {
         Self::collect_price_data(&mut data, &storage, cutoff).await;
         Self::collect_market_data(&mut data, &storage, cutoff).await;
         Self::collect_chain_data(&mut data, &storage, cutoff).await;
-        Self::collect_transaction_data(&mut data, &dag_cache).await;
+        Self::collect_transaction_data(&mut data, &storage, &dag_cache).await;
         Self::collect_fee_data(&mut data, &dag_cache).await;
         Self::collect_feerate_data(&mut data, &storage, cutoff).await;
         Self::collect_mining_data(&mut data, &dag_cache).await;
@@ -307,7 +308,7 @@ impl SseData {
         }
     }
 
-    async fn collect_transaction_data(&mut self, dag_cache: &Arc<DagCache>) {
+    async fn collect_transaction_data(&mut self, storage: &Storage, dag_cache: &Arc<DagCache>) {
         let threshold = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -359,6 +360,11 @@ impl SseData {
         self.set(
             SseKey::ProtocolTransactionCounts24h,
             SseField::from(serde_json::to_string(&protocol_counts).unwrap()),
+        );
+
+        self.set(
+            SseKey::MempoolTransactionCount,
+            SseField::from(storage.get_mempool_transaction_count().await),
         );
     }
 

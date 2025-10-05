@@ -21,6 +21,7 @@ pub enum KeyRegistry {
     FeerateNormal,
     FeerateLow,
     MempoolEntries,
+    MempoolTransactionCount,
 
     // Hash Rate changes
     HashRate7dChange,

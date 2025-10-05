@@ -114,6 +114,12 @@ pub trait Writer {
         value: Decimal,
         timestamp: Option<DateTime<Utc>>,
     ) -> Result<(), Error>;
+
+    async fn set_mempool_transaction_count(
+        &self,
+        value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error>;
 }
 
 impl Writer for Storage {
@@ -391,6 +397,26 @@ impl Writer for Storage {
 
         Ok(())
     }
+
+    async fn set_mempool_transaction_count(
+        &self,
+        value: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Result<(), Error> {
+        self.cache
+            .set_mempool_transaction_count(value, timestamp)
+            .await?;
+    
+        key_value::upsert(
+            &self.pg_pool,
+            KeyRegistry::MempoolTransactionCount,
+            value,
+            timestamp.unwrap_or(Utc::now()),
+        )
+        .await?;
+
+        Ok(())
+    }
 }
 
 pub trait Reader {
@@ -412,6 +438,8 @@ pub trait Reader {
     async fn get_feerate_low(&self) -> CacheEntry<Decimal>;
     async fn get_feerate_normal(&self) -> CacheEntry<Decimal>;
     async fn get_feerate_priority(&self) -> CacheEntry<Decimal>;
+
+    async fn get_mempool_transaction_count(&self) -> CacheEntry<u64>;
 }
 
 impl Reader for Storage {
@@ -477,5 +505,9 @@ impl Reader for Storage {
 
     async fn get_feerate_priority(&self) -> CacheEntry<Decimal> {
         self.cache.get_feerate_priority().await
+    }
+
+    async fn get_mempool_transaction_count(&self) -> CacheEntry<u64> {
+        self.cache.get_mempool_transaction_count().await
     }
 }
