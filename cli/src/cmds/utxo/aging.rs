@@ -43,9 +43,13 @@ struct Data {
     sompi_6m_to_1y: u64,
     sompi_1y_to_2y: u64,
     sompi_2y_to_3y: u64,
-    sompi_3y_to_5y: u64,
-    sompi_5y_to_7y: u64,
-    sompi_7y_to_10y: u64,
+    sompi_3y_to_4y: u64,
+    sompi_4y_to_5y: u64,
+    sompi_5y_to_6y: u64,
+    sompi_6y_to_7y: u64,
+    sompi_7y_to_8y: u64,
+    sompi_8y_to_9y: u64,
+    sompi_9y_to_10y: u64,
     sompi_gt_10y: u64,
 
     cs_percent_lt_1d: Decimal,
@@ -56,9 +60,13 @@ struct Data {
     cs_percent_6m_to_1y: Decimal,
     cs_percent_1y_to_2y: Decimal,
     cs_percent_2y_to_3y: Decimal,
-    cs_percent_3y_to_5y: Decimal,
-    cs_percent_5y_to_7y: Decimal,
-    cs_percent_7y_to_10y: Decimal,
+    cs_percent_3y_to_4y: Decimal,
+    cs_percent_4y_to_5y: Decimal,
+    cs_percent_5y_to_6y: Decimal,
+    cs_percent_6y_to_7y: Decimal,
+    cs_percent_7y_to_8y: Decimal,
+    cs_percent_8y_to_9y: Decimal,
+    cs_percent_9y_to_10y: Decimal,
     cs_percent_gt_10y: Decimal,
 }
 
@@ -75,9 +83,13 @@ impl Data {
         self.cs_percent_6m_to_1y = (Decimal::from_u64(self.sompi_6m_to_1y).unwrap() / cs) * m;
         self.cs_percent_1y_to_2y = (Decimal::from_u64(self.sompi_1y_to_2y).unwrap() / cs) * m;
         self.cs_percent_2y_to_3y = (Decimal::from_u64(self.sompi_2y_to_3y).unwrap() / cs) * m;
-        self.cs_percent_3y_to_5y = (Decimal::from_u64(self.sompi_3y_to_5y).unwrap() / cs) * m;
-        self.cs_percent_5y_to_7y = (Decimal::from_u64(self.sompi_5y_to_7y).unwrap() / cs) * m;
-        self.cs_percent_7y_to_10y = (Decimal::from_u64(self.sompi_7y_to_10y).unwrap() / cs) * m;
+        self.cs_percent_3y_to_4y = (Decimal::from_u64(self.sompi_3y_to_4y).unwrap() / cs) * m;
+        self.cs_percent_4y_to_5y = (Decimal::from_u64(self.sompi_4y_to_5y).unwrap() / cs) * m;
+        self.cs_percent_5y_to_6y = (Decimal::from_u64(self.sompi_5y_to_6y).unwrap() / cs) * m;
+        self.cs_percent_6y_to_7y = (Decimal::from_u64(self.sompi_6y_to_7y).unwrap() / cs) * m;
+        self.cs_percent_7y_to_8y = (Decimal::from_u64(self.sompi_7y_to_8y).unwrap() / cs) * m;
+        self.cs_percent_8y_to_9y = (Decimal::from_u64(self.sompi_8y_to_9y).unwrap() / cs) * m;
+        self.cs_percent_9y_to_10y = (Decimal::from_u64(self.sompi_9y_to_10y).unwrap() / cs) * m;
         self.cs_percent_gt_10y = (Decimal::from_u64(self.sompi_gt_10y).unwrap() / cs) * m;
     }
 }
@@ -174,17 +186,33 @@ impl UtxoAgeAnalysis {
                 // 2 Years to 3 Years Ago
                 self.data.sompi_2y_to_3y += utxo.amount;
                 continue;
+            } else if age_months < 48 {
+                // 3 Years to 4 Years Ago
+                self.data.sompi_3y_to_4y += utxo.amount;
+                continue;
             } else if age_months < 60 {
-                // 3 Years to 5 Years Ago
-                self.data.sompi_3y_to_5y += utxo.amount;
+                // 4 Years to 5 Years Ago
+                self.data.sompi_4y_to_5y += utxo.amount;
+                continue;
+            } else if age_months < 72 {
+                // 5 Years to 6 Years Ago
+                self.data.sompi_5y_to_6y += utxo.amount;
                 continue;
             } else if age_months < 84 {
-                // 5 Years to 7 Years Ago
-                self.data.sompi_5y_to_7y += utxo.amount;
+                // 6 Years to 7 Years Ago
+                self.data.sompi_6y_to_7y += utxo.amount;
+                continue;
+            } else if age_months < 96 {
+                // 7 Years to 8 Years Ago
+                self.data.sompi_7y_to_8y += utxo.amount;
+                continue;
+            } else if age_months < 108 {
+                // 8 Years to 9 Years Ago
+                self.data.sompi_8y_to_9y += utxo.amount;
                 continue;
             } else if age_months < 120 {
-                // 7 Years to 10 Years Ago
-                self.data.sompi_7y_to_10y += utxo.amount;
+                // 9 Years to 10 Years Ago
+                self.data.sompi_9y_to_10y += utxo.amount;
                 continue;
             }
 
@@ -207,9 +235,13 @@ impl UtxoAgeAnalysis {
                 sompi_6m_to_1y,
                 sompi_1y_to_2y,
                 sompi_2y_to_3y,
-                sompi_3y_to_5y,
-                sompi_5y_to_7y,
-                sompi_7y_to_10y,
+                sompi_3y_to_4y,
+                sompi_4y_to_5y,
+                sompi_5y_to_6y,
+                sompi_6y_to_7y,
+                sompi_7y_to_8y,
+                sompi_8y_to_9y,
+                sompi_9y_to_10y,
                 sompi_gt_10y,
                 cs_percent_lt_1d,
                 cs_percent_1d_to_1w,
@@ -219,14 +251,19 @@ impl UtxoAgeAnalysis {
                 cs_percent_6m_to_1y,
                 cs_percent_1y_to_2y,
                 cs_percent_2y_to_3y,
-                cs_percent_3y_to_5y,
-                cs_percent_5y_to_7y,
-                cs_percent_7y_to_10y,
+                cs_percent_3y_to_4y,
+                cs_percent_4y_to_5y,
+                cs_percent_5y_to_6y,
+                cs_percent_6y_to_7y,
+                cs_percent_7y_to_8y,
+                cs_percent_8y_to_9y,
+                cs_percent_9y_to_10y,
                 cs_percent_gt_10y
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, $23, $24, $25
+                $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+                $31, $32, $33
             );
         ";
 
@@ -243,9 +280,13 @@ impl UtxoAgeAnalysis {
             .bind(self.data.sompi_6m_to_1y as i64)
             .bind(self.data.sompi_1y_to_2y as i64)
             .bind(self.data.sompi_2y_to_3y as i64)
-            .bind(self.data.sompi_3y_to_5y as i64)
-            .bind(self.data.sompi_5y_to_7y as i64)
-            .bind(self.data.sompi_7y_to_10y as i64)
+            .bind(self.data.sompi_3y_to_4y as i64)
+            .bind(self.data.sompi_4y_to_5y as i64)
+            .bind(self.data.sompi_5y_to_6y as i64)
+            .bind(self.data.sompi_6y_to_7y as i64)
+            .bind(self.data.sompi_7y_to_8y as i64)
+            .bind(self.data.sompi_8y_to_9y as i64)
+            .bind(self.data.sompi_9y_to_10y as i64)
             .bind(self.data.sompi_gt_10y as i64)
             .bind(self.data.cs_percent_lt_1d)
             .bind(self.data.cs_percent_1d_to_1w)
@@ -255,9 +296,13 @@ impl UtxoAgeAnalysis {
             .bind(self.data.cs_percent_6m_to_1y)
             .bind(self.data.cs_percent_1y_to_2y)
             .bind(self.data.cs_percent_2y_to_3y)
-            .bind(self.data.cs_percent_3y_to_5y)
-            .bind(self.data.cs_percent_5y_to_7y)
-            .bind(self.data.cs_percent_7y_to_10y)
+            .bind(self.data.cs_percent_3y_to_4y)
+            .bind(self.data.cs_percent_4y_to_5y)
+            .bind(self.data.cs_percent_5y_to_6y)
+            .bind(self.data.cs_percent_6y_to_7y)
+            .bind(self.data.cs_percent_7y_to_8y)
+            .bind(self.data.cs_percent_8y_to_9y)
+            .bind(self.data.cs_percent_9y_to_10y)
             .bind(self.data.cs_percent_gt_10y)
             .execute(&self.pg_pool)
             .await
