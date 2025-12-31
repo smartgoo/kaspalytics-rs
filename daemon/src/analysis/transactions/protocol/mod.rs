@@ -8,4 +8,5 @@ pub enum TransactionProtocol {
     Kns,
     Kasia,
     Kasplex,
+    KSocial,
 }

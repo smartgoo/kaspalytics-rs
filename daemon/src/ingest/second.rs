@@ -138,4 +138,12 @@ impl SecondMetrics {
     pub fn decrement_kasplex_transaction_count(&mut self) {
         self.decrement_protocol_transaction_count(TransactionProtocol::Kasplex);
     }
+
+    pub fn increment_ksocial_transaction_count(&mut self) {
+        self.increment_protocol_transaction_count(TransactionProtocol::KSocial);
+    }
+
+    pub fn decrement_ksocial_transaction_count(&mut self) {
+        self.decrement_protocol_transaction_count(TransactionProtocol::KSocial);
+    }
 }

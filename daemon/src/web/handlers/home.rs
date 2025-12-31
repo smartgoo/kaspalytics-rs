@@ -356,6 +356,14 @@ impl SseData {
                 threshold,
             ),
         );
+        protocol_counts.insert(
+            "KSocial",
+            tx_counter::protocol_transaction_count(
+                dag_cache,
+                TransactionProtocol::KSocial,
+                threshold,
+            ),
+        );
 
         self.set(
             SseKey::ProtocolTransactionCounts24h,

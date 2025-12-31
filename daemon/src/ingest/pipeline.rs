@@ -131,6 +131,11 @@ fn detect_transaction_protocol(
         return Some(TransactionProtocol::Kasplex);
     }
 
+    // Check for K Social payload prefix
+    if payload_str.starts_with("k:") {
+        return Some(TransactionProtocol::KSocial);
+    }
+
     // Check inputs for Kasplex or KNS inscription
     for input in transaction.inputs.iter() {
         let parsed_script = parse_signature_script(&input.signature_script);
@@ -300,6 +305,9 @@ fn add_transaction_acceptance(
                     Some(TransactionProtocol::Kasplex) => {
                         v.increment_kasplex_transaction_count();
                     }
+                    Some(TransactionProtocol::KSocial) => {
+                        v.increment_ksocial_transaction_count();
+                    }
                     None => {}
                 }
             });
@@ -448,6 +456,9 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
                     }
                     Some(TransactionProtocol::Kasplex) => {
                         v.decrement_kasplex_transaction_count();
+                    }
+                    Some(TransactionProtocol::KSocial) => {
+                        v.decrement_ksocial_transaction_count();
                     }
                     None => {}
                 }
