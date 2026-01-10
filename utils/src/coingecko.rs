@@ -14,7 +14,10 @@ pub struct PriceResponse {
 
 pub async fn get_simple_price() -> Result<PriceResponse, reqwest::Error> {
     let url = "https://api.coingecko.com/api/v3/simple/price?ids=kaspa&vs_currencies=usd";
-    let response = reqwest::get(url).await?.error_for_status()?;
+    let client = reqwest::Client::builder()
+        .user_agent("kaspalytics-rs/1.0")
+        .build()?;
+    let response = client.get(url).send().await?.error_for_status()?;
     let data: PriceResponse = response.json().await?;
 
     Ok(data)
@@ -30,7 +33,10 @@ pub struct MarketChartResponse {
 pub async fn get_market_chart() -> Result<MarketChartResponse, reqwest::Error> {
     // Public API allows up to 365 day
     let url = "https://api.coingecko.com/api/v3/coins/kaspa/market_chart?vs_currency=USD&days=365";
-    let response = reqwest::get(url).await?.error_for_status()?;
+    let client = reqwest::Client::builder()
+        .user_agent("kaspalytics-rs/1.0")
+        .build()?;
+    let response = client.get(url).send().await?.error_for_status()?;
     let data: MarketChartResponse = response.json().await?;
 
     Ok(data)
@@ -67,7 +73,10 @@ pub struct CoinResponse {
 pub async fn get_coin_data() -> Result<CoinResponse, reqwest::Error> {
     let url =
         "https://api.coingecko.com/api/v3/coins/kaspa?community_data=false&developer_data=false";
-    let response = reqwest::get(url).await?.error_for_status()?;
+    let client = reqwest::Client::builder()
+        .user_agent("kaspalytics-rs/1.0")
+        .build()?;
+    let response = client.get(url).send().await?.error_for_status()?;
     let data: CoinResponse = response.json().await?;
 
     Ok(data)
