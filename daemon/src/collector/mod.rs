@@ -282,7 +282,9 @@ async fn update_mempool_entries(
     let date = Utc::now();
     let data = rpc_client.get_mempool_entries(true, false).await?;
 
-    storage.set_mempool_transaction_count(data.len() as u64, Some(date)).await?;
+    storage
+        .set_mempool_transaction_count(data.len() as u64, Some(date))
+        .await?;
     storage.set_mempool_entries(data, Some(date)).await?;
 
     Ok(())

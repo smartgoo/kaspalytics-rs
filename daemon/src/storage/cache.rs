@@ -241,7 +241,7 @@ impl Writer for Cache {
         &self,
         value: u64,
         timestamp: Option<DateTime<Utc>>,
-    ) -> Result <(), Error> {
+    ) -> Result<(), Error> {
         *self.mempool_transaction_count.write().await = CacheEntry::<u64> {
             value,
             timestamp: timestamp.unwrap_or(Utc::now()),

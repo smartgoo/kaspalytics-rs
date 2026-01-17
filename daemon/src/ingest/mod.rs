@@ -7,7 +7,7 @@ mod second;
 use cache::{CacheStateError, DagCache, Manager, Reader, Writer};
 use chrono::Utc;
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_rpc_core::GetBlockDagInfoResponse;
+use kaspa_rpc_core::{GetBlockDagInfoResponse, RpcDataVerbosityLevel};
 use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::{config::Config, log::LogTarget};
 use log::{debug, error, info, warn};
@@ -83,8 +83,10 @@ impl DagIngest {
                     true,
                     true
                 ),
-                self.rpc_client.get_virtual_chain_from_block_custom(
+                self.rpc_client.get_virtual_chain_from_block_v2(
                     self.dag_cache.last_known_chain_block().unwrap(),
+                    Some(RpcDataVerbosityLevel::Full),
+                    Some(10),
                 ),
             )?;
 
@@ -99,23 +101,28 @@ impl DagIngest {
             }
 
             // Process removed chain blocks
-            for removed_chain_block in vspc.removed_chain_block_hashes {
-                pipeline::remove_chain_block_pipeline(self.dag_cache.clone(), &removed_chain_block);
+            for removed_chain_block in vspc.removed_chain_block_hashes.iter() {
+                pipeline::remove_chain_block_pipeline(self.dag_cache.clone(), removed_chain_block);
             }
 
             // Process added chain blocks
-            for acceptance in vspc.added_acceptance_data {
+            for acceptance in vspc.chain_block_accepted_transactions.iter() {
+                let accepting_chain_block_hash = acceptance.chain_block_header.hash.unwrap();
                 if !self
                     .dag_cache
-                    .contains_block_hash(&acceptance.accepting_chain_block_header.hash)
+                    .contains_block_hash(&accepting_chain_block_hash)
                 {
                     break;
                 }
 
                 self.dag_cache
-                    .set_last_known_chain_block(acceptance.accepting_chain_block_header.hash);
+                    .set_last_known_chain_block(accepting_chain_block_hash);
 
-                pipeline::add_chain_block_acceptance_pipeline(self.dag_cache.clone(), acceptance);
+                pipeline::add_chain_block_acceptance_pipeline(
+                    self.dag_cache.clone(),
+                    accepting_chain_block_hash,
+                    acceptance,
+                );
             }
 
             // Prune data and send pruned to broker
@@ -210,35 +217,40 @@ impl DagIngest {
 
                 // Get VSPC
                 let vspc = rpc_client
-                    .get_virtual_chain_from_block_custom(
+                    .get_virtual_chain_from_block_v2(
                         dag_cache.last_known_chain_block().unwrap(),
+                        Some(RpcDataVerbosityLevel::Full),
+                        Some(10),
                     )
                     .await?;
 
                 // Process removed chain blocks
-                for removed_chain_block in vspc.removed_chain_block_hashes {
-                    pipeline::remove_chain_block_pipeline(dag_cache.clone(), &removed_chain_block);
+                for removed_chain_block in vspc.removed_chain_block_hashes.iter() {
+                    pipeline::remove_chain_block_pipeline(dag_cache.clone(), removed_chain_block);
                 }
 
                 // Process added chain blocks
-                for acceptance in vspc.added_acceptance_data {
-                    if !dag_cache.contains_block_hash(&acceptance.accepting_chain_block_header.hash)
-                    {
+                for acceptance in vspc.chain_block_accepted_transactions.iter() {
+                    let chain_block_hash = acceptance.chain_block_header.hash.unwrap();
+                    if !dag_cache.contains_block_hash(&chain_block_hash) {
                         warn!(
                             target: LogTarget::Daemon.as_str(),
                             "not in cache: {:?} | {:?}",
-                            acceptance.accepting_chain_block_header.hash,
-                            acceptance.accepting_chain_block_header.timestamp
+                            chain_block_hash,
+                            acceptance.chain_block_header.timestamp.unwrap()
                         );
 
                         continue;
                     }
 
-                    dag_cache
-                        .set_last_known_chain_block(acceptance.accepting_chain_block_header.hash);
+                    dag_cache.set_last_known_chain_block(chain_block_hash);
 
-                    let accepting_block_ts = acceptance.accepting_chain_block_header.timestamp;
-                    pipeline::add_chain_block_acceptance_pipeline(dag_cache.clone(), acceptance);
+                    let accepting_block_ts = acceptance.chain_block_header.timestamp.unwrap();
+                    pipeline::add_chain_block_acceptance_pipeline(
+                        dag_cache.clone(),
+                        chain_block_hash,
+                        acceptance,
+                    );
 
                     // Sleep when we get to a VSPC block that is within 5 seconds of current time
                     // This indicates we are near DAG Tip, trying to stay a little behind it
@@ -341,8 +353,6 @@ impl DagIngest {
                 self.dag_cache.last_known_chain_block().unwrap(),
             );
         }
-
-        // self.dag_cache.set_last_known_chain_block("e4eede8a0954a634595dc9e26a88dc2488a55e45c5796ff93814aa40761ac644".parse().unwrap());
 
         // Initial sync to tip using iterative GetBlocks/GetVSPC
         self.initial_sync_to_tip().await?;

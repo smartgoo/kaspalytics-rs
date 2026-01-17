@@ -35,7 +35,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -278,7 +278,7 @@ checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -419,29 +419,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.69.5"
+version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
-dependencies = [
- "bitflags",
- "cexpr",
- "clang-sys",
- "itertools 0.12.1",
- "lazy_static",
- "lazycell",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 1.1.0",
- "shlex",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "bindgen"
-version = "0.71.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
 dependencies = [
  "bitflags",
  "cexpr",
@@ -450,18 +430,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "rustc-hash 2.1.1",
+ "rustc-hash",
  "shlex",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
 name = "bitflags"
-version = "2.9.1"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 dependencies = [
- "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -529,7 +509,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -732,7 +712,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -909,6 +889,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
+dependencies = [
+ "darling_core",
+ "darling_macro",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 2.0.114",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
+dependencies = [
+ "darling_core",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "dashmap"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -970,7 +985,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -1031,7 +1046,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -1118,7 +1133,7 @@ checksum = "ba7795da175654fe16979af73f81f26a8ea27638d8d9823d317016888a63dc4c"
 dependencies = [
  "num-traits",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -1355,7 +1370,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -1413,21 +1428,21 @@ dependencies = [
  "cfg-if",
  "js-sys",
  "libc",
- "wasi 0.11.1+wasi-snapshot-preview1",
+ "wasi",
  "wasm-bindgen",
 ]
 
 [[package]]
 name = "getrandom"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4"
+checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
  "js-sys",
  "libc",
  "r-efi",
- "wasi 0.14.2+wasi-0.2.4",
+ "wasip2",
  "wasm-bindgen",
 ]
 
@@ -1466,7 +1481,7 @@ dependencies = [
  "futures-sink",
  "futures-timer",
  "futures-util",
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
  "no-std-compat",
  "nonzero_ext",
  "parking_lot",
@@ -1857,6 +1872,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ident_case"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
 name = "idna"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1955,15 +1976,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
@@ -1983,15 +1995,15 @@ version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38f262f097c174adebe41eb73d66ae9c06b2844fb0da69969647bbddd9b0538a"
 dependencies = [
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
  "libc",
 ]
 
 [[package]]
 name = "js-sys"
-version = "0.3.77"
+version = "0.3.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cfaf33c695fc6e08064efbc1f72ec937429614f25eef83af942d0e227c3a28f"
+checksum = "8c942ebf8e95485ca0d52d97da7c5a2c387d0e7f0ba4c35e93bfcaee045955b3"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
@@ -1999,8 +2011,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-addresses"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "borsh",
  "js-sys",
@@ -2014,8 +2026,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-consensus"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "arc-swap",
  "async-channel 2.3.1",
@@ -2055,8 +2067,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-consensus-client"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "ahash 0.8.12",
  "cfg-if",
@@ -2084,16 +2096,17 @@ dependencies = [
 
 [[package]]
 name = "kaspa-consensus-core"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "arc-swap",
  "async-trait",
+ "bitflags",
  "borsh",
  "cfg-if",
  "faster-hex",
  "futures-util",
- "getrandom 0.2.16",
+ "getrandom 0.3.4",
  "itertools 0.13.0",
  "js-sys",
  "kaspa-addresses",
@@ -2120,8 +2133,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-consensus-notify"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "async-channel 2.3.1",
  "cfg-if",
@@ -2140,8 +2153,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-consensus-wasm"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "cfg-if",
  "faster-hex",
@@ -2165,8 +2178,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-consensusmanager"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "duration-string",
  "futures",
@@ -2185,8 +2198,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-core"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2205,8 +2218,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-database"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "bincode",
  "enum-primitive-derive",
@@ -2228,8 +2241,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-hashes"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "blake2b_simd",
  "borsh",
@@ -2247,8 +2260,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-index-core"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2267,8 +2280,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-math"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "borsh",
  "faster-hex",
@@ -2287,16 +2300,16 @@ dependencies = [
 
 [[package]]
 name = "kaspa-merkle"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "kaspa-hashes",
 ]
 
 [[package]]
 name = "kaspa-mining-errors"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "kaspa-consensus-core",
  "thiserror 1.0.69",
@@ -2304,8 +2317,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-muhash"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "kaspa-hashes",
  "kaspa-math",
@@ -2315,8 +2328,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-notify"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2347,8 +2360,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-pow"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "js-sys",
  "kaspa-consensus-client",
@@ -2363,8 +2376,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-rpc-core"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
@@ -2394,6 +2407,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde-wasm-bindgen",
+ "serde_nested_with",
  "smallvec",
  "thiserror 1.0.69",
  "uuid 1.17.0",
@@ -2405,8 +2419,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-rpc-macros"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro-error",
@@ -2418,8 +2432,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-txscript"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "blake2b_simd",
  "borsh",
@@ -2449,8 +2463,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-txscript-errors"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "secp256k1",
  "thiserror 1.0.69",
@@ -2458,8 +2472,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-utils"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "arc-swap",
  "async-channel 2.3.1",
@@ -2488,8 +2502,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-utxoindex"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "futures",
  "kaspa-consensus-core",
@@ -2508,8 +2522,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-wasm-core"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "faster-hex",
  "hexplay",
@@ -2520,8 +2534,8 @@ dependencies = [
 
 [[package]]
 name = "kaspa-wrpc-client"
-version = "1.0.1"
-source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=bda81216921d16cd3ce7e649129a6efcf8c081b7#bda81216921d16cd3ce7e649129a6efcf8c081b7"
+version = "1.0.2"
+source = "git+https://github.com/smartgoo/rusty-kaspa.git?rev=a492b6a#a492b6ac8748c64635aa27e2f4e51d05a7d59f9f"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2685,12 +2699,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazycell"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
-
-[[package]]
 name = "lettre"
 version = "0.11.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2750,14 +2758,13 @@ dependencies = [
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.16.0+8.10.0"
+version = "0.17.3+10.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3d60bc059831dc1c83903fb45c103f75db65c5a7bf22272764d9cc683e348c"
+checksum = "cef2a00ee60fe526157c9023edab23943fae1ce2ab6f4abb2a807c1746835de9"
 dependencies = [
- "bindgen 0.69.5",
+ "bindgen",
  "bzip2-sys",
  "cc",
- "glob",
  "libc",
  "libz-sys",
  "lz4-sys",
@@ -2990,7 +2997,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78bed444cc8a2160f01cbcf811ef18cac863ad68ae8ca62092e8db51d51c761c"
 dependencies = [
  "libc",
- "wasi 0.11.1+wasi-snapshot-preview1",
+ "wasi",
  "windows-sys 0.59.0",
 ]
 
@@ -3242,7 +3249,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -3334,7 +3341,7 @@ checksum = "d27b3870ede76ad9fc5cf19aa770877ad429a8134168a55183bc588acc648ab2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -3375,7 +3382,7 @@ checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -3506,6 +3513,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3553,7 +3582,7 @@ dependencies = [
  "libc",
  "once_cell",
  "raw-cpuid",
- "wasi 0.11.1+wasi-snapshot-preview1",
+ "wasi",
  "web-sys",
  "winapi",
 ]
@@ -3569,7 +3598,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash 2.1.1",
+ "rustc-hash",
  "rustls",
  "socket2",
  "thiserror 2.0.12",
@@ -3585,11 +3614,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49df843a9161c85bb8aae55f101bc0bac8bcafd637a620d9122fd7e0b2f7422e"
 dependencies = [
  "bytes",
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
  "lru-slab",
  "rand 0.9.1",
  "ring",
- "rustc-hash 2.1.1",
+ "rustc-hash",
  "rustls",
  "rustls-pki-types",
  "slab",
@@ -3696,7 +3725,7 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
 ]
 
 [[package]]
@@ -3884,9 +3913,9 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.22.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bd13e55d6d7b8cd0ea569161127567cd587676c99f4472f779a0279aa60a7a7"
+checksum = "ddb7af00d2b17dbd07d82c0063e25411959748ff03e8d4f96134c2ff41fce34f"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -3935,7 +3964,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6268b74858287e1a062271b988a0c534bf85bbeb567fe09331bf40ed78113d5"
 dependencies = [
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -3943,12 +3972,6 @@ name = "rustc-demangle"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "989e6739f80c4ad5b13e0fd7fe89531180375b18520cc8c82080e4dc4035b84f"
-
-[[package]]
-name = "rustc-hash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"
@@ -4100,10 +4123,11 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.219"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
+checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
+ "serde_core",
  "serde_derive",
 ]
 
@@ -4129,14 +4153,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_derive"
-version = "1.0.219"
+name = "serde_core"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
+checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.228"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4149,6 +4182,18 @@ dependencies = [
  "memchr",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_nested_with"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc84538493ef215370434907a7dca8117778d16ac1acd0482ce88a0f5cf19707"
+dependencies = [
+ "darling",
+ "proc-macro-error2",
+ "quote",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4422,7 +4467,7 @@ dependencies = [
  "quote",
  "sqlx-core",
  "sqlx-macros-core",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4445,7 +4490,7 @@ dependencies = [
  "sqlx-mysql",
  "sqlx-postgres",
  "sqlx-sqlite",
- "syn 2.0.104",
+ "syn 2.0.114",
  "tokio",
  "url",
 ]
@@ -4610,7 +4655,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4632,9 +4677,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.104"
+version = "2.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
+checksum = "d4d107df263a3013ef9b1879b0df87d706ff80f65a86ea879bd9c31f9b307c2a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4658,7 +4703,7 @@ checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4709,7 +4754,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8a64e3985349f2441a1a9ef0b853f869006c3855f2cda6862a94d26ebb9d6a1"
 dependencies = [
  "fastrand",
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
@@ -4760,7 +4805,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4771,7 +4816,7 @@ checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -4868,7 +4913,7 @@ checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -5058,7 +5103,7 @@ checksum = "81383ab64e72a7a8b8e13130c49e3dab29def6d0c7d76a03087b3cf71c5c6903"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -5221,7 +5266,7 @@ version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cf4199d1e5d15ddd86a694e4d0dffa9c323ce759fea589f00fef9d81cc1931d"
 dependencies = [
- "getrandom 0.3.3",
+ "getrandom 0.3.4",
  "js-sys",
  "rand 0.9.1",
  "serde",
@@ -5277,12 +5322,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
-name = "wasi"
-version = "0.14.2+wasi-0.2.4"
+name = "wasip2"
+version = "1.0.2+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9683f9a5a998d873c0d21fcbe3c083009670149a8fab228644b8bd36b2c48cb3"
+checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
 dependencies = [
- "wit-bindgen-rt",
+ "wit-bindgen",
 ]
 
 [[package]]
@@ -5293,9 +5338,9 @@ checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.100"
+version = "0.2.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1edc8929d7499fc4e8f0be2262a241556cfc54a0bea223790e71446f2aab1ef5"
+checksum = "64024a30ec1e37399cf85a7ffefebdb72205ca1c972291c51512360d90bd8566"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -5303,29 +5348,17 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-bindgen-macro",
-]
-
-[[package]]
-name = "wasm-bindgen-backend"
-version = "0.2.100"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f0a0651a5c2bc21487bde11ee802ccaf4c51935d0d3d42a6101f98161700bc6"
-dependencies = [
- "bumpalo",
- "log",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.50"
+version = "0.4.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "555d470ec0bc3bb57890405e5d4322cc9ea83cebb085523ced7be4144dac1e61"
+checksum = "70a6e77fd0ae8029c9ea0063f87c46fde723e7d887703d74ad2616d792e51e6f"
 dependencies = [
  "cfg-if",
+ "futures-util",
  "js-sys",
  "once_cell",
  "wasm-bindgen",
@@ -5334,9 +5367,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.100"
+version = "0.2.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fe63fc6d09ed3792bd0897b314f53de8e16568c2b3f7982f468c0bf9bd0b407"
+checksum = "008b239d9c740232e71bd39e8ef6429d27097518b6b30bdf9086833bd5b6d608"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -5344,31 +5377,31 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.100"
+version = "0.2.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae87ea40c9f689fc23f209965b6fb8a99ad69aeeb0231408be24920604395de"
+checksum = "5256bae2d58f54820e6490f9839c49780dff84c65aeab9e772f15d5f0e913a55"
 dependencies = [
+ "bumpalo",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
- "wasm-bindgen-backend",
+ "syn 2.0.114",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.100"
+version = "0.2.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a05d73b933a847d6cccdda8f838a22ff101ad9bf93e33684f39c1f5f0eece3d"
+checksum = "1f01b580c9ac74c8d8f0c0e4afb04eeef2acf145458e52c03845ee9cd23e3d12"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "web-sys"
-version = "0.3.77"
+version = "0.3.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33b6dd2ef9186f1f2072e409e99cd22a975331a6b3591b12c764e0e55c60d5d2"
+checksum = "312e32e551d92129218ea9a2452120f4aabc03529ef03e4d0d82fb2780608598"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -5486,7 +5519,7 @@ checksum = "9107ddc059d5b6fbfbffdfa7a7fe3e22a226def0b2608f72e9d552763d3e1ad7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -5497,7 +5530,7 @@ checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -5508,7 +5541,7 @@ checksum = "29bee4b38ea3cde66011baa44dba677c432a78593e202392d1e9070cf2a7fca7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -5519,7 +5552,7 @@ checksum = "bd9211b69f8dcdfa817bfd14bf1c97c9188afa36f4750130fcdf3f400eca9fa8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -5797,13 +5830,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "wit-bindgen-rt"
-version = "0.39.0"
+name = "wit-bindgen"
+version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
-dependencies = [
- "bitflags",
-]
+checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
 
 [[package]]
 name = "workflow-core"
@@ -6110,7 +6140,7 @@ checksum = "38da3c9736e16c5d3c8c597a9aaa5d1fa565d0532ae05e27c24aa62fb32c0ab6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
  "synstructure",
 ]
 
@@ -6131,7 +6161,7 @@ checksum = "9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -6151,7 +6181,7 @@ checksum = "d71e5d6e06ab090c67b5e44993ec16b72dcbaabc526db883a360057678b48502"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
  "synstructure",
 ]
 
@@ -6191,7 +6221,7 @@ checksum = "5b96237efa0c878c64bd89c436f661be4e46b2f3eff1ebb976f7ef2321d2f58f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -6200,7 +6230,6 @@ version = "2.0.15+zstd.1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb81183ddd97d0c74cedf1d50d85c8d08c1b8b68ee863bdee9e706eedba1a237"
 dependencies = [
- "bindgen 0.71.1",
  "cc",
  "pkg-config",
 ]

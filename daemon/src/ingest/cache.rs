@@ -104,51 +104,6 @@ impl Reader for DagCache {
     fn seconds_iter(&self) -> impl Iterator<Item = RefMulti<'_, u64, SecondMetrics>> {
         self.seconds.iter()
     }
-
-    // fn log_cache_size(&self) {
-    //     // Estimate blocks size
-    //     let estimated_blocks_size = self
-    //         .blocks
-    //         .iter()
-    //         .map(|entry| std::mem::size_of::<Hash>() + entry.value().estimate_size())
-    //         .sum::<usize>();
-
-    //     // Estimate transactions size
-    //     let estimated_transactions_size = self
-    //         .transactions
-    //         .iter()
-    //         .map(|entry| std::mem::size_of::<CacheTransactionId>() + entry.value().estimate_size())
-    //         .sum::<usize>();
-
-    //     // Estimate accepting_block_transactions size
-    //     let estimated_accepting_size = self
-    //         .accepting_block_transactions
-    //         .iter()
-    //         .map(|entry| {
-    //             std::mem::size_of::<Hash>() + // key size
-    //             std::mem::size_of::<Vec<CacheTransactionId>>() +
-    //             (entry.value().len() * std::mem::size_of::<CacheTransactionId>())
-    //         })
-    //         .sum::<usize>();
-
-    //     // Estimate seconds size
-    //     // TODO
-
-    //     let total_size =
-    //         estimated_blocks_size + estimated_transactions_size + estimated_accepting_size;
-
-    //     info!(
-    //         target: LogTarget::Daemon.as_str(),
-    //         "DagCache est memory size: {:.2} MB | {} Blocks ({:.2} MB) | {} Transactions ({:.2} MB) | {} Accepting Blocks ({:.2} MB)",
-    //         total_size as f64 / (1024.0 * 1024.0),
-    //         self.blocks.len(),
-    //         estimated_blocks_size as f64 / (1024.0 * 1024.0),
-    //         self.transactions.len(),
-    //         estimated_transactions_size as f64 / (1024.0 * 1024.0),
-    //         self.accepting_block_transactions.len(),
-    //         estimated_accepting_size as f64 / (1024.0 * 1024.0),
-    //     );
-    // }
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -185,8 +140,6 @@ impl Manager for DagCache {
             }
         }
 
-        // Var to store pruned blocks
-        // That will later be returned at end of function
         let mut pruned_blocks = Vec::new();
         let mut pruned_transactions = Vec::new();
 

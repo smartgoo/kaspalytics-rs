@@ -205,9 +205,10 @@ impl DbTransactionInput {
             previous_outpoint_transaction_id: input
                 .previous_outpoint
                 .transaction_id
+                .unwrap()
                 .as_bytes()
                 .to_vec(),
-            previous_outpoint_index: input.previous_outpoint.index as i16,
+            previous_outpoint_index: input.previous_outpoint.index.unwrap() as i16,
             signature_script: input.signature_script.clone(),
             sig_op_count: input.sig_op_count as i16,
             utxo_amount,

@@ -143,33 +143,6 @@ impl Listener {
 
                 pipeline::block_add_pipeline(self.dag_cache.clone(), &bn.block);
             }
-            // Notification::VirtualChainChanged(vccn) => {
-            //     // Process removed chain blocks
-            //     for removed_chain_block in vccn.removed_chain_block_hashes.iter() {
-            //         pipeline::remove_chain_block_pipeline(
-            //             self.dag_cache.clone(),
-            //             removed_chain_block,
-            //         );
-            //     }
-
-            //     // Process added chain blocks
-            //     for acceptance in vccn.accepted_transaction_ids.iter() {
-            //         if !self
-            //             .dag_cache
-            //             .contains_block_hash(&acceptance.accepting_block_hash)
-            //         {
-            //             break;
-            //         }
-
-            //         self.dag_cache
-            //             .set_last_known_chain_block(acceptance.accepting_block_hash);
-
-            //         pipeline::add_chain_block_acceptance_pipeline(
-            //             self.dag_cache.clone(),
-            //             acceptance.clone(),
-            //         );
-            //     }
-            // }
             _ => unimplemented!(),
         }
 

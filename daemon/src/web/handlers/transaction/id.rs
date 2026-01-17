@@ -108,9 +108,9 @@ fn convert_cache_transaction_to_response(
             TransactionInput {
                 index: index as i16,
                 previous_outpoint_transaction_id: hex::encode(
-                    input.previous_outpoint.transaction_id.as_bytes(),
+                    input.previous_outpoint.transaction_id.unwrap().as_bytes(),
                 ),
-                previous_outpoint_index: input.previous_outpoint.index as i16,
+                previous_outpoint_index: input.previous_outpoint.index.unwrap() as i16,
                 signature_script: hex::encode(&input.signature_script),
                 sequence: Some(input.sequence as i64),
                 sig_op_count: input.sig_op_count as i16,

@@ -1,14 +1,16 @@
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use chrono::{DateTime, Utc};
 use kaspa_consensus_core::subnets::SubnetworkId;
-use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId};
+use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId, TransactionIndexType};
 use kaspa_consensus_core::BlueWorkType;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint, RpcTransactionOutput,
-    RpcUtxoEntry,
+    RpcBlock, RpcOptionalTransaction, RpcOptionalTransactionInput, RpcOptionalTransactionOutpoint,
+    RpcOptionalTransactionOutput, RpcOptionalUtxoEntry, RpcTransaction, RpcTransactionInput,
+    RpcTransactionOutpoint, RpcTransactionOutput, RpcUtxoEntry,
 };
 use kaspa_txscript::script_class::ScriptClass;
+use kaspa_txscript::standard::extract_script_pub_key_address;
 use serde::{Deserialize, Serialize};
 
 pub type CacheTransactionId = TransactionId;
@@ -83,6 +85,27 @@ pub struct CacheTransactionOutput {
     pub script_public_key_address: String,
 }
 
+impl From<RpcOptionalTransactionOutput> for CacheTransactionOutput {
+    fn from(value: RpcOptionalTransactionOutput) -> Self {
+        Self {
+            value: value.value.unwrap(),
+            script_public_key: value.script_public_key.unwrap(),
+            script_public_key_type: value
+                .verbose_data
+                .clone()
+                .unwrap()
+                .script_public_key_type
+                .unwrap(),
+            script_public_key_address: value
+                .verbose_data
+                .unwrap()
+                .script_public_key_address
+                .unwrap()
+                .to_string(),
+        }
+    }
+}
+
 impl From<RpcTransactionOutput> for CacheTransactionOutput {
     fn from(value: RpcTransactionOutput) -> Self {
         Self {
@@ -98,7 +121,29 @@ impl From<RpcTransactionOutput> for CacheTransactionOutput {
     }
 }
 
-pub type CacheTransactionOutpoint = RpcTransactionOutpoint;
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CacheTransactionOutpoint {
+    pub transaction_id: Option<TransactionId>,
+    pub index: Option<TransactionIndexType>,
+}
+
+impl From<RpcOptionalTransactionOutpoint> for CacheTransactionOutpoint {
+    fn from(value: RpcOptionalTransactionOutpoint) -> Self {
+        CacheTransactionOutpoint {
+            transaction_id: value.transaction_id,
+            index: value.index,
+        }
+    }
+}
+
+impl From<RpcTransactionOutpoint> for CacheTransactionOutpoint {
+    fn from(value: RpcTransactionOutpoint) -> Self {
+        CacheTransactionOutpoint {
+            transaction_id: Some(value.transaction_id),
+            index: Some(value.index),
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CacheUtxoEntry {
@@ -109,23 +154,40 @@ pub struct CacheUtxoEntry {
     pub script_public_key_address: Option<String>,
 }
 
+impl From<RpcOptionalUtxoEntry> for CacheUtxoEntry {
+    fn from(value: RpcOptionalUtxoEntry) -> Self {
+        let spk_type = ScriptClass::from_script(value.script_public_key.as_ref().unwrap());
+        let address = extract_script_pub_key_address(
+            value.script_public_key.as_ref().unwrap(),
+            kaspa_addresses::Prefix::Mainnet,
+        )
+        .unwrap();
+
+        Self {
+            amount: value.amount.unwrap(),
+            script_public_key: value.script_public_key.unwrap(),
+            is_coinbase: value.is_coinbase.unwrap(),
+            script_public_key_type: Some(spk_type),
+            script_public_key_address: Some(address.to_string()),
+        }
+    }
+}
+
 impl From<RpcUtxoEntry> for CacheUtxoEntry {
     fn from(value: RpcUtxoEntry) -> Self {
-        let (spkt, spka) = if let Some(verbose_data) = value.verbose_data {
-            (
-                verbose_data.script_public_key_type.clone(),
-                verbose_data.script_public_key_address,
-            )
-        } else {
-            (None, None)
-        };
+        let spk_type = ScriptClass::from_script(&value.script_public_key);
+        let address = extract_script_pub_key_address(
+            &value.script_public_key,
+            kaspa_addresses::Prefix::Mainnet,
+        )
+        .unwrap();
 
         Self {
             amount: value.amount,
             script_public_key: value.script_public_key,
             is_coinbase: value.is_coinbase,
-            script_public_key_type: spkt,
-            script_public_key_address: spka.map(|v| v.to_string()),
+            script_public_key_type: Some(spk_type),
+            script_public_key_address: Some(address.to_string()),
         }
     }
 }
@@ -139,8 +201,8 @@ pub struct CacheTransactionInput {
     pub utxo_entry: Option<CacheUtxoEntry>,
 }
 
-impl From<RpcTransactionInput> for CacheTransactionInput {
-    fn from(value: RpcTransactionInput) -> Self {
+impl From<RpcOptionalTransactionInput> for CacheTransactionInput {
+    fn from(value: RpcOptionalTransactionInput) -> Self {
         let cache_utxo = if let Some(verbose_data) = value.verbose_data {
             verbose_data.utxo_entry.map(CacheUtxoEntry::from)
         } else {
@@ -148,11 +210,23 @@ impl From<RpcTransactionInput> for CacheTransactionInput {
         };
 
         Self {
-            previous_outpoint: value.previous_outpoint,
+            previous_outpoint: CacheTransactionOutpoint::from(value.previous_outpoint.unwrap()),
+            signature_script: value.signature_script.unwrap(),
+            sequence: value.sequence.unwrap(),
+            sig_op_count: value.sig_op_count.unwrap(),
+            utxo_entry: cache_utxo,
+        }
+    }
+}
+
+impl From<RpcTransactionInput> for CacheTransactionInput {
+    fn from(value: RpcTransactionInput) -> Self {
+        Self {
+            previous_outpoint: CacheTransactionOutpoint::from(value.previous_outpoint),
             signature_script: value.signature_script,
             sequence: value.sequence,
             sig_op_count: value.sig_op_count,
-            utxo_entry: cache_utxo,
+            utxo_entry: None,
         }
     }
 }
@@ -176,6 +250,36 @@ pub struct CacheTransaction {
     pub accepting_block_hash: Option<Hash>,
     pub protocol: Option<TransactionProtocol>,
     pub fee: Option<u64>,
+}
+
+impl From<RpcOptionalTransaction> for CacheTransaction {
+    fn from(value: RpcOptionalTransaction) -> Self {
+        CacheTransaction {
+            id: value.verbose_data.clone().unwrap().transaction_id.unwrap(),
+            inputs: value
+                .inputs
+                .iter()
+                .map(|o| CacheTransactionInput::from(o.clone()))
+                .collect(),
+            outputs: value
+                .outputs
+                .iter()
+                .map(|o| CacheTransactionOutput::from(o.clone()))
+                .collect(),
+            version: value.version.unwrap(),
+            lock_time: value.lock_time.unwrap(),
+            subnetwork_id: value.subnetwork_id.unwrap(),
+            gas: value.gas.unwrap(),
+            payload: value.payload.unwrap(),
+            mass: value.mass.unwrap(),
+            compute_mass: value.verbose_data.clone().unwrap().compute_mass.unwrap(),
+            blocks: vec![value.verbose_data.clone().unwrap().block_hash.unwrap()],
+            block_time: value.verbose_data.clone().unwrap().block_time.unwrap(),
+            accepting_block_hash: None,
+            protocol: None,
+            fee: None,
+        }
+    }
 }
 
 impl From<RpcTransaction> for CacheTransaction {

@@ -406,7 +406,7 @@ impl Writer for Storage {
         self.cache
             .set_mempool_transaction_count(value, timestamp)
             .await?;
-    
+
         key_value::upsert(
             &self.pg_pool,
             KeyRegistry::MempoolTransactionCount,
