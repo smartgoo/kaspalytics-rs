@@ -9,4 +9,5 @@ pub enum TransactionProtocol {
     Kasia,
     Kasplex,
     KSocial,
+    Igra,
 }

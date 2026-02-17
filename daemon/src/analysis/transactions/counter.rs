@@ -131,3 +131,7 @@ pub fn kasplex_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u
 pub fn ksocial_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     protocol_transaction_count(dag_cache, TransactionProtocol::KSocial, threshold)
 }
+
+pub fn igra_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    protocol_transaction_count(dag_cache, TransactionProtocol::Igra, threshold)
+}

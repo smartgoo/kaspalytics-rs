@@ -146,4 +146,12 @@ impl SecondMetrics {
     pub fn decrement_ksocial_transaction_count(&mut self) {
         self.decrement_protocol_transaction_count(TransactionProtocol::KSocial);
     }
+
+    pub fn increment_igra_transaction_count(&mut self) {
+        self.increment_protocol_transaction_count(TransactionProtocol::Igra);
+    }
+
+    pub fn decrement_igra_transaction_count(&mut self) {
+        self.decrement_protocol_transaction_count(TransactionProtocol::Igra);
+    }
 }

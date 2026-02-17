@@ -131,6 +131,13 @@ fn detect_transaction_protocol(
         return Some(TransactionProtocol::KSocial);
     }
 
+    // Check for Igra Labs L2: first byte upper nibble = 0x9, lower nibble = 0x1–0x7
+    if let Some(&first_byte) = transaction.payload.first() {
+        if first_byte >= 0x91 && first_byte <= 0x97 {
+            return Some(TransactionProtocol::Igra);
+        }
+    }
+
     // Check inputs for Kasplex or KNS inscription
     for input in transaction.inputs.iter() {
         let parsed_script = parse_signature_script(&input.signature_script);
@@ -298,6 +305,9 @@ fn add_transaction_acceptance(
                     Some(TransactionProtocol::KSocial) => {
                         v.increment_ksocial_transaction_count();
                     }
+                    Some(TransactionProtocol::Igra) => {
+                        v.increment_igra_transaction_count();
+                    }
                     None => {}
                 }
             });
@@ -427,6 +437,9 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
                     }
                     Some(TransactionProtocol::KSocial) => {
                         v.decrement_ksocial_transaction_count();
+                    }
+                    Some(TransactionProtocol::Igra) => {
+                        v.decrement_igra_transaction_count();
                     }
                     None => {}
                 }
