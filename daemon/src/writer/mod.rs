@@ -96,18 +96,22 @@ impl NotableTransactionTracker {
         let qualifies_fee = self.top_by_fee.len() < self.max_size || fee > min_fee;
 
         if qualifies_fee {
-            if self.top_by_fee.len() >= self.max_size {
-                if let Some(evicted) = self.top_by_fee.iter().next().cloned() {
-                    self.top_by_fee.remove(&evicted);
-                    // Only delete from DB if also absent from amount set.
-                    let still_notable = self.top_by_amount.iter().any(|(_, id)| id == &evicted.1);
-                    if !still_notable && self.db_state.contains(&evicted.1) {
-                        to_delete.push(evicted.1);
+            let entry_fee = (fee, tx_id.clone());
+            if !self.top_by_fee.contains(&entry_fee) {
+                if self.top_by_fee.len() >= self.max_size {
+                    if let Some(evicted) = self.top_by_fee.iter().next().cloned() {
+                        self.top_by_fee.remove(&evicted);
+                        // Only delete from DB if also absent from amount set.
+                        let still_notable =
+                            self.top_by_amount.iter().any(|(_, id)| id == &evicted.1);
+                        if !still_notable && self.db_state.contains(&evicted.1) {
+                            to_delete.push(evicted.1);
+                        }
                     }
                 }
+                self.top_by_fee.insert(entry_fee);
+                newly_notable = true;
             }
-            self.top_by_fee.insert((fee, tx_id.clone()));
-            newly_notable = true;
         }
 
         // -- Amount set --
@@ -120,18 +124,22 @@ impl NotableTransactionTracker {
         let qualifies_amount = self.top_by_amount.len() < self.max_size || amount > min_amount;
 
         if qualifies_amount {
-            if self.top_by_amount.len() >= self.max_size {
-                if let Some(evicted) = self.top_by_amount.iter().next().cloned() {
-                    self.top_by_amount.remove(&evicted);
-                    // Only delete from DB if also absent from fee set.
-                    let still_notable = self.top_by_fee.iter().any(|(_, id)| id == &evicted.1);
-                    if !still_notable && self.db_state.contains(&evicted.1) {
-                        to_delete.push(evicted.1);
+            let entry_amount = (amount, tx_id.clone());
+            if !self.top_by_amount.contains(&entry_amount) {
+                if self.top_by_amount.len() >= self.max_size {
+                    if let Some(evicted) = self.top_by_amount.iter().next().cloned() {
+                        self.top_by_amount.remove(&evicted);
+                        // Only delete from DB if also absent from fee set.
+                        let still_notable =
+                            self.top_by_fee.iter().any(|(_, id)| id == &evicted.1);
+                        if !still_notable && self.db_state.contains(&evicted.1) {
+                            to_delete.push(evicted.1);
+                        }
                     }
                 }
+                self.top_by_amount.insert(entry_amount);
+                newly_notable = true;
             }
-            self.top_by_amount.insert((amount, tx_id.clone()));
-            newly_notable = true;
         }
 
         // -- DB insert --
