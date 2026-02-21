@@ -168,42 +168,6 @@ impl WebServer {
                 get(handlers::visualizer::stream),
             )
             .route(
-                "/api/v1/address/{address}",
-                get(handlers::address::balance::get_balance),
-            )
-            .route(
-                "/api/v1/address/{address}/utxos",
-                get(handlers::address::utxos::get_utxos_by_address),
-            )
-            .route(
-                "/api/v1/address/{address}/transactions",
-                get(handlers::address::transactions::get_address_transactions),
-            )
-            .route(
-                "/api/v1/address/{address}/transactions-count-chart",
-                get(handlers::address::transaction_count_chart::get_transaction_count_chart),
-            )
-            .route(
-                "/api/v1/blocks/oldest-timestamp",
-                get(handlers::block::oldest_timestamp::get_oldest_timestamp),
-            )
-            .route(
-                "/api/v1/block/{hash}",
-                get(handlers::block::hash::get_block),
-            )
-            .route(
-                "/api/v1/transaction/{id}",
-                get(handlers::transaction::id::get_transaction),
-            )
-            .route(
-                "/api/v1/transaction/{id}/confirmations",
-                get(handlers::transaction::confirmations::get_confirmation_count),
-            )
-            .route(
-                "/api/v1/explorer/search/{value}",
-                get(handlers::explorer::search_value),
-            )
-            .route(
                 "/api/v1/lists/protocol-activity",
                 get(handlers::lists::protocol_activity::get_protocol_activity),
             )

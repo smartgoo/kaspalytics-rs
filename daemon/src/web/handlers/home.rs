@@ -366,11 +366,7 @@ impl SseData {
         );
         protocol_counts.insert(
             "Igra",
-            tx_counter::protocol_transaction_count(
-                dag_cache,
-                TransactionProtocol::Igra,
-                threshold,
-            ),
+            tx_counter::protocol_transaction_count(dag_cache, TransactionProtocol::Igra, threshold),
         );
 
         self.set(
