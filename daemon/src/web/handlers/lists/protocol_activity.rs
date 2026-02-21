@@ -55,7 +55,7 @@ fn build_custom_query() -> String {
           protocol_id,
           SUM(transaction_count)::bigint AS transaction_count,
           SUM(fees_generated)::bigint AS fees_generated
-        FROM kaspad.protocol_activity_per_minute
+        FROM kaspad.protocol_activity_minutely
         WHERE minute_bucket >= $1::timestamptz AND minute_bucket < $2::timestamptz
             AND protocol_id is not null
         GROUP BY protocol_id
@@ -70,7 +70,7 @@ fn build_today_query() -> String {
           protocol_id,
           SUM(transaction_count)::bigint AS transaction_count,
           SUM(fees_generated)::bigint AS fees_generated
-        FROM kaspad.protocol_activity_per_minute
+        FROM kaspad.protocol_activity_minutely
         WHERE minute_bucket >= date_trunc('day', now() at time zone 'utc')
           AND minute_bucket < date_trunc('day', now() at time zone 'utc') + INTERVAL '1 day'
           AND protocol_id is not null
@@ -86,9 +86,10 @@ fn build_yesterday_query() -> String {
           protocol_id,
           SUM(transaction_count)::bigint AS transaction_count,
           SUM(fees_generated)::bigint AS fees_generated
-        FROM kaspad.protocol_activity_per_minute
+        FROM kaspad.protocol_activity_minutely
         WHERE minute_bucket >= (date_trunc('day', now() at time zone 'utc') - INTERVAL '1 day')
           AND minute_bucket < date_trunc('day', now() at time zone 'utc')
+          AND protocol_id is not null
         GROUP BY protocol_id
         ORDER BY transaction_count DESC
     "#
@@ -102,7 +103,7 @@ fn build_interval_query(interval_expression: &str) -> String {
           protocol_id,
           SUM(transaction_count)::bigint AS transaction_count,
           SUM(fees_generated)::bigint AS fees_generated
-        FROM kaspad.protocol_activity_per_minute
+        FROM kaspad.protocol_activity_minutely
         WHERE minute_bucket >= (now() at time zone 'utc' - {})
           AND minute_bucket <= (now() at time zone 'utc')
           AND protocol_id is not null

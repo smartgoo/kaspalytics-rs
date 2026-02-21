@@ -53,7 +53,7 @@ fn build_today_query() -> String {
                SUM(agg.total_spent)::bigint AS total_spent,
                ka.label AS known_label,
                ka.type AS known_type
-        FROM kaspad.address_spending_per_minute agg
+        FROM kaspad.address_activity_minutely agg
         LEFT JOIN known_addresses ka ON ka.address = agg.address
         WHERE agg.minute_bucket >= date_trunc('day', now() at time zone 'utc')
           AND agg.minute_bucket < date_trunc('day', now() at time zone 'utc') + INTERVAL '1 day'
@@ -71,7 +71,7 @@ fn build_yesterday_query() -> String {
                SUM(agg.total_spent)::bigint AS total_spent,
                ka.label AS known_label,
                ka.type AS known_type
-        FROM kaspad.address_spending_per_minute agg
+        FROM kaspad.address_activity_minutely agg
         LEFT JOIN known_addresses ka ON ka.address = agg.address
         WHERE agg.minute_bucket >= (date_trunc('day', now() at time zone 'utc') - INTERVAL '1 day')
           AND agg.minute_bucket < date_trunc('day', now() at time zone 'utc')
@@ -90,7 +90,7 @@ fn build_interval_query(interval_expression: &str) -> String {
                SUM(agg.total_spent)::bigint AS total_spent,
                ka.label AS known_label,
                ka.type AS known_type
-        FROM kaspad.address_spending_per_minute agg
+        FROM kaspad.address_activity_minutely agg
         LEFT JOIN known_addresses ka ON ka.address = agg.address
         WHERE agg.minute_bucket >= (now() at time zone 'utc' - {})
           AND agg.minute_bucket <= (now() at time zone 'utc')

@@ -46,10 +46,9 @@ fn get_interval_expression(timeframe: &str) -> Option<&'static str> {
 fn build_today_query() -> String {
     r#"
         SELECT encode(transaction_id, 'hex') AS transaction_id, block_time, protocol_id, total_output_amount
-        FROM kaspad.transactions
-        WHERE subnetwork_id = 0
-          AND accepting_block_hash IS NOT NULL
-          AND block_time >= date_trunc('day', now())
+        FROM kaspad.notable_transactions
+        WHERE block_time >= date_trunc('day', now() at time zone 'utc')
+          AND total_output_amount IS NOT NULL
         ORDER BY total_output_amount DESC, block_time DESC
         LIMIT 100
     "#
@@ -59,11 +58,10 @@ fn build_today_query() -> String {
 fn build_yesterday_query() -> String {
     r#"
         SELECT encode(transaction_id, 'hex') AS transaction_id, block_time, protocol_id, total_output_amount
-        FROM kaspad.transactions
-        WHERE subnetwork_id = 0
-          AND accepting_block_hash IS NOT NULL
-          AND block_time >= (date_trunc('day', now()) - INTERVAL '1 day')
-          AND block_time < date_trunc('day', now())
+        FROM kaspad.notable_transactions
+        WHERE block_time >= (date_trunc('day', now() at time zone 'utc') - INTERVAL '1 day')
+          AND block_time < date_trunc('day', now() at time zone 'utc')
+          AND total_output_amount IS NOT NULL
         ORDER BY total_output_amount DESC, block_time DESC
         LIMIT 100
     "#
@@ -74,10 +72,9 @@ fn build_interval_query(interval_expression: &str) -> String {
     format!(
         r#"
         SELECT encode(transaction_id, 'hex') AS transaction_id, block_time, protocol_id, total_output_amount
-        FROM kaspad.transactions
-        WHERE subnetwork_id = 0
-          AND accepting_block_hash IS NOT NULL
-          AND block_time >= (NOW() - {})
+        FROM kaspad.notable_transactions
+        WHERE block_time >= (NOW() - {})
+          AND total_output_amount IS NOT NULL
         ORDER BY total_output_amount DESC, block_time DESC
         LIMIT 100
         "#,
