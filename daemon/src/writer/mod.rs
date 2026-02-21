@@ -157,6 +157,10 @@ pub struct Writer {
     stats: Arc<Mutex<WriterStats>>,
     notable_tracker: NotableTransactionTracker,
     address_window: AddressActivityWindow,
+    /// Minute-aligned cutoff (unix ms). Computed from the first batch on startup.
+    /// Minutely rows >= cutoff are deleted, and transactions in the partial minute
+    /// before the cutoff are skipped to avoid double-counting on any restart.
+    resync_cutoff_ms: Option<u64>,
 }
 
 struct WriterStats {
@@ -176,6 +180,7 @@ impl Writer {
             // Initialised in run() after loading from DB.
             notable_tracker: NotableTransactionTracker::new(1000),
             address_window: AddressActivityWindow::new(1000, 24 * 60 * 60 * 1000),
+            resync_cutoff_ms: None,
         }
     }
 }
@@ -184,6 +189,17 @@ impl Writer {
 fn minute_bucket(block_time_ms: u64) -> DateTime<Utc> {
     let truncated = (block_time_ms / 60_000) * 60_000;
     DateTime::<Utc>::from_timestamp_millis(truncated as i64).unwrap()
+}
+
+/// Round a millisecond timestamp UP to the next minute boundary.
+/// If already aligned, returns the same value.
+fn ceil_to_next_minute_ms(block_time_ms: u64) -> u64 {
+    let remainder = block_time_ms % 60_000;
+    if remainder == 0 {
+        block_time_ms
+    } else {
+        block_time_ms + (60_000 - remainder)
+    }
 }
 
 impl Writer {
@@ -198,6 +214,29 @@ impl Writer {
                 tx.accepting_block_hash.is_some() && tx.subnetwork_id == SUBNETWORK_ID_NATIVE
             })
             .collect();
+
+        // On the first batch with accepted transactions, compute the resync cutoff
+        // and delete stale minutely rows. This prevents double-counting on any
+        // restart — whether from a fresh sync, an old cache, or a clean restart.
+        if self.resync_cutoff_ms.is_none() {
+            if let Some(earliest) = accepted_native.iter().map(|tx| tx.block_time).min() {
+                let cutoff_ms = ceil_to_next_minute_ms(earliest);
+                let cutoff_dt =
+                    DateTime::<Utc>::from_timestamp_millis(cutoff_ms as i64).unwrap();
+
+                delete_minutely_rows_from(cutoff_dt, &self.pg_pool)
+                    .await
+                    .unwrap();
+
+                self.resync_cutoff_ms = Some(cutoff_ms);
+
+                info!(
+                    target: LogTarget::Daemon.as_str(),
+                    "Writer: resync cutoff set to {}, deleted minutely rows at or after cutoff",
+                    cutoff_dt,
+                );
+            }
+        }
 
         // ── 1. Notable transactions ─────────────────────────────────────────
         let mut notable_insert: Vec<DbNotableTx> = Vec::new();
@@ -214,6 +253,12 @@ impl Writer {
 
         for tx in &accepted_native {
             if let Some(protocol) = &tx.protocol {
+                // Skip the partial minute at the resync boundary.
+                if let Some(cutoff_ms) = self.resync_cutoff_ms {
+                    if (tx.block_time / 60_000) * 60_000 < cutoff_ms {
+                        continue;
+                    }
+                }
                 let bucket = minute_bucket(tx.block_time);
                 let fee = tx.fee.unwrap_or(0) as i64;
                 let entry = protocol_map
@@ -235,6 +280,12 @@ impl Writer {
 
         for tx in &accepted_native {
             let minute_ms = (tx.block_time / 60_000) * 60_000;
+            // Skip the partial minute at the resync boundary.
+            if let Some(cutoff_ms) = self.resync_cutoff_ms {
+                if minute_ms < cutoff_ms {
+                    continue;
+                }
+            }
             let minute_entries = by_minute.entry(minute_ms).or_default();
             let mut seen_in_tx: HashSet<&str> = HashSet::new();
 

@@ -149,6 +149,25 @@ pub async fn upsert_address_activity_minutely(
     Ok(())
 }
 
+/// Delete all minutely rows at or after `cutoff`.
+/// Used on fresh sync to clear stale data before re-populating.
+pub async fn delete_minutely_rows_from(
+    cutoff: DateTime<Utc>,
+    pool: &PgPool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM kaspad.protocol_activity_minutely WHERE minute_bucket >= $1")
+        .bind(cutoff)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM kaspad.address_activity_minutely WHERE minute_bucket >= $1")
+        .bind(cutoff)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
 /// Delete rows older than `retention_days` from the two time-bounded minutely tables.
 /// Called periodically (e.g. hourly) from the Writer to enforce retention without TimescaleDB.
 pub async fn prune_old_minutely_rows(
