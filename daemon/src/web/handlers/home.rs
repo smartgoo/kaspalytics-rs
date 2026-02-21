@@ -331,43 +331,12 @@ impl SseData {
         );
 
         // Collect all protocol transaction counts in a HashMap
-        let mut protocol_counts = HashMap::new();
-        protocol_counts.insert(
-            "Krc",
-            tx_counter::protocol_transaction_count(dag_cache, TransactionProtocol::Krc, threshold),
-        );
-        protocol_counts.insert(
-            "Kns",
-            tx_counter::protocol_transaction_count(dag_cache, TransactionProtocol::Kns, threshold),
-        );
-        protocol_counts.insert(
-            "Kasia",
-            tx_counter::protocol_transaction_count(
-                dag_cache,
-                TransactionProtocol::Kasia,
-                threshold,
-            ),
-        );
-        protocol_counts.insert(
-            "Kasplex",
-            tx_counter::protocol_transaction_count(
-                dag_cache,
-                TransactionProtocol::Kasplex,
-                threshold,
-            ),
-        );
-        protocol_counts.insert(
-            "KSocial",
-            tx_counter::protocol_transaction_count(
-                dag_cache,
-                TransactionProtocol::KSocial,
-                threshold,
-            ),
-        );
-        protocol_counts.insert(
-            "Igra",
-            tx_counter::protocol_transaction_count(dag_cache, TransactionProtocol::Igra, threshold),
-        );
+        let protocol_counts: HashMap<String, u64> = TransactionProtocol::iter()
+            .map(|p| {
+                let count = tx_counter::protocol_transaction_count(dag_cache, p.clone(), threshold);
+                (p.to_string(), count)
+            })
+            .collect();
 
         self.set(
             SseKey::ProtocolTransactionCounts24h,

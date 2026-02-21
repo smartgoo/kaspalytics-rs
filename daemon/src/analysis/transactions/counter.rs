@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use crate::ingest::cache::{DagCache, Reader};
 use std::collections::HashMap;
@@ -109,29 +108,4 @@ pub fn protocol_transaction_count(
         .filter(|entry| *entry.key() >= threshold)
         .map(|entry| entry.get_protocol_transaction_count(&protocol))
         .sum()
-}
-
-// Legacy compatibility functions - deprecated, use protocol_transaction_count instead
-pub fn krc_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    protocol_transaction_count(dag_cache, TransactionProtocol::Krc, threshold)
-}
-
-pub fn kns_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    protocol_transaction_count(dag_cache, TransactionProtocol::Kns, threshold)
-}
-
-pub fn kasia_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    protocol_transaction_count(dag_cache, TransactionProtocol::Kasia, threshold)
-}
-
-pub fn kasplex_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    protocol_transaction_count(dag_cache, TransactionProtocol::Kasplex, threshold)
-}
-
-pub fn ksocial_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    protocol_transaction_count(dag_cache, TransactionProtocol::KSocial, threshold)
-}
-
-pub fn igra_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    protocol_transaction_count(dag_cache, TransactionProtocol::Igra, threshold)
 }

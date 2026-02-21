@@ -154,7 +154,7 @@ fn detect_transaction_protocol(
                         dag_cache
                             .seconds
                             .entry(previous_transaction.block_time / 1000)
-                            .and_modify(|v| v.increment_krc_transaction_count());
+                            .and_modify(|v| v.increment_protocol_transaction_count(TransactionProtocol::Krc));
                     }
                 } else {
                     warn!(
@@ -177,7 +177,7 @@ fn detect_transaction_protocol(
                         dag_cache
                             .seconds
                             .entry(previous_transaction.block_time / 1000)
-                            .and_modify(|v| v.increment_kns_transaction_count());
+                            .and_modify(|v| v.increment_protocol_transaction_count(TransactionProtocol::Kns));
                     }
                 } else {
                     warn!(
@@ -289,26 +289,8 @@ fn add_transaction_acceptance(
                 v.increment_total_fees(tx.fee.unwrap());
 
                 // Increment Protocol count for given second
-                match tx.protocol {
-                    Some(TransactionProtocol::Krc) => {
-                        v.increment_krc_transaction_count();
-                    }
-                    Some(TransactionProtocol::Kns) => {
-                        v.increment_kns_transaction_count();
-                    }
-                    Some(TransactionProtocol::Kasia) => {
-                        v.increment_kasia_transaction_count();
-                    }
-                    Some(TransactionProtocol::Kasplex) => {
-                        v.increment_kasplex_transaction_count();
-                    }
-                    Some(TransactionProtocol::KSocial) => {
-                        v.increment_ksocial_transaction_count();
-                    }
-                    Some(TransactionProtocol::Igra) => {
-                        v.increment_igra_transaction_count();
-                    }
-                    None => {}
+                if let Some(ref protocol) = tx.protocol {
+                    v.increment_protocol_transaction_count(protocol.clone());
                 }
             });
     }
@@ -422,26 +404,8 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
                     v.decrement_total_fees(tx.fee.unwrap());
                 }
 
-                match tx.protocol {
-                    Some(TransactionProtocol::Krc) => {
-                        v.decrement_krc_transaction_count();
-                    }
-                    Some(TransactionProtocol::Kns) => {
-                        v.decrement_kns_transaction_count();
-                    }
-                    Some(TransactionProtocol::Kasia) => {
-                        v.decrement_kasia_transaction_count();
-                    }
-                    Some(TransactionProtocol::Kasplex) => {
-                        v.decrement_kasplex_transaction_count();
-                    }
-                    Some(TransactionProtocol::KSocial) => {
-                        v.decrement_ksocial_transaction_count();
-                    }
-                    Some(TransactionProtocol::Igra) => {
-                        v.decrement_igra_transaction_count();
-                    }
-                    None => {}
+                if let Some(ref protocol) = tx.protocol {
+                    v.decrement_protocol_transaction_count(protocol.clone());
                 }
             });
     }
