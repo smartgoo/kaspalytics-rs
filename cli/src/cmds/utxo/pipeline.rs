@@ -1,6 +1,7 @@
 use super::aging::UtxoAgeAnalysis;
 use super::kas_bucket::DistributionByKASBucketAnalysis;
 use super::percentile::AddressPercentileAnalysis;
+use super::realized_price::RealizedPriceAnalysis;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_consensus_core::Hash;
@@ -53,6 +54,7 @@ struct UtxoSnapshotHeader {
     percentile_analysis_completed: Option<bool>,
     kas_last_moved_by_age_bucket_complete: Option<bool>,
     distribution_by_kas_bucket_complete: Option<bool>,
+    realized_price_analysis_complete: Option<bool>,
 }
 
 impl UtxoSnapshotHeader {
@@ -101,6 +103,7 @@ impl UtxoSnapshotHeader {
             percentile_analysis_completed: Some(false),
             kas_last_moved_by_age_bucket_complete: Some(false),
             distribution_by_kas_bucket_complete: Some(false),
+            realized_price_analysis_complete: Some(false),
         }
     }
 
@@ -197,11 +200,27 @@ impl UtxoSnapshotHeader {
     }
 
     async fn set_kas_last_moved_by_age_bucket_complete(&mut self, pg_pool: PgPool) {
-        self.distribution_by_kas_bucket_complete = Some(true);
+        self.kas_last_moved_by_age_bucket_complete = Some(true);
 
         let sql = r#"
             UPDATE utxo_snapshot_header
             SET kas_last_moved_by_age_bucket_complete = true
+            WHERE id = $1
+        "#;
+
+        sqlx::query(sql)
+            .bind(self.id)
+            .execute(&pg_pool)
+            .await
+            .unwrap();
+    }
+
+    async fn set_realized_price_analysis_complete(&mut self, pg_pool: PgPool) {
+        self.realized_price_analysis_complete = Some(true);
+
+        let sql = r#"
+            UPDATE utxo_snapshot_header
+            SET realized_price_analysis_complete = true
             WHERE id = $1
         "#;
 
@@ -456,6 +475,26 @@ impl UtxoBasedPipeline {
 
         utxo_snapshot_header
             .set_kas_last_moved_by_age_bucket_complete(self.pg_pool.clone())
+            .await;
+
+        // Realized Price Analysis (URPD, supply in profit/loss, realized cap)
+        debug!(
+            target: LogTarget::Cli.as_str(),
+            "Starting realized price analysis..."
+        );
+        RealizedPriceAnalysis::new(
+            self.pg_pool.clone(),
+            utxo_snapshot_header.id,
+            db.db.clone(),
+            self.rpc_client.clone(),
+            utxo_snapshot_header.circulating_supply,
+            utxo_snapshot_header.kas_price_usd,
+        )
+        .run()
+        .await;
+
+        utxo_snapshot_header
+            .set_realized_price_analysis_complete(self.pg_pool.clone())
             .await;
 
         let _ = kaspalytics_utils::email::send_email(
