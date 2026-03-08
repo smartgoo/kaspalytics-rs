@@ -174,6 +174,8 @@ impl RealizedPriceAnalysis {
     }
 
     async fn insert_to_db(&self) {
+        let mut tx = self.pg_pool.begin().await.unwrap();
+
         // Delete any existing URPD rows for this snapshot (idempotent re-runs)
         sqlx::query(
             r#"
@@ -182,7 +184,7 @@ impl RealizedPriceAnalysis {
             "#,
         )
         .bind(self.utxo_snapshot_id)
-        .execute(&self.pg_pool)
+        .execute(&mut *tx)
         .await
         .unwrap();
 
@@ -201,7 +203,7 @@ impl RealizedPriceAnalysis {
         .bind(self.sompi_in_profit as i64)
         .bind(self.sompi_in_loss as i64)
         .bind(self.utxo_snapshot_id)
-        .execute(&self.pg_pool)
+        .execute(&mut *tx)
         .await
         .unwrap();
 
@@ -226,10 +228,12 @@ impl RealizedPriceAnalysis {
             .bind(bucket.sompi as i64)
             .bind(bucket.utxo_count as i64)
             .bind(cs_percent)
-            .execute(&self.pg_pool)
+            .execute(&mut *tx)
             .await
             .unwrap();
         }
+
+        tx.commit().await.unwrap();
     }
 
     pub async fn run(&mut self) {
