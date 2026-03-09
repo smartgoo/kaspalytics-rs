@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[allow(dead_code)]
 pub fn transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache
         .seconds_iter()
@@ -12,6 +13,7 @@ pub fn transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
         .sum()
 }
 
+#[allow(dead_code)]
 pub fn coinbase_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache
         .seconds_iter()
@@ -20,6 +22,7 @@ pub fn coinbase_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> 
         .sum()
 }
 
+#[allow(dead_code)]
 pub fn coinbase_transaction_accepted_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache
         .seconds_iter()
@@ -28,6 +31,7 @@ pub fn coinbase_transaction_accepted_count(dag_cache: &Arc<DagCache>, threshold:
         .sum()
 }
 
+#[allow(dead_code)]
 pub fn unique_transaction_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache
         .seconds_iter()
@@ -69,6 +73,7 @@ pub fn unique_accepted_count_per_hour_24h(dag_cache: &Arc<DagCache>) -> HashMap<
     effective_count_per_hour
 }
 
+#[allow(dead_code)]
 pub fn accepted_count_per_hour_24h(dag_cache: &Arc<DagCache>) -> HashMap<u64, u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

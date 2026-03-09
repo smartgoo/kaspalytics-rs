@@ -426,6 +426,7 @@ pub trait Reader {
     async fn get_volume(&self) -> CacheEntry<Decimal>;
 
     async fn get_pruning_point(&self) -> CacheEntry<Hash>;
+    #[allow(dead_code)]
     async fn get_sink_blue_score(&self) -> CacheEntry<u64>;
     async fn get_daa_score(&self) -> CacheEntry<u64>;
     async fn get_circulating_supply(&self) -> CacheEntry<u64>;

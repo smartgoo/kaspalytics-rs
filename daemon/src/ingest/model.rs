@@ -313,6 +313,7 @@ impl From<RpcTransaction> for CacheTransaction {
 }
 
 pub struct PruningBatch {
+    #[allow(dead_code)]
     pub blocks: Vec<CacheBlock>,
     pub transactions: Vec<CacheTransaction>,
 }
