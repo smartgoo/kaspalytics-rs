@@ -15,7 +15,8 @@ use std::time::Instant;
 async fn main() {
     let cli = Cli::parse();
 
-    let config = kaspalytics_utils::config::Config::from_env();
+    let mut config = kaspalytics_utils::config::Config::from_env();
+    config.log_level = cli.global_args.log_level;
 
     kaspalytics_utils::log::init_logger(&config, "cli").unwrap();
 
