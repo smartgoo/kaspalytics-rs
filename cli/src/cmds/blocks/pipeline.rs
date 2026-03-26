@@ -13,7 +13,7 @@ use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
 use kaspalytics_utils::kaspad::db::ConsensusStorageSecondary;
 use kaspalytics_utils::log::LogTarget;
-use log::{debug, error};
+use log::{debug, error, info};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -73,6 +73,14 @@ impl BlockAnalysis {
 impl BlockAnalysis {
     fn load_chain_blocks(&mut self) -> Result<(), StoreError> {
         let mut past_window_count: u32 = 0;
+        let mut scanned_count: u64 = 0;
+        let start = std::time::Instant::now();
+
+        debug!(
+            target: LogTarget::Cli.as_str(),
+            "Scanning selected chain store for blocks in window [{}, {}]",
+            self.window_start_time, self.window_end_time
+        );
 
         for entry in self
             .storage
@@ -91,6 +99,15 @@ impl BlockAnalysis {
                 }
             })?;
 
+            scanned_count += 1;
+            if scanned_count % 100_000 == 0 {
+                debug!(
+                    target: LogTarget::Cli.as_str(),
+                    "load_chain_blocks scanned {} entries, {} matched so far ({:.1?} elapsed)",
+                    scanned_count, self.chain_blocks.len(), start.elapsed()
+                );
+            }
+
             let key = u64::from_le_bytes((*key).try_into().unwrap());
             let header = self.storage.headers_store.get_header(hash)?;
 
@@ -108,10 +125,10 @@ impl BlockAnalysis {
             }
         }
 
-        debug!(
+        info!(
             target: LogTarget::Cli.as_str(),
-            "{} chain blocks loaded from DbSelectedChainStore for target window",
-            self.chain_blocks.len()
+            "load_chain_blocks complete: {} matched out of {} scanned in {:.1?}",
+            self.chain_blocks.len(), scanned_count, start.elapsed()
         );
 
         Ok(())
@@ -123,6 +140,8 @@ impl BlockAnalysis {
     fn tx_analysis(&mut self) -> Result<(), StoreError> {
         let mut transaction_cache = HashSet::<TransactionId>::new();
         let mut tx_iter_order = VecDeque::<Vec<TransactionId>>::new();
+        let start = std::time::Instant::now();
+        let mut total_tx_count: u64 = 0;
 
         // Extract borrows to avoid conflicts with self.stats
         let storage = &self.storage;
@@ -134,13 +153,24 @@ impl BlockAnalysis {
             .map(|(&k, &v)| (k, v))
             .collect();
 
+        let total_chain_blocks = chain_blocks.len();
+        info!(
+            target: LogTarget::Cli.as_str(),
+            "tx_analysis starting: {} chain blocks to process",
+            total_chain_blocks
+        );
+
         // Iterate chain blocks
         for (chain_block_index, (_, chain_block_hash)) in chain_blocks.iter().enumerate() {
             if chain_block_index % 1000 == 0 {
                 debug!(
                     target: LogTarget::Cli.as_str(),
-                    "tx_analysis processed {} chain blocks",
-                    chain_block_index
+                    "tx_analysis progress: {}/{} chain blocks ({:.1}%), {} txs, cache size: {}, {:.1?} elapsed",
+                    chain_block_index, total_chain_blocks,
+                    if total_chain_blocks > 0 { chain_block_index as f64 / total_chain_blocks as f64 * 100.0 } else { 0.0 },
+                    total_tx_count,
+                    transaction_cache.len(),
+                    start.elapsed()
                 );
             }
 
@@ -267,6 +297,7 @@ impl BlockAnalysis {
 
                     stats.fees.push(tx_fee);
 
+                    total_tx_count += 1;
                     transaction_cache.insert(tx.id());
                     this_chain_blocks_accepted_transactions.push(tx.id());
                 }
@@ -287,6 +318,12 @@ impl BlockAnalysis {
             }
         }
 
+        info!(
+            target: LogTarget::Cli.as_str(),
+            "tx_analysis complete: {} chain blocks, {} transactions, {} stats entries in {:.1?}",
+            total_chain_blocks, total_tx_count, self.stats.len(), start.elapsed()
+        );
+
         Ok(())
     }
 }
@@ -294,16 +331,21 @@ impl BlockAnalysis {
 impl BlockAnalysis {
     async fn run_inner(&mut self, pool: &PgPool) -> Result<(), StoreError> {
         // TODO custom error that wraps StoreError, other error types...
+        let pipeline_start = std::time::Instant::now();
 
-        debug!(
+        info!(
             target: LogTarget::Cli.as_str(),
-            "Loading chain blocks from DbSelectedChainStore for target window..."
+            "block-pipeline starting: window [{}, {}]",
+            self.window_start_time, self.window_end_time
         );
+
+        info!(target: LogTarget::Cli.as_str(), "Phase 1/3: loading chain blocks...");
         self.load_chain_blocks()?;
 
-        debug!(target: LogTarget::Cli.as_str(), "Running tx_analysis...");
+        info!(target: LogTarget::Cli.as_str(), "Phase 2/3: running tx_analysis...");
         self.tx_analysis()?;
 
+        info!(target: LogTarget::Cli.as_str(), "Phase 3/3: rolling up stats and saving...");
         let per_day = Stats::rollup(std::mem::take(&mut self.stats), Granularity::Day);
         for (time, mut stats) in per_day {
             // Skip stat entries outside of time window
@@ -312,7 +354,7 @@ impl BlockAnalysis {
                 continue;
             }
 
-            debug!(target: LogTarget::Cli.as_str(), "{:?}", stats);
+            info!(target: LogTarget::Cli.as_str(), "Saving stats: {:?}", stats);
             stats.save(pool).await.unwrap(); // TODO handle
 
             let _ = kaspalytics_utils::email::send_email(
@@ -321,6 +363,12 @@ impl BlockAnalysis {
                 format!("{:?}", stats),
             );
         }
+
+        info!(
+            target: LogTarget::Cli.as_str(),
+            "block-pipeline completed in {:.1?}",
+            pipeline_start.elapsed()
+        );
 
         Ok(())
     }
@@ -336,6 +384,11 @@ impl BlockAnalysis {
         let retry_delay = std::time::Duration::from_secs(60);
 
         loop {
+            info!(
+                target: LogTarget::Cli.as_str(),
+                "block-pipeline attempt {}/{}",
+                retries + 1, max_retries
+            );
             let storage = ConsensusStorageSecondary::new(config.clone());
 
             let mut process =
