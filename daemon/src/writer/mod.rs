@@ -130,8 +130,7 @@ impl NotableTransactionTracker {
                     if let Some(evicted) = self.top_by_amount.iter().next().cloned() {
                         self.top_by_amount.remove(&evicted);
                         // Only delete from DB if also absent from fee set.
-                        let still_notable =
-                            self.top_by_fee.iter().any(|(_, id)| id == &evicted.1);
+                        let still_notable = self.top_by_fee.iter().any(|(_, id)| id == &evicted.1);
                         if !still_notable && self.db_state.contains(&evicted.1) {
                             to_delete.push(evicted.1);
                         }
@@ -229,8 +228,7 @@ impl Writer {
         if self.resync_cutoff_ms.is_none() {
             if let Some(earliest) = accepted_native.iter().map(|tx| tx.block_time).min() {
                 let cutoff_ms = ceil_to_next_minute_ms(earliest);
-                let cutoff_dt =
-                    DateTime::<Utc>::from_timestamp_millis(cutoff_ms as i64).unwrap();
+                let cutoff_dt = DateTime::<Utc>::from_timestamp_millis(cutoff_ms as i64).unwrap();
 
                 delete_minutely_rows_from(cutoff_dt, &self.pg_pool)
                     .await

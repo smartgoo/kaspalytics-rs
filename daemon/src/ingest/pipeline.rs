@@ -154,7 +154,9 @@ fn detect_transaction_protocol(
                         dag_cache
                             .seconds
                             .entry(previous_transaction.block_time / 1000)
-                            .and_modify(|v| v.increment_protocol_transaction_count(TransactionProtocol::Krc));
+                            .and_modify(|v| {
+                                v.increment_protocol_transaction_count(TransactionProtocol::Krc)
+                            });
                     }
                 } else {
                     warn!(
@@ -177,7 +179,9 @@ fn detect_transaction_protocol(
                         dag_cache
                             .seconds
                             .entry(previous_transaction.block_time / 1000)
-                            .and_modify(|v| v.increment_protocol_transaction_count(TransactionProtocol::Kns));
+                            .and_modify(|v| {
+                                v.increment_protocol_transaction_count(TransactionProtocol::Kns)
+                            });
                     }
                 } else {
                     warn!(
@@ -400,8 +404,8 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
             .and_modify(|v| {
                 v.decrement_unique_accepted_transaction_count();
 
-                if tx.fee.is_some() {
-                    v.decrement_total_fees(tx.fee.unwrap());
+                if let Some(fee) = tx.fee {
+                    v.decrement_total_fees(fee);
                 }
 
                 if let Some(ref protocol) = tx.protocol {

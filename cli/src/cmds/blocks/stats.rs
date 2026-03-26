@@ -87,7 +87,7 @@ impl Stats {
             let mut sorted = values.to_owned();
             sorted.sort_unstable();
             let mid = sorted.len() / 2;
-            if sorted.len() % 2 == 0 {
+            if sorted.len().is_multiple_of(2) {
                 ((sorted[mid - 1] + sorted[mid]) as f64) / 2.0
             } else {
                 sorted[mid] as f64
@@ -109,7 +109,7 @@ impl Stats {
         let max = values[values.len() - 1];
 
         let mid = values.len() / 2;
-        let median = if values.len() % 2 == 0 {
+        let median = if values.len().is_multiple_of(2) == 0 {
             ((values[mid - 1] + values[mid]) as f64) / 2.0
         } else {
             values[mid] as f64

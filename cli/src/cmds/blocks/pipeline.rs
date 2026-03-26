@@ -100,7 +100,7 @@ impl BlockAnalysis {
             })?;
 
             scanned_count += 1;
-            if scanned_count % 100_000 == 0 {
+            if scanned_count.is_multiple_of(100_000) {
                 debug!(
                     target: LogTarget::Cli.as_str(),
                     "load_chain_blocks scanned {} entries, {} matched so far ({:.1?} elapsed)",
@@ -133,7 +133,6 @@ impl BlockAnalysis {
 
         Ok(())
     }
-
 }
 
 impl BlockAnalysis {
@@ -192,9 +191,7 @@ impl BlockAnalysis {
 
             // Iterate blocks in current chain block's mergeset
             for mergeset_data in acceptances.iter() {
-                let header = storage
-                    .headers_store
-                    .get_header(mergeset_data.block_hash)?;
+                let header = storage.headers_store.get_header(mergeset_data.block_hash)?;
 
                 let transactions = storage
                     .block_transactions_store

@@ -108,9 +108,7 @@ impl RealizedPriceAnalysis {
         let ts = timestamp_ms as i64;
 
         // Binary search for the rightmost entry with timestamp_ms <= ts
-        let idx = self
-            .price_history
-            .partition_point(|p| p.timestamp_ms <= ts);
+        let idx = self.price_history.partition_point(|p| p.timestamp_ms <= ts);
 
         if idx == 0 {
             // UTXO is before any price data
