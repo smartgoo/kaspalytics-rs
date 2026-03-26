@@ -5,7 +5,7 @@ use kaspa_consensus::model::stores::block_transactions::BlockTransactionsStoreRe
 use kaspa_consensus::model::stores::headers::HeaderStoreReader;
 use kaspa_consensus::model::stores::selected_chain::SelectedChainStoreReader;
 use kaspa_consensus::model::stores::utxo_diffs::UtxoDiffsStoreReader;
-use kaspa_consensus_core::tx::{TransactionId, TransactionOutpoint, UtxoEntry};
+use kaspa_consensus_core::tx::TransactionId;
 use kaspa_consensus_core::utxo::utxo_diff::ImmutableUtxoDiff;
 use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
@@ -72,6 +72,8 @@ impl BlockAnalysis {
 
 impl BlockAnalysis {
     fn load_chain_blocks(&mut self) -> Result<(), StoreError> {
+        let mut past_window_count: u32 = 0;
+
         for entry in self
             .storage
             .selected_chain_store
@@ -92,9 +94,16 @@ impl BlockAnalysis {
             let key = u64::from_le_bytes((*key).try_into().unwrap());
             let header = self.storage.headers_store.get_header(hash)?;
 
-            if self.window_start_time <= header.timestamp
-                && header.timestamp <= self.window_end_time
-            {
+            if header.timestamp > self.window_end_time {
+                past_window_count += 1;
+                if past_window_count >= 1000 {
+                    break;
+                }
+                continue;
+            }
+            past_window_count = 0;
+
+            if self.window_start_time <= header.timestamp {
                 self.chain_blocks.insert(key, hash);
             }
         }
@@ -108,26 +117,6 @@ impl BlockAnalysis {
         Ok(())
     }
 
-    // Reads utxo_diffs_store for given chain block
-    // Returns a single map of all UTXOs affected (created or removed) for chain block
-    fn get_utxos_for_chain_block(
-        &self,
-        hash: Hash,
-    ) -> Result<HashMap<TransactionOutpoint, UtxoEntry>, StoreError> {
-        let utxo_diffs = self.storage.utxo_diffs_store.get(hash)?;
-
-        let mut utxos = HashMap::<TransactionOutpoint, UtxoEntry>::new();
-
-        utxo_diffs.removed().iter().for_each(|(outpoint, utxo)| {
-            utxos.insert(*outpoint, utxo.clone());
-        });
-
-        utxo_diffs.added().iter().for_each(|(outpoint, utxo)| {
-            utxos.insert(*outpoint, utxo.clone());
-        });
-
-        Ok(utxos)
-    }
 }
 
 impl BlockAnalysis {
@@ -135,10 +124,18 @@ impl BlockAnalysis {
         let mut transaction_cache = HashSet::<TransactionId>::new();
         let mut tx_iter_order = VecDeque::<Vec<TransactionId>>::new();
 
+        // Extract borrows to avoid conflicts with self.stats
+        let storage = &self.storage;
+        let network_id = self.config.network_id;
+        let chain_blocks: Vec<(u64, Hash)> = self
+            .chain_blocks
+            .iter()
+            .skip(1)
+            .map(|(&k, &v)| (k, v))
+            .collect();
+
         // Iterate chain blocks
-        for (chain_block_index, (_, chain_block_hash)) in
-            self.chain_blocks.iter().skip(1).enumerate()
-        {
+        for (chain_block_index, (_, chain_block_hash)) in chain_blocks.iter().enumerate() {
             if chain_block_index % 1000 == 0 {
                 debug!(
                     target: LogTarget::Cli.as_str(),
@@ -150,25 +147,30 @@ impl BlockAnalysis {
             let mut this_chain_blocks_accepted_transactions = Vec::<TransactionId>::new();
 
             // Get acceptance data
-            let acceptances = self.storage.acceptance_data_store.get(*chain_block_hash)?;
+            let acceptances = storage.acceptance_data_store.get(*chain_block_hash)?;
 
             // Load UTXOs from utxo diffs store
-            let utxos = self.get_utxos_for_chain_block(*chain_block_hash)?;
+            let utxo_diffs = storage.utxo_diffs_store.get(*chain_block_hash)?;
+            let mut utxos =
+                HashMap::with_capacity(utxo_diffs.removed().len() + utxo_diffs.added().len());
+            utxo_diffs.removed().iter().for_each(|(outpoint, utxo)| {
+                utxos.insert(*outpoint, utxo.clone());
+            });
+            utxo_diffs.added().iter().for_each(|(outpoint, utxo)| {
+                utxos.insert(*outpoint, utxo.clone());
+            });
 
             // Iterate blocks in current chain block's mergeset
             for mergeset_data in acceptances.iter() {
-                let header = self
-                    .storage
+                let header = storage
                     .headers_store
                     .get_header(mergeset_data.block_hash)?;
 
-                let transactions = self
-                    .storage
+                let transactions = storage
                     .block_transactions_store
                     .get(mergeset_data.block_hash)?;
 
-                let is_chain_block = match self
-                    .storage
+                let is_chain_block = match storage
                     .selected_chain_store
                     .read()
                     .get_by_hash(mergeset_data.block_hash)
@@ -180,10 +182,10 @@ impl BlockAnalysis {
 
                 let block_time_s = header.timestamp / 1000;
 
-                // Ensure stats entry for this second exists
-                self.stats
+                let stats = self
+                    .stats
                     .entry(block_time_s)
-                    .or_insert(Stats::new(block_time_s, Granularity::Second));
+                    .or_insert_with(|| Stats::new(block_time_s, Granularity::Second));
 
                 // Iterate transactions in the merged block
                 let mut accepted_transactions_in_this_block = 0;
@@ -197,19 +199,9 @@ impl BlockAnalysis {
                     match (is_chain_block, tx_index) {
                         (true, 0) => {
                             // Coinbase transaction of chain block
-                            // Add to counters
-                            self.stats
-                                .entry(block_time_s)
-                                .and_modify(|stats| stats.coinbase_tx_count += 1);
-
-                            self.stats.entry(block_time_s).and_modify(|stats| {
-                                stats.output_count_coinbase_tx += tx.outputs.len() as u64
-                            });
-
-                            self.stats
-                                .entry(block_time_s)
-                                .and_modify(|stats| stats.chain_block_count += 1);
-
+                            stats.coinbase_tx_count += 1;
+                            stats.output_count_coinbase_tx += tx.outputs.len() as u64;
+                            stats.chain_block_count += 1;
                             accepted_transactions_in_this_block += 1;
 
                             // Continue skips fee analysis since this is coinbase tx
@@ -224,23 +216,14 @@ impl BlockAnalysis {
                             // A regular transaction
                             // Either part of chain block (at index 1+)
                             // Or part of non-chain block (at index 1+)
-                            self.stats
-                                .entry(block_time_s)
-                                .and_modify(|stats| stats.regular_tx_count += 1);
-
+                            stats.regular_tx_count += 1;
                             accepted_transactions_in_this_block += 1;
                         }
                     }
 
-                    // Count inputs of current transaction
-                    self.stats
-                        .entry(block_time_s)
-                        .and_modify(|stats| stats.input_count += tx.inputs.len() as u64);
-
-                    // Count outputs of current transaction
-                    self.stats.entry(block_time_s).and_modify(|stats| {
-                        stats.output_count_regular_tx += tx.outputs.len() as u64
-                    });
+                    // Count inputs and outputs of current transaction
+                    stats.input_count += tx.inputs.len() as u64;
+                    stats.output_count_regular_tx += tx.outputs.len() as u64;
 
                     let mut all_outpoints_resolved = true;
                     let mut tx_fee = 0;
@@ -252,28 +235,21 @@ impl BlockAnalysis {
 
                                 let address = extract_script_pub_key_address(
                                     &previous_outpoint.script_public_key,
-                                    self.config.network_id.into(),
+                                    network_id.into(),
                                 )
                                 .unwrap();
 
-                                self.stats.entry(block_time_s).and_modify(|stats| {
-                                    stats.unique_senders.insert(address);
-                                });
+                                stats.unique_senders.insert(address);
                             }
                             None => {
-                                self.stats.entry(block_time_s).and_modify(|stats| {
-                                    stats.input_count_missing_previous_outpoints += 1
-                                });
-
+                                stats.input_count_missing_previous_outpoints += 1;
                                 all_outpoints_resolved = false;
                             }
                         }
                     }
 
                     if !all_outpoints_resolved {
-                        self.stats
-                            .entry(block_time_s)
-                            .and_modify(|stats| stats.skipped_tx_count_cannot_resolve_inputs += 1);
+                        stats.skipped_tx_count_cannot_resolve_inputs += 1;
                         continue;
                     }
 
@@ -282,28 +258,22 @@ impl BlockAnalysis {
 
                         let address = extract_script_pub_key_address(
                             &output.script_public_key,
-                            self.config.network_id.into(),
+                            network_id.into(),
                         )
                         .unwrap();
 
-                        self.stats.entry(block_time_s).and_modify(|stats| {
-                            stats.unique_recipients.insert(address);
-                        });
+                        stats.unique_recipients.insert(address);
                     }
 
-                    self.stats
-                        .entry(block_time_s)
-                        .and_modify(|stats| stats.fees.push(tx_fee));
+                    stats.fees.push(tx_fee);
 
                     transaction_cache.insert(tx.id());
                     this_chain_blocks_accepted_transactions.push(tx.id());
                 }
 
-                self.stats.entry(block_time_s).and_modify(|stats| {
-                    stats
-                        .transaction_count_per_block
-                        .push(accepted_transactions_in_this_block)
-                });
+                stats
+                    .transaction_count_per_block
+                    .push(accepted_transactions_in_this_block);
             }
 
             tx_iter_order.push_back(this_chain_blocks_accepted_transactions);
@@ -334,8 +304,8 @@ impl BlockAnalysis {
         debug!(target: LogTarget::Cli.as_str(), "Running tx_analysis...");
         self.tx_analysis()?;
 
-        let per_day = Stats::rollup(&self.stats.clone(), Granularity::Day);
-        for (time, stats) in per_day {
+        let per_day = Stats::rollup(std::mem::take(&mut self.stats), Granularity::Day);
+        for (time, mut stats) in per_day {
             // Skip stat entries outside of time window
             // Sometimes, due to block relations, there are entries for the day prior
             if time * 1000 < self.window_start_time || self.window_end_time < time * 1000 {

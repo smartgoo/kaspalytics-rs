@@ -6,7 +6,6 @@ use std::fmt;
 
 use kaspalytics_utils::granularity::Granularity;
 
-#[derive(Clone)]
 pub struct Stats {
     // Second, Minute, Hour, Day
     granularity: Granularity,
@@ -50,7 +49,6 @@ pub struct Stats {
 
     pub unique_senders: HashSet<Address>,
     pub unique_recipients: HashSet<Address>,
-    pub unique_addresses: HashSet<Address>,
 }
 
 impl Stats {
@@ -71,21 +69,19 @@ impl Stats {
             skipped_tx_count_cannot_resolve_inputs: 0,
             unique_senders: HashSet::<Address>::new(),
             unique_recipients: HashSet::<Address>::new(),
-            unique_addresses: HashSet::<Address>::new(),
         }
     }
 }
 
 impl Stats {
-    fn vec_stats(&self, values: &[u64]) -> (u64, f64, f64, u64, u64) {
-        let sum: u64 = values.iter().sum();
-        let mean = (sum as f64) / (values.len() as f64);
+    fn vec_stats_readonly(values: &[u64]) -> (u64, f64, f64, u64, u64) {
         if values.is_empty() {
             return (0, 0.0, 0.0, 0, 0);
         }
-
-        let min = *values.iter().min().unwrap_or(&0);
-        let max = *values.iter().max().unwrap_or(&0);
+        let sum: u64 = values.iter().sum();
+        let mean = (sum as f64) / (values.len() as f64);
+        let min = *values.iter().min().unwrap();
+        let max = *values.iter().max().unwrap();
 
         let median = {
             let mut sorted = values.to_owned();
@@ -96,6 +92,27 @@ impl Stats {
             } else {
                 sorted[mid] as f64
             }
+        };
+
+        (sum, mean, median, min, max)
+    }
+
+    fn vec_stats_mut(values: &mut [u64]) -> (u64, f64, f64, u64, u64) {
+        if values.is_empty() {
+            return (0, 0.0, 0.0, 0, 0);
+        }
+        let sum: u64 = values.iter().sum();
+        let mean = (sum as f64) / (values.len() as f64);
+
+        values.sort_unstable();
+        let min = values[0];
+        let max = values[values.len() - 1];
+
+        let mid = values.len() / 2;
+        let median = if values.len() % 2 == 0 {
+            ((values[mid - 1] + values[mid]) as f64) / 2.0
+        } else {
+            values[mid] as f64
         };
 
         (sum, mean, median, min, max)
@@ -143,60 +160,45 @@ impl Stats {
     // At this time, `per_second_stats` must be per second.
     // No other source granularity is supported.
     pub fn rollup(
-        per_second_stats: &BTreeMap<u64, Stats>,
+        per_second_stats: BTreeMap<u64, Stats>,
         target_granularity: Granularity,
     ) -> BTreeMap<u64, Stats> {
         let mut rolled_up: BTreeMap<u64, Stats> = BTreeMap::new();
 
-        for (epoch_second, per_second_stats) in per_second_stats {
-            let key = Self::calculate_granularity_epoch(*epoch_second, &target_granularity);
+        for (epoch_second, per_second_stats) in per_second_stats.into_iter() {
+            let key = Self::calculate_granularity_epoch(epoch_second, &target_granularity);
+            let tps = per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count;
 
-            rolled_up
+            let target = rolled_up
                 .entry(key)
-                .and_modify(|new_stats| {
-                    new_stats.chain_block_count += per_second_stats.chain_block_count;
+                .or_insert_with(|| Stats::new(key, target_granularity));
 
-                    new_stats
-                        .transaction_count_per_block
-                        .extend(per_second_stats.transaction_count_per_block.clone());
+            target.chain_block_count += per_second_stats.chain_block_count;
+            target
+                .transaction_count_per_block
+                .extend(per_second_stats.transaction_count_per_block);
+            target.coinbase_tx_count += per_second_stats.coinbase_tx_count;
+            target.regular_tx_count += per_second_stats.regular_tx_count;
+            target.input_count += per_second_stats.input_count;
+            target.output_count_coinbase_tx += per_second_stats.output_count_coinbase_tx;
+            target.output_count_regular_tx += per_second_stats.output_count_regular_tx;
+            target.fees.extend(per_second_stats.fees);
 
-                    new_stats.coinbase_tx_count += per_second_stats.coinbase_tx_count;
-                    new_stats.regular_tx_count += per_second_stats.regular_tx_count;
-                    new_stats.input_count += per_second_stats.input_count;
-                    new_stats.output_count_coinbase_tx += per_second_stats.output_count_coinbase_tx;
-                    new_stats.output_count_regular_tx += per_second_stats.output_count_regular_tx;
-                    new_stats.fees.extend(per_second_stats.fees.clone());
+            if tps > target.tps_max {
+                target.tps_max = tps;
+            }
 
-                    if per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count
-                        > new_stats.tps_max
-                    {
-                        new_stats.tps_max =
-                            per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count;
-                    }
+            target.input_count_missing_previous_outpoints +=
+                per_second_stats.input_count_missing_previous_outpoints;
+            target.skipped_tx_count_cannot_resolve_inputs +=
+                per_second_stats.skipped_tx_count_cannot_resolve_inputs;
 
-                    new_stats.input_count_missing_previous_outpoints +=
-                        per_second_stats.input_count_missing_previous_outpoints;
-                    new_stats.skipped_tx_count_cannot_resolve_inputs +=
-                        per_second_stats.skipped_tx_count_cannot_resolve_inputs;
-
-                    new_stats
-                        .unique_senders
-                        .extend(per_second_stats.unique_senders.clone());
-                    new_stats
-                        .unique_recipients
-                        .extend(per_second_stats.unique_recipients.clone());
-                    new_stats
-                        .unique_addresses
-                        .extend(per_second_stats.unique_addresses.clone());
-                })
-                .or_insert_with(|| {
-                    let mut new_stats = per_second_stats.clone();
-                    new_stats.granularity = target_granularity;
-                    new_stats.epoch_second = key;
-                    new_stats.tps_max =
-                        per_second_stats.coinbase_tx_count + per_second_stats.regular_tx_count;
-                    new_stats
-                });
+            target
+                .unique_senders
+                .extend(per_second_stats.unique_senders);
+            target
+                .unique_recipients
+                .extend(per_second_stats.unique_recipients);
         }
 
         rolled_up
@@ -204,12 +206,12 @@ impl Stats {
 }
 
 impl Stats {
-    async fn save_block_summary(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
+    async fn save_block_summary(&mut self, pool: &PgPool) -> Result<(), sqlx::Error> {
         let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
             .unwrap()
             .date_naive();
 
-        let tpb = self.vec_stats(&self.transaction_count_per_block);
+        let tpb = Self::vec_stats_mut(&mut self.transaction_count_per_block);
 
         sqlx::query(
             r#"
@@ -235,12 +237,12 @@ impl Stats {
         Ok(())
     }
 
-    async fn save_transaction_summary(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
+    async fn save_transaction_summary(&mut self, pool: &PgPool) -> Result<(), sqlx::Error> {
         let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
             .unwrap()
             .date_naive();
 
-        let fees = self.vec_stats(&self.fees);
+        let fees = Self::vec_stats_mut(&mut self.fees);
         let tps_mean = self.tps_mean();
 
         sqlx::query(
@@ -282,7 +284,7 @@ impl Stats {
         Ok(())
     }
 
-    pub async fn save(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
+    pub async fn save(&mut self, pool: &PgPool) -> Result<(), sqlx::Error> {
         self.save_block_summary(pool).await?;
         self.save_transaction_summary(pool).await?;
 
@@ -292,8 +294,8 @@ impl Stats {
 
 impl fmt::Debug for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tpb = self.vec_stats(&self.transaction_count_per_block);
-        let fees = self.vec_stats(&self.fees);
+        let tpb = Self::vec_stats_readonly(&self.transaction_count_per_block);
+        let fees = Self::vec_stats_readonly(&self.fees);
 
         f.debug_struct("Stats")
             .field("epoch_second", &self.epoch_second)
