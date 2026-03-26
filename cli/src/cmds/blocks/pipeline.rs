@@ -389,10 +389,13 @@ impl BlockAnalysis {
                 "block-pipeline attempt {}/{}",
                 retries + 1, max_retries
             );
+            debug!(target: LogTarget::Cli.as_str(), "Opening ConsensusStorageSecondary...");
             let storage = ConsensusStorageSecondary::new(config.clone());
+            debug!(target: LogTarget::Cli.as_str(), "ConsensusStorageSecondary opened");
 
             let mut process =
                 BlockAnalysis::new_for_yesterday(config.clone(), storage.inner.clone());
+            debug!(target: LogTarget::Cli.as_str(), "BlockAnalysis created for yesterday");
 
             match process.run_inner(&pool).await {
                 Ok(_) => break,
