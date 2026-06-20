@@ -5,9 +5,10 @@ use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId, TransactionIndexT
 use kaspa_consensus_core::BlueWorkType;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{
-    RpcBlock, RpcOptionalTransaction, RpcOptionalTransactionInput, RpcOptionalTransactionOutpoint,
-    RpcOptionalTransactionOutput, RpcOptionalUtxoEntry, RpcTransaction, RpcTransactionInput,
-    RpcTransactionOutpoint, RpcTransactionOutput, RpcUtxoEntry,
+    RpcBlock, RpcHash, RpcOptionalTransaction, RpcOptionalTransactionInput,
+    RpcOptionalTransactionOutpoint, RpcOptionalTransactionOutput, RpcOptionalUtxoEntry,
+    RpcTransaction, RpcTransactionInput, RpcTransactionOutpoint, RpcTransactionOutput,
+    RpcUtxoEntry,
 };
 use kaspa_txscript::script_class::ScriptClass;
 use kaspa_txscript::standard::extract_script_pub_key_address;
@@ -78,15 +79,28 @@ impl From<RpcBlock> for CacheBlock {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct CacheCovenantBinding {
+    pub authorizing_input: u16,
+    pub covenant_id: Hash,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CacheTransactionOutput {
     pub value: u64,
     pub script_public_key: CacheScriptPublicKey,
     pub script_public_key_type: CacheScriptClass,
     pub script_public_key_address: String,
+    pub covenant: Option<CacheCovenantBinding>,
 }
 
 impl From<RpcOptionalTransactionOutput> for CacheTransactionOutput {
     fn from(value: RpcOptionalTransactionOutput) -> Self {
+        let covenant = value.covenant.and_then(|c| {
+            c.0.map(|binding| CacheCovenantBinding {
+                authorizing_input: binding.0.authorizing_input,
+                covenant_id: binding.0.covenant_id,
+            })
+        });
         Self {
             value: value.value.unwrap(),
             script_public_key: value.script_public_key.unwrap(),
@@ -102,12 +116,17 @@ impl From<RpcOptionalTransactionOutput> for CacheTransactionOutput {
                 .script_public_key_address
                 .unwrap()
                 .to_string(),
+            covenant,
         }
     }
 }
 
 impl From<RpcTransactionOutput> for CacheTransactionOutput {
     fn from(value: RpcTransactionOutput) -> Self {
+        let covenant = value.covenant.map(|binding| CacheCovenantBinding {
+            authorizing_input: binding.0.authorizing_input,
+            covenant_id: binding.0.covenant_id,
+        });
         Self {
             value: value.value,
             script_public_key: value.script_public_key,
@@ -117,6 +136,7 @@ impl From<RpcTransactionOutput> for CacheTransactionOutput {
                 .unwrap()
                 .script_public_key_address
                 .to_string(),
+            covenant,
         }
     }
 }
@@ -152,6 +172,7 @@ pub struct CacheUtxoEntry {
     pub is_coinbase: bool,
     pub script_public_key_type: Option<CacheScriptClass>,
     pub script_public_key_address: Option<String>,
+    pub covenant_id: Option<RpcHash>,
 }
 
 impl From<RpcOptionalUtxoEntry> for CacheUtxoEntry {
@@ -169,6 +190,7 @@ impl From<RpcOptionalUtxoEntry> for CacheUtxoEntry {
             is_coinbase: value.is_coinbase.unwrap(),
             script_public_key_type: Some(spk_type),
             script_public_key_address: Some(address.to_string()),
+            covenant_id: value.covenant_id,
         }
     }
 }
@@ -188,6 +210,7 @@ impl From<RpcUtxoEntry> for CacheUtxoEntry {
             is_coinbase: value.is_coinbase,
             script_public_key_type: Some(spk_type),
             script_public_key_address: Some(address.to_string()),
+            covenant_id: value.covenant_id,
         }
     }
 }
@@ -198,6 +221,7 @@ pub struct CacheTransactionInput {
     pub signature_script: Vec<u8>,
     pub sequence: u64,
     pub sig_op_count: u8,
+    pub compute_budget: u16,
     pub utxo_entry: Option<CacheUtxoEntry>,
 }
 
@@ -214,6 +238,7 @@ impl From<RpcOptionalTransactionInput> for CacheTransactionInput {
             signature_script: value.signature_script.unwrap(),
             sequence: value.sequence.unwrap(),
             sig_op_count: value.sig_op_count.unwrap(),
+            compute_budget: value.compute_budget.unwrap_or(0),
             utxo_entry: cache_utxo,
         }
     }
@@ -226,6 +251,7 @@ impl From<RpcTransactionInput> for CacheTransactionInput {
             signature_script: value.signature_script,
             sequence: value.sequence,
             sig_op_count: value.sig_op_count,
+            compute_budget: value.compute_budget,
             utxo_entry: None,
         }
     }
