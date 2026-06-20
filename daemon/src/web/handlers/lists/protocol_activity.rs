@@ -133,11 +133,10 @@ pub async fn get_protocol_activity(
 
     // Determine query type and build SQL
     let (sql_query, query_params, start_param, end_param) =
-        if timeframe == "custom" && custom_start_iso.is_some() && custom_end_iso.is_some() {
-            // Custom date range
-            let start_str = custom_start_iso.unwrap();
-            let end_str = custom_end_iso.unwrap();
-
+        if let (Some(start_str), Some(end_str)) = (
+            custom_start_iso.filter(|_| timeframe == "custom"),
+            custom_end_iso,
+        ) {
             // Parse and validate dates
             let custom_start = match DateTime::parse_from_rfc3339(start_str) {
                 Ok(dt) => dt.with_timezone(&Utc),

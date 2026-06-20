@@ -109,7 +109,7 @@ impl Stats {
         let max = values[values.len() - 1];
 
         let mid = values.len() / 2;
-        let median = if values.len().is_multiple_of(2) == 0 {
+        let median = if values.len().is_multiple_of(2) {
             ((values[mid - 1] + values[mid]) as f64) / 2.0
         } else {
             values[mid] as f64

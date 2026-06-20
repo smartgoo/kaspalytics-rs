@@ -28,17 +28,17 @@ futures = "0.3.31"
 hex = "0.4.3"
 http = "1.3.1"
 
-kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-# kaspa-grpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-hashes = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
-kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "a492b6a" }
+kaspa-addresses = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-consensus = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-consensus-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-database = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+# kaspa-grpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-hashes = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-rpc-core = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-txscript = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-utils = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-utxoindex = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
+kaspa-wrpc-client = { git = "https://github.com/smartgoo/rusty-kaspa.git", rev = "6f6c2aa4" }
 
 # kaspa-addresses = { path = "../rusty-kaspa/crypto/addresses" }
 # kaspa-consensus = { path = "../rusty-kaspa/consensus" }

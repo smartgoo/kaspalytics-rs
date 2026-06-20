@@ -308,6 +308,7 @@ impl Writer {
             }
         }
 
+        #[allow(clippy::type_complexity)]
         let mut addr_flushes: Vec<(u64, Vec<(String, u64, u64)>)> = Vec::new();
         for (minute_ms, entries) in by_minute {
             if let Some(flush) = self.address_window.ingest(minute_ms, entries) {

@@ -1,5 +1,9 @@
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
+type AddressStats = (u64, u64);
+type MinuteEntry = (u64, HashMap<String, AddressStats>);
+pub type FlushResult = Option<(u64, Vec<(String, u64, u64)>)>;
+
 /// Tracks rolling per-minute address activity over a configurable window.
 ///
 /// Accumulates address spending data per minute and, when a minute completes,
@@ -7,9 +11,9 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 pub struct AddressActivityWindow {
     /// Completed minutes in the window: (minute_bucket_ms, {address → (tx_count, total_spent)})
     /// Oldest entry at front; evicted when older than window_duration_ms.
-    minute_log: VecDeque<(u64, HashMap<String, (u64, u64)>)>,
+    minute_log: VecDeque<MinuteEntry>,
     /// Running totals across all minutes currently in the window.
-    totals: HashMap<String, (u64, u64)>,
+    totals: HashMap<String, AddressStats>,
     /// (tx_count, address) ordered ascending — smallest count at front.
     ranked: BTreeSet<(u64, String)>,
     /// Minute bucket (unix ms, minute-aligned) currently being accumulated.
@@ -43,7 +47,7 @@ impl AddressActivityWindow {
         &mut self,
         minute_bucket: u64,
         entries: HashMap<String, (u64, u64)>,
-    ) -> Option<(u64, Vec<(String, u64, u64)>)> {
+    ) -> FlushResult {
         // First call ever: initialise pending and return nothing.
         if self.pending_minute == 0 {
             self.pending_minute = minute_bucket;
@@ -78,11 +82,11 @@ impl AddressActivityWindow {
     }
 
     /// Force-flush the current pending minute (e.g. on shutdown).
-    pub fn flush(&mut self) -> Option<(u64, Vec<(String, u64, u64)>)> {
+    pub fn flush(&mut self) -> FlushResult {
         self.flush_pending()
     }
 
-    fn flush_pending(&mut self) -> Option<(u64, Vec<(String, u64, u64)>)> {
+    fn flush_pending(&mut self) -> FlushResult {
         if self.pending.is_empty() {
             return None;
         }

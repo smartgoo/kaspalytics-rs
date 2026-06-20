@@ -133,7 +133,7 @@ fn detect_transaction_protocol(
 
     // Check for Igra Labs L2: first byte upper nibble = 0x9, lower nibble = 0x1–0x7
     if let Some(&first_byte) = transaction.payload.first() {
-        if first_byte >= 0x91 && first_byte <= 0x97 {
+        if (0x91..=0x97).contains(&first_byte) {
             return Some(TransactionProtocol::Igra);
         }
     }
@@ -220,7 +220,7 @@ fn transaction_add_pipeline(
 
     // Transaction is not in cache
     // Run process to determine TX type, protocol
-    if transaction.subnetwork_id.clone() == SUBNETWORK_ID_COINBASE {
+    if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
         dag_cache
             .seconds
             .entry(block_time / 1000)
