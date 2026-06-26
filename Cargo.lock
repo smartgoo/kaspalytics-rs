@@ -3062,6 +3062,7 @@ dependencies = [
  "kaspa-consensus-core",
  "kaspa-database",
  "kaspa-rpc-core",
+ "kaspa-txscript",
  "kaspa-utils",
  "lettre",
  "log",

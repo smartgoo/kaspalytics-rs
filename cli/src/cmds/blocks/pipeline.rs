@@ -11,6 +11,7 @@ use kaspa_consensus_core::Hash;
 use kaspa_database::prelude::StoreError;
 use kaspa_txscript::standard::extract_script_pub_key_address;
 use kaspalytics_utils::config::Config;
+use kaspalytics_utils::covenant::{tally_covenant_metrics, ResolvedInputView, TxOutputView};
 use kaspalytics_utils::kaspad::db::ConsensusStorageSecondary;
 use kaspalytics_utils::log::LogTarget;
 use log::{debug, error, info};
@@ -252,13 +253,45 @@ impl BlockAnalysis {
                     stats.input_count += tx.inputs.len() as u64;
                     stats.output_count_regular_tx += tx.outputs.len() as u64;
 
+                    // Output-side data: accumulate value and recipients, and build
+                    // the covenant-tally view. These depend only on the transaction's
+                    // own outputs, so they are tallied even when an input fails to
+                    // resolve below — keeping the per-script-class counts reconciled
+                    // against output_count_regular_tx (counted above).
+                    let mut tx_output_amount = 0u64;
+                    let mut output_views = Vec::with_capacity(tx.outputs.len());
+                    for output in tx.outputs.iter() {
+                        tx_output_amount += output.value;
+
+                        output_views.push(TxOutputView {
+                            script_public_key: &output.script_public_key,
+                            is_covenant: output.covenant.is_some(),
+                        });
+
+                        let address = extract_script_pub_key_address(
+                            &output.script_public_key,
+                            network_id.into(),
+                        )
+                        .unwrap();
+
+                        stats.unique_recipients.insert(address);
+                    }
+
+                    // Input-side data: resolve each spent output. Unresolved inputs
+                    // are recorded but contribute nothing to the covenant tally.
                     let mut all_outpoints_resolved = true;
-                    let mut tx_fee = 0;
+                    let mut tx_input_amount = 0u64;
+                    let mut resolved_input_views = Vec::with_capacity(tx.inputs.len());
                     for input in tx.inputs.iter() {
-                        let previous_outpoint = utxos.get(&input.previous_outpoint);
-                        match previous_outpoint {
+                        match utxos.get(&input.previous_outpoint) {
                             Some(previous_outpoint) => {
-                                tx_fee += previous_outpoint.amount;
+                                tx_input_amount += previous_outpoint.amount;
+
+                                resolved_input_views.push(ResolvedInputView {
+                                    spent_script_public_key: &previous_outpoint.script_public_key,
+                                    spent_is_covenant: previous_outpoint.covenant_id.is_some(),
+                                    signature_script: &input.signature_script,
+                                });
 
                                 let address = extract_script_pub_key_address(
                                     &previous_outpoint.script_public_key,
@@ -275,24 +308,31 @@ impl BlockAnalysis {
                         }
                     }
 
+                    // Single shared classification + covenant tally, identical to the
+                    // daemon's live metrics.
+                    let tally = tally_covenant_metrics(output_views, resolved_input_views);
+
+                    stats.output_count_pubkey += tally.output_count_pubkey;
+                    stats.output_count_pubkey_ecdsa += tally.output_count_pubkey_ecdsa;
+                    stats.output_count_script_hash += tally.output_count_script_hash;
+                    stats.output_count_nonstandard += tally.output_count_nonstandard;
+                    if tally.uses_introspection_opcode {
+                        stats.introspection_opcode_tx_count += 1;
+                    }
+                    stats.covenant_outputs_created += tally.covenant_outputs_created;
+                    if tally.covenant_outputs_created > 0 {
+                        stats.covenant_creating_tx_count += 1;
+                    }
+                    stats.covenant_outputs_spent += tally.covenant_outputs_spent;
+
                     if !all_outpoints_resolved {
+                        // A reliable fee needs every input resolved; the covenant
+                        // tally above already reflects only the resolved inputs.
                         stats.skipped_tx_count_cannot_resolve_inputs += 1;
                         continue;
                     }
 
-                    for output in tx.outputs.iter() {
-                        tx_fee -= output.value;
-
-                        let address = extract_script_pub_key_address(
-                            &output.script_public_key,
-                            network_id.into(),
-                        )
-                        .unwrap();
-
-                        stats.unique_recipients.insert(address);
-                    }
-
-                    stats.fees.push(tx_fee);
+                    stats.fees.push(tx_input_amount - tx_output_amount);
 
                     total_tx_count += 1;
                     transaction_cache.insert(tx.id());

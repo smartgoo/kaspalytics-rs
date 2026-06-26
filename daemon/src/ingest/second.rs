@@ -1,6 +1,7 @@
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use kaspalytics_utils::covenant::CovenantTally;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -27,6 +28,24 @@ pub struct SecondMetrics {
 
     // Count of various protocol transactions
     pub protocol_transaction_counts: HashMap<TransactionProtocol, u64>,
+
+    // Counts of accepted transaction outputs by script class (per output)
+    pub output_count_pubkey: u64,
+    pub output_count_pubkey_ecdsa: u64,
+    pub output_count_script_hash: u64,
+    pub output_count_nonstandard: u64,
+
+    // Count of accepted transactions that use a covenant / introspection opcode
+    pub introspection_opcode_tx_count: u64,
+
+    // Count of accepted transactions that create at least one covenant-bound output
+    pub covenant_creating_tx_count: u64,
+
+    // Count of covenant-bound outputs created by accepted transactions
+    pub covenant_outputs_created: u64,
+
+    // Count of covenant-bound outputs spent by accepted transactions
+    pub covenant_outputs_spent: u64,
 
     pub updated_at: DateTime<Utc>,
 }
@@ -104,5 +123,50 @@ impl SecondMetrics {
             .get(protocol)
             .copied()
             .unwrap_or(0)
+    }
+
+    pub fn apply_script_covenant_delta(&mut self, delta: &CovenantTally) {
+        self.output_count_pubkey += delta.output_count_pubkey;
+        self.output_count_pubkey_ecdsa += delta.output_count_pubkey_ecdsa;
+        self.output_count_script_hash += delta.output_count_script_hash;
+        self.output_count_nonstandard += delta.output_count_nonstandard;
+        if delta.uses_introspection_opcode {
+            self.introspection_opcode_tx_count += 1;
+        }
+        if delta.covenant_outputs_created > 0 {
+            self.covenant_creating_tx_count += 1;
+        }
+        self.covenant_outputs_created += delta.covenant_outputs_created;
+        self.covenant_outputs_spent += delta.covenant_outputs_spent;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn remove_script_covenant_delta(&mut self, delta: &CovenantTally) {
+        self.output_count_pubkey = self
+            .output_count_pubkey
+            .saturating_sub(delta.output_count_pubkey);
+        self.output_count_pubkey_ecdsa = self
+            .output_count_pubkey_ecdsa
+            .saturating_sub(delta.output_count_pubkey_ecdsa);
+        self.output_count_script_hash = self
+            .output_count_script_hash
+            .saturating_sub(delta.output_count_script_hash);
+        self.output_count_nonstandard = self
+            .output_count_nonstandard
+            .saturating_sub(delta.output_count_nonstandard);
+        if delta.uses_introspection_opcode {
+            self.introspection_opcode_tx_count =
+                self.introspection_opcode_tx_count.saturating_sub(1);
+        }
+        if delta.covenant_outputs_created > 0 {
+            self.covenant_creating_tx_count = self.covenant_creating_tx_count.saturating_sub(1);
+        }
+        self.covenant_outputs_created = self
+            .covenant_outputs_created
+            .saturating_sub(delta.covenant_outputs_created);
+        self.covenant_outputs_spent = self
+            .covenant_outputs_spent
+            .saturating_sub(delta.covenant_outputs_spent);
+        self.updated_at = Utc::now();
     }
 }

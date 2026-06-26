@@ -49,6 +49,26 @@ pub struct Stats {
 
     pub unique_senders: HashSet<Address>,
     pub unique_recipients: HashSet<Address>,
+
+    // -----------------------------------
+    // Script class / covenant Summary
+    // Output counts by script class (per output, regular transactions)
+    pub output_count_pubkey: u64,
+    pub output_count_pubkey_ecdsa: u64,
+    pub output_count_script_hash: u64,
+    pub output_count_nonstandard: u64,
+
+    // Count of transactions using a covenant / introspection opcode
+    pub introspection_opcode_tx_count: u64,
+
+    // Count of transactions creating at least one covenant-bound output
+    pub covenant_creating_tx_count: u64,
+
+    // Count of covenant-bound outputs created
+    pub covenant_outputs_created: u64,
+
+    // Count of covenant-bound outputs spent
+    pub covenant_outputs_spent: u64,
 }
 
 impl Stats {
@@ -69,6 +89,14 @@ impl Stats {
             skipped_tx_count_cannot_resolve_inputs: 0,
             unique_senders: HashSet::<Address>::new(),
             unique_recipients: HashSet::<Address>::new(),
+            output_count_pubkey: 0,
+            output_count_pubkey_ecdsa: 0,
+            output_count_script_hash: 0,
+            output_count_nonstandard: 0,
+            introspection_opcode_tx_count: 0,
+            covenant_creating_tx_count: 0,
+            covenant_outputs_created: 0,
+            covenant_outputs_spent: 0,
         }
     }
 }
@@ -199,6 +227,15 @@ impl Stats {
             target
                 .unique_recipients
                 .extend(per_second_stats.unique_recipients);
+
+            target.output_count_pubkey += per_second_stats.output_count_pubkey;
+            target.output_count_pubkey_ecdsa += per_second_stats.output_count_pubkey_ecdsa;
+            target.output_count_script_hash += per_second_stats.output_count_script_hash;
+            target.output_count_nonstandard += per_second_stats.output_count_nonstandard;
+            target.introspection_opcode_tx_count += per_second_stats.introspection_opcode_tx_count;
+            target.covenant_creating_tx_count += per_second_stats.covenant_creating_tx_count;
+            target.covenant_outputs_created += per_second_stats.covenant_outputs_created;
+            target.covenant_outputs_spent += per_second_stats.covenant_outputs_spent;
         }
 
         rolled_up
@@ -284,9 +321,44 @@ impl Stats {
         Ok(())
     }
 
+    async fn save_script_covenant_summary(&mut self, pool: &PgPool) -> Result<(), sqlx::Error> {
+        let date = DateTime::from_timestamp(self.epoch_second as i64, 0)
+            .unwrap()
+            .date_naive();
+
+        sqlx::query(
+            r#"
+                INSERT INTO script_covenant_daily_summary
+                (
+                    date,
+                    output_count_pubkey, output_count_pubkey_ecdsa,
+                    output_count_script_hash, output_count_nonstandard,
+                    introspection_opcode_tx_count, covenant_creating_tx_count,
+                    covenant_outputs_created, covenant_outputs_spent
+                )
+                VALUES
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+        )
+        .bind(date)
+        .bind(self.output_count_pubkey as i64)
+        .bind(self.output_count_pubkey_ecdsa as i64)
+        .bind(self.output_count_script_hash as i64)
+        .bind(self.output_count_nonstandard as i64)
+        .bind(self.introspection_opcode_tx_count as i64)
+        .bind(self.covenant_creating_tx_count as i64)
+        .bind(self.covenant_outputs_created as i64)
+        .bind(self.covenant_outputs_spent as i64)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn save(&mut self, pool: &PgPool) -> Result<(), sqlx::Error> {
         self.save_block_summary(pool).await?;
         self.save_transaction_summary(pool).await?;
+        self.save_script_covenant_summary(pool).await?;
 
         Ok(())
     }
@@ -328,6 +400,20 @@ impl fmt::Debug for Stats {
             .field("unique_senders", &self.unique_sender_count())
             .field("unique_recipients", &self.unique_recipient_count())
             .field("unique_addresses", &self.unique_address_count())
+            .field("output_count_pubkey", &self.output_count_pubkey)
+            .field("output_count_pubkey_ecdsa", &self.output_count_pubkey_ecdsa)
+            .field("output_count_script_hash", &self.output_count_script_hash)
+            .field("output_count_nonstandard", &self.output_count_nonstandard)
+            .field(
+                "introspection_opcode_tx_count",
+                &self.introspection_opcode_tx_count,
+            )
+            .field(
+                "covenant_creating_tx_count",
+                &self.covenant_creating_tx_count,
+            )
+            .field("covenant_outputs_created", &self.covenant_outputs_created)
+            .field("covenant_outputs_spent", &self.covenant_outputs_spent)
             .finish()
     }
 }

@@ -47,6 +47,11 @@ enum SseKey {
     UniqueAcceptedTransactionCount24h,
     UniqueAcceptedTransactionCountPerHour24h,
     ProtocolTransactionCounts24h,
+    OutputScriptClassCounts24h,
+    IntrospectionOpcodeTransactionCount24h,
+    CovenantCreatingTransactionCount24h,
+    CovenantOutputsCreated24h,
+    CovenantOutputsSpent24h,
 
     // Fees
     FeeMean60s,
@@ -341,6 +346,41 @@ impl SseData {
         self.set(
             SseKey::ProtocolTransactionCounts24h,
             SseField::from(serde_json::to_string(&protocol_counts).unwrap()),
+        );
+
+        // Output counts by script class (per output)
+        self.set(
+            SseKey::OutputScriptClassCounts24h,
+            SseField::from(
+                serde_json::to_string(&tx_counter::output_script_class_counts(
+                    dag_cache, threshold,
+                ))
+                .unwrap(),
+            ),
+        );
+
+        // Transactions using covenant / introspection opcodes
+        self.set(
+            SseKey::IntrospectionOpcodeTransactionCount24h,
+            SseField::from(tx_counter::introspection_opcode_tx_count(
+                dag_cache, threshold,
+            )),
+        );
+
+        // Covenant id activity
+        self.set(
+            SseKey::CovenantCreatingTransactionCount24h,
+            SseField::from(tx_counter::covenant_creating_tx_count(dag_cache, threshold)),
+        );
+
+        self.set(
+            SseKey::CovenantOutputsCreated24h,
+            SseField::from(tx_counter::covenant_outputs_created(dag_cache, threshold)),
+        );
+
+        self.set(
+            SseKey::CovenantOutputsSpent24h,
+            SseField::from(tx_counter::covenant_outputs_spent(dag_cache, threshold)),
         );
 
         self.set(

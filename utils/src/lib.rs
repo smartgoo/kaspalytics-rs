@@ -1,5 +1,6 @@
 pub mod coingecko;
 pub mod config;
+pub mod covenant;
 pub mod database;
 pub mod dirs;
 pub mod email;
@@ -8,6 +9,7 @@ pub mod granularity;
 pub mod kaspad;
 pub mod log;
 pub mod math;
+pub mod script;
 
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspad::db::KASPAD_RDB_FD_ALLOCATION;

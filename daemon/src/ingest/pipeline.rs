@@ -7,6 +7,9 @@ use crate::ingest::model::CacheUtxoEntry;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcBlock, RpcChainBlockAcceptedTransactions};
+use kaspalytics_utils::covenant::{
+    tally_covenant_metrics, CovenantTally, ResolvedInputView, TxOutputView,
+};
 use kaspalytics_utils::log::LogTarget;
 use log::warn;
 use std::sync::Arc;
@@ -198,6 +201,28 @@ fn detect_transaction_protocol(
     None
 }
 
+/// Computes a transaction's contribution to the per-second script-class and
+/// covenant metrics, using the shared tally so the daemon and CLI stay in sync.
+/// Output classes and covenant-bound outputs are counted per output; covenant
+/// spends and P2SH-revealed introspection are counted from each input's resolved
+/// UTXO entry (unresolved inputs contribute nothing).
+fn script_covenant_delta(transaction: &CacheTransaction) -> CovenantTally {
+    let outputs = transaction.outputs.iter().map(|output| TxOutputView {
+        script_public_key: &output.script_public_key,
+        is_covenant: output.covenant.is_some(),
+    });
+
+    let resolved_inputs = transaction.inputs.iter().filter_map(|input| {
+        input.utxo_entry.as_ref().map(|utxo_entry| ResolvedInputView {
+            spent_script_public_key: &utxo_entry.script_public_key,
+            spent_is_covenant: utxo_entry.covenant_id.is_some(),
+            signature_script: &input.signature_script,
+        })
+    });
+
+    tally_covenant_metrics(outputs, resolved_inputs)
+}
+
 fn transaction_add_pipeline(
     dag_cache: Arc<DagCache>,
     block_hash: Hash,
@@ -267,22 +292,28 @@ fn add_transaction_acceptance(
             .entry(tx_timestamp / 1000)
             .and_modify(|v| v.increment_coinbase_accepted_transaction_count());
     } else {
-        // Cacluate fee paid
+        // Calculate fee paid. A fee can only be computed when every input's
+        // spent (previous) output is resolved; otherwise total_input_amount is
+        // understated and the subtraction would underflow. When any input is
+        // unresolved we record no fee for this transaction rather than a wrong
+        // one — downstream consumers treat a None fee as zero.
+        let all_inputs_resolved = tx.inputs.iter().all(|input| input.utxo_entry.is_some());
+
         let total_input_amount = tx
             .inputs
             .iter()
-            .map(|input| {
-                input
-                    .utxo_entry
-                    .as_ref()
-                    .map(|utxo_entry| utxo_entry.amount)
-                    .unwrap_or(0)
-            })
+            .filter_map(|input| input.utxo_entry.as_ref().map(|utxo_entry| utxo_entry.amount))
             .sum::<u64>();
 
         let total_output_amount = tx.outputs.iter().map(|output| output.value).sum::<u64>();
 
-        tx.fee = Some(total_input_amount - total_output_amount);
+        tx.fee = if all_inputs_resolved {
+            total_input_amount.checked_sub(total_output_amount)
+        } else {
+            None
+        };
+
+        let delta = script_covenant_delta(&tx);
 
         // Update metrics for given second
         dag_cache
@@ -290,12 +321,21 @@ fn add_transaction_acceptance(
             .entry(tx_timestamp / 1000)
             .and_modify(|v| {
                 v.increment_unique_accepted_transaction_count();
-                v.increment_total_fees(tx.fee.unwrap());
+
+                // Only accumulate a fee for transactions with a fully-resolved
+                // input set. Covenant-spend counts inside the delta are likewise
+                // only derived from resolved inputs.
+                if let Some(fee) = tx.fee {
+                    v.increment_total_fees(fee);
+                }
 
                 // Increment Protocol count for given second
                 if let Some(ref protocol) = tx.protocol {
                     v.increment_protocol_transaction_count(protocol.clone());
                 }
+
+                // Increment script-class and covenant counts for given second
+                v.apply_script_covenant_delta(&delta);
             });
     }
 }
@@ -398,6 +438,8 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
             .entry(tx_timestamp / 1000)
             .and_modify(|v| v.decrement_coinbase_accepted_transaction_count());
     } else {
+        let delta = script_covenant_delta(&tx);
+
         dag_cache
             .seconds
             .entry(tx_timestamp / 1000)
@@ -411,6 +453,8 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
                 if let Some(ref protocol) = tx.protocol {
                     v.decrement_protocol_transaction_count(protocol.clone());
                 }
+
+                v.remove_script_covenant_delta(&delta);
             });
     }
 }

@@ -29,6 +29,9 @@ struct UtxoSetLoadResults {
 
     utxo_count: u64,
 
+    // Count of UTXOs bound to a covenant id
+    covenant_utxo_count: u64,
+
     // Total sompi held by addresses with a dust balance
     dust_address_sompi_total: u64,
 
@@ -111,6 +114,21 @@ impl UtxoSnapshotHeader {
         let sql = r#"
             UPDATE utxo_snapshot_header
             SET utxo_count = $1
+            WHERE id = $2
+        "#;
+
+        sqlx::query(sql)
+            .bind(count as i64)
+            .bind(self.id)
+            .execute(&self.pg_pool)
+            .await
+            .unwrap();
+    }
+
+    async fn set_covenant_utxo_count(&self, count: u64) {
+        let sql = r#"
+            UPDATE utxo_snapshot_header
+            SET utxo_count_covenant = $1
             WHERE id = $2
         "#;
 
@@ -259,6 +277,10 @@ impl UtxoBasedPipeline {
 
             let (key, utxo) = c.unwrap();
 
+            if utxo.covenant_id.is_some() {
+                results.covenant_utxo_count += 1;
+            }
+
             if utxo.amount <= 1000 {
                 results.dust_address_count += 1;
                 results.dust_address_sompi_total += utxo.amount;
@@ -400,6 +422,9 @@ impl UtxoBasedPipeline {
 
         utxo_snapshot_header
             .set_utxo_count(utxo_set_results.utxo_count)
+            .await;
+        utxo_snapshot_header
+            .set_covenant_utxo_count(utxo_set_results.covenant_utxo_count)
             .await;
         utxo_snapshot_header
             .set_unique_address_count(
