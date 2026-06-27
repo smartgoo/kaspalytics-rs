@@ -57,6 +57,11 @@ pub struct CovenantTally {
     /// script, uses the ZK precompile opcode (`OpZkPrecompile`).
     pub uses_zk_precompile_opcode: bool,
     /// Number of P2SH outputs spent by this transaction's resolved inputs whose
+    /// revealed redeem script uses a covenant / introspection opcode. Unresolved
+    /// inputs are not represented, so this is a lower bound when the caller could
+    /// not resolve every input.
+    pub introspection_opcode_outputs_spent: u64,
+    /// Number of P2SH outputs spent by this transaction's resolved inputs whose
     /// revealed redeem script uses the ZK precompile opcode. Unresolved inputs
     /// are not represented, so this is a lower bound when the caller could not
     /// resolve every input.
@@ -119,6 +124,7 @@ pub fn tally_covenant_metrics<'a>(
         if ScriptClass::from_script(input.spent_script_public_key) == ScriptClass::ScriptHash {
             if signature_script_reveals_introspection(input.signature_script) {
                 uses_introspection = true;
+                tally.introspection_opcode_outputs_spent += 1;
             }
             if signature_script_reveals_zk_precompile(input.signature_script) {
                 uses_zk_precompile = true;
@@ -251,6 +257,8 @@ mod tests {
 
         assert_eq!(tally.output_count_nonstandard, 1);
         assert!(tally.uses_introspection_opcode);
+        // Detected in an output script, not a spend, so nothing is "spent".
+        assert_eq!(tally.introspection_opcode_outputs_spent, 0);
     }
 
     #[test]
@@ -268,6 +276,7 @@ mod tests {
         );
 
         assert!(tally.uses_introspection_opcode);
+        assert_eq!(tally.introspection_opcode_outputs_spent, 1);
     }
 
     #[test]
@@ -290,6 +299,7 @@ mod tests {
         assert!(tally.uses_zk_precompile_opcode);
         assert!(!tally.uses_introspection_opcode);
         assert_eq!(tally.zk_precompile_outputs_spent, 1);
+        assert_eq!(tally.introspection_opcode_outputs_spent, 0);
     }
 
     #[test]
@@ -325,6 +335,7 @@ mod tests {
         );
 
         assert!(!tally.uses_introspection_opcode);
+        assert_eq!(tally.introspection_opcode_outputs_spent, 0);
     }
 
     #[test]
@@ -354,6 +365,7 @@ mod tests {
         );
 
         assert!(tally.uses_introspection_opcode);
+        assert_eq!(tally.introspection_opcode_outputs_spent, 1);
         assert_eq!(tally.output_count_pubkey, 1);
     }
 

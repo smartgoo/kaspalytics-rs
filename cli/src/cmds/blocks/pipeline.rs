@@ -319,6 +319,8 @@ impl BlockAnalysis {
                     if tally.uses_introspection_opcode {
                         stats.introspection_opcode_tx_count += 1;
                     }
+                    stats.introspection_opcode_outputs_spent +=
+                        tally.introspection_opcode_outputs_spent;
                     if tally.uses_zk_precompile_opcode {
                         stats.zk_precompile_tx_count += 1;
                     }

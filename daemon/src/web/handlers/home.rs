@@ -49,6 +49,7 @@ enum SseKey {
     ProtocolTransactionCounts24h,
     OutputScriptClassCounts24h,
     IntrospectionOpcodeTransactionCount24h,
+    IntrospectionOpcodeOutputsSpent24h,
     ZkPrecompileTransactionCount24h,
     ZkPrecompileOutputsSpent24h,
     CovenantCreatingTransactionCount24h,
@@ -365,6 +366,14 @@ impl SseData {
         self.set(
             SseKey::IntrospectionOpcodeTransactionCount24h,
             SseField::from(tx_counter::introspection_opcode_tx_count(
+                dag_cache, threshold,
+            )),
+        );
+
+        // P2SH outputs spent revealing a covenant / introspection opcode
+        self.set(
+            SseKey::IntrospectionOpcodeOutputsSpent24h,
+            SseField::from(tx_counter::introspection_opcode_outputs_spent(
                 dag_cache, threshold,
             )),
         );

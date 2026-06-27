@@ -61,6 +61,10 @@ pub struct Stats {
     // Count of transactions using a covenant / introspection opcode
     pub introspection_opcode_tx_count: u64,
 
+    // Count of P2SH outputs spent whose revealed redeem script uses a covenant /
+    // introspection opcode
+    pub introspection_opcode_outputs_spent: u64,
+
     // Count of transactions using the ZK precompile opcode
     pub zk_precompile_tx_count: u64,
 
@@ -101,6 +105,7 @@ impl Stats {
             output_count_script_hash: 0,
             output_count_nonstandard: 0,
             introspection_opcode_tx_count: 0,
+            introspection_opcode_outputs_spent: 0,
             zk_precompile_tx_count: 0,
             zk_precompile_outputs_spent: 0,
             covenant_creating_tx_count: 0,
@@ -242,6 +247,8 @@ impl Stats {
             target.output_count_script_hash += per_second_stats.output_count_script_hash;
             target.output_count_nonstandard += per_second_stats.output_count_nonstandard;
             target.introspection_opcode_tx_count += per_second_stats.introspection_opcode_tx_count;
+            target.introspection_opcode_outputs_spent +=
+                per_second_stats.introspection_opcode_outputs_spent;
             target.zk_precompile_tx_count += per_second_stats.zk_precompile_tx_count;
             target.zk_precompile_outputs_spent += per_second_stats.zk_precompile_outputs_spent;
             target.covenant_creating_tx_count += per_second_stats.covenant_creating_tx_count;
@@ -344,13 +351,14 @@ impl Stats {
                     date,
                     output_count_pubkey, output_count_pubkey_ecdsa,
                     output_count_script_hash, output_count_nonstandard,
-                    introspection_opcode_tx_count, zk_precompile_tx_count,
+                    introspection_opcode_tx_count, introspection_opcode_outputs_spent,
+                    zk_precompile_tx_count,
                     zk_precompile_outputs_spent,
                     covenant_creating_tx_count,
                     covenant_outputs_created, covenant_outputs_spent
                 )
                 VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
         )
         .bind(date)
@@ -359,6 +367,7 @@ impl Stats {
         .bind(self.output_count_script_hash as i64)
         .bind(self.output_count_nonstandard as i64)
         .bind(self.introspection_opcode_tx_count as i64)
+        .bind(self.introspection_opcode_outputs_spent as i64)
         .bind(self.zk_precompile_tx_count as i64)
         .bind(self.zk_precompile_outputs_spent as i64)
         .bind(self.covenant_creating_tx_count as i64)
@@ -422,6 +431,10 @@ impl fmt::Debug for Stats {
             .field(
                 "introspection_opcode_tx_count",
                 &self.introspection_opcode_tx_count,
+            )
+            .field(
+                "introspection_opcode_outputs_spent",
+                &self.introspection_opcode_outputs_spent,
             )
             .field("zk_precompile_tx_count", &self.zk_precompile_tx_count)
             .field(

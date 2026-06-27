@@ -38,6 +38,10 @@ pub struct SecondMetrics {
     // Count of accepted transactions that use a covenant / introspection opcode
     pub introspection_opcode_tx_count: u64,
 
+    // Count of P2SH outputs spent by accepted transactions whose revealed redeem
+    // script uses a covenant / introspection opcode
+    pub introspection_opcode_outputs_spent: u64,
+
     // Count of accepted transactions that use the ZK precompile opcode
     pub zk_precompile_tx_count: u64,
 
@@ -140,6 +144,7 @@ impl SecondMetrics {
         if delta.uses_introspection_opcode {
             self.introspection_opcode_tx_count += 1;
         }
+        self.introspection_opcode_outputs_spent += delta.introspection_opcode_outputs_spent;
         if delta.uses_zk_precompile_opcode {
             self.zk_precompile_tx_count += 1;
         }
@@ -169,6 +174,9 @@ impl SecondMetrics {
             self.introspection_opcode_tx_count =
                 self.introspection_opcode_tx_count.saturating_sub(1);
         }
+        self.introspection_opcode_outputs_spent = self
+            .introspection_opcode_outputs_spent
+            .saturating_sub(delta.introspection_opcode_outputs_spent);
         if delta.uses_zk_precompile_opcode {
             self.zk_precompile_tx_count = self.zk_precompile_tx_count.saturating_sub(1);
         }

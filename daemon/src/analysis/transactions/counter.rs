@@ -153,6 +153,16 @@ pub fn introspection_opcode_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) 
         .sum()
 }
 
+/// Count of P2SH outputs spent whose revealed redeem script uses a covenant /
+/// introspection opcode since `threshold`.
+pub fn introspection_opcode_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.introspection_opcode_outputs_spent)
+        .sum()
+}
+
 /// Count of accepted transactions using the ZK precompile opcode since `threshold`.
 pub fn zk_precompile_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache
