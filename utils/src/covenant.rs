@@ -15,7 +15,10 @@
 //!   actually contains a covenant / introspection opcode, detected by scanning
 //!   the redeem script revealed by a P2SH spend or a non-standard output script.
 
-use crate::script::{script_uses_introspection_opcode, signature_script_reveals_introspection};
+use crate::script::{
+    script_uses_introspection_opcode, script_uses_zk_precompile_opcode,
+    signature_script_reveals_introspection, signature_script_reveals_zk_precompile,
+};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_txscript::script_class::ScriptClass;
 
@@ -50,6 +53,14 @@ pub struct CovenantTally {
     /// True if any output script, or any resolved P2SH input's revealed redeem
     /// script, uses a covenant / introspection opcode.
     pub uses_introspection_opcode: bool,
+    /// True if any output script, or any resolved P2SH input's revealed redeem
+    /// script, uses the ZK precompile opcode (`OpZkPrecompile`).
+    pub uses_zk_precompile_opcode: bool,
+    /// Number of P2SH outputs spent by this transaction's resolved inputs whose
+    /// revealed redeem script uses the ZK precompile opcode. Unresolved inputs
+    /// are not represented, so this is a lower bound when the caller could not
+    /// resolve every input.
+    pub zk_precompile_outputs_spent: u64,
     /// Number of covenant-bound outputs created by this transaction.
     pub covenant_outputs_created: u64,
     /// Number of covenant-bound outputs spent by this transaction's resolved
@@ -72,6 +83,7 @@ pub fn tally_covenant_metrics<'a>(
 ) -> CovenantTally {
     let mut tally = CovenantTally::default();
     let mut uses_introspection = false;
+    let mut uses_zk_precompile = false;
 
     for output in outputs {
         match ScriptClass::from_script(output.script_public_key) {
@@ -85,10 +97,13 @@ pub fn tally_covenant_metrics<'a>(
             tally.covenant_outputs_created += 1;
         }
 
-        // A non-standard output may carry introspection opcodes directly in its
-        // script public key.
+        // A non-standard output may carry introspection / zk-precompile opcodes
+        // directly in its script public key.
         if script_uses_introspection_opcode(output.script_public_key.script()) {
             uses_introspection = true;
+        }
+        if script_uses_zk_precompile_opcode(output.script_public_key.script()) {
+            uses_zk_precompile = true;
         }
     }
 
@@ -101,14 +116,19 @@ pub fn tally_covenant_metrics<'a>(
         // only revealed in the redeem script of a pay-to-script-hash spend.
         // Gating on the spent output's class avoids misreading signature bytes
         // as opcodes on a non-P2SH spend.
-        if ScriptClass::from_script(input.spent_script_public_key) == ScriptClass::ScriptHash
-            && signature_script_reveals_introspection(input.signature_script)
-        {
-            uses_introspection = true;
+        if ScriptClass::from_script(input.spent_script_public_key) == ScriptClass::ScriptHash {
+            if signature_script_reveals_introspection(input.signature_script) {
+                uses_introspection = true;
+            }
+            if signature_script_reveals_zk_precompile(input.signature_script) {
+                uses_zk_precompile = true;
+                tally.zk_precompile_outputs_spent += 1;
+            }
         }
     }
 
     tally.uses_introspection_opcode = uses_introspection;
+    tally.uses_zk_precompile_opcode = uses_zk_precompile;
     tally
 }
 
@@ -158,6 +178,16 @@ mod tests {
     /// opcode (OpTxOutputCount). Mirrors a real P2SH covenant reveal.
     fn sig_revealing_introspection() -> Vec<u8> {
         let redeem = vec![codes::OpTxOutputCount, codes::OpCheckSig];
+        let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // dummy signature push
+        sig.push(redeem.len() as u8); // OP_DATA_2
+        sig.extend_from_slice(&redeem);
+        sig
+    }
+
+    /// A signature script whose final push is a redeem script using the ZK
+    /// precompile opcode. Mirrors a real P2SH OpZkPrecompile reveal.
+    fn sig_revealing_zk_precompile() -> Vec<u8> {
+        let redeem = vec![codes::OpZkPrecompile, codes::OpCheckSig];
         let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // dummy signature push
         sig.push(redeem.len() as u8); // OP_DATA_2
         sig.extend_from_slice(&redeem);
@@ -238,6 +268,43 @@ mod tests {
         );
 
         assert!(tally.uses_introspection_opcode);
+    }
+
+    #[test]
+    fn detects_zk_precompile_revealed_by_p2sh_input() {
+        // A P2SH input whose redeem script uses OpZkPrecompile sets the
+        // zk-precompile flag without setting the introspection flag (the opcode
+        // sits below the introspection range).
+        let spent = p2sh();
+        let sig = sig_revealing_zk_precompile();
+
+        let tally = tally_covenant_metrics(
+            std::iter::empty(),
+            vec![ResolvedInputView {
+                spent_script_public_key: &spent,
+                spent_is_covenant: false,
+                signature_script: &sig,
+            }],
+        );
+
+        assert!(tally.uses_zk_precompile_opcode);
+        assert!(!tally.uses_introspection_opcode);
+        assert_eq!(tally.zk_precompile_outputs_spent, 1);
+    }
+
+    #[test]
+    fn detects_zk_precompile_in_nonstandard_output_script() {
+        let out = spk(vec![codes::OpZkPrecompile, codes::OpCheckSig]);
+
+        let tally = tally_covenant_metrics(
+            vec![TxOutputView { script_public_key: &out, is_covenant: false }],
+            std::iter::empty(),
+        );
+
+        assert_eq!(tally.output_count_nonstandard, 1);
+        assert!(tally.uses_zk_precompile_opcode);
+        assert!(!tally.uses_introspection_opcode);
+        assert_eq!(tally.zk_precompile_outputs_spent, 0);
     }
 
     #[test]

@@ -18,6 +18,11 @@ pub const COVENANT_OPCODE_MIN: u8 = codes::OpTxVersion;
 /// `OpCheckSigFromStack{,ECDSA}` and `OpBlake3` additions).
 pub const COVENANT_OPCODE_MAX: u8 = codes::OpBlake3WithKey;
 
+/// Byte value of the ZK precompile opcode (`OpZkPrecompile`). It is covenant-
+/// gated like the introspection opcodes but sits below their contiguous range
+/// (`0xa6` vs `0xb2..=0xda`), so it is tracked separately.
+pub const ZK_PRECOMPILE_OPCODE: u8 = codes::OpZkPrecompile;
+
 /// Outcome of attempting to read a data push at the current cursor position.
 enum PushScan {
     /// `op` is not a data-push opcode; continue scanning from `cursor`.
@@ -64,16 +69,16 @@ fn scan_push(op: u8, script: &[u8], cursor: &mut usize) -> PushScan {
     }
 }
 
-/// Scans a single script body and returns true if it contains any opcode in the
-/// covenant / introspection range. Data pushes are skipped so that bytes inside
+/// Scans a single script body and returns true if any executed (non-pushed)
+/// opcode satisfies `matches`. Data pushes are skipped so that bytes inside
 /// pushed data are never mistaken for opcodes.
-pub fn script_uses_introspection_opcode(script: &[u8]) -> bool {
+fn script_contains_opcode(script: &[u8], matches: impl Fn(u8) -> bool) -> bool {
     let mut cursor = 0;
     while cursor < script.len() {
         let op = script[cursor];
         cursor += 1;
 
-        if (COVENANT_OPCODE_MIN..=COVENANT_OPCODE_MAX).contains(&op) {
+        if matches(op) {
             return true;
         }
 
@@ -87,6 +92,22 @@ pub fn script_uses_introspection_opcode(script: &[u8]) -> bool {
     }
 
     false
+}
+
+/// Scans a single script body and returns true if it contains any opcode in the
+/// covenant / introspection range. Data pushes are skipped so that bytes inside
+/// pushed data are never mistaken for opcodes.
+pub fn script_uses_introspection_opcode(script: &[u8]) -> bool {
+    script_contains_opcode(script, |op| {
+        (COVENANT_OPCODE_MIN..=COVENANT_OPCODE_MAX).contains(&op)
+    })
+}
+
+/// Scans a single script body and returns true if it contains the ZK precompile
+/// opcode (`OpZkPrecompile`). Data pushes are skipped so that bytes inside pushed
+/// data are never mistaken for opcodes.
+pub fn script_uses_zk_precompile_opcode(script: &[u8]) -> bool {
+    script_contains_opcode(script, |op| op == ZK_PRECOMPILE_OPCODE)
 }
 
 /// Returns the data of the last push operation in `script`, or `None` if there
@@ -127,6 +148,18 @@ fn last_push_payload(script: &[u8]) -> Option<&[u8]> {
 pub fn signature_script_reveals_introspection(signature_script: &[u8]) -> bool {
     match last_push_payload(signature_script) {
         Some(redeem) => script_uses_introspection_opcode(redeem),
+        None => false,
+    }
+}
+
+/// Returns true if the redeem script revealed by a signature script (its final
+/// data push) uses the ZK precompile opcode (`OpZkPrecompile`).
+///
+/// Like [`signature_script_reveals_introspection`], this treats the final push as
+/// a redeem script, so callers must gate on the spent output being P2SH.
+pub fn signature_script_reveals_zk_precompile(signature_script: &[u8]) -> bool {
+    match last_push_payload(signature_script) {
+        Some(redeem) => script_uses_zk_precompile_opcode(redeem),
         None => false,
     }
 }
@@ -188,6 +221,42 @@ mod tests {
         // OP_PUSHDATA1 claiming 200 bytes but none follow
         assert!(!script_uses_introspection_opcode(&[0x4c, 200]));
         assert!(last_push_payload(&[0x4c, 200]).is_none());
+    }
+
+    #[test]
+    fn detects_zk_precompile_opcode() {
+        // OpZkPrecompile (0xa6) standing alone
+        assert!(script_uses_zk_precompile_opcode(&[0xa6]));
+        // Anything else must not match
+        assert!(!script_uses_zk_precompile_opcode(&[0xa5]));
+        assert!(!script_uses_zk_precompile_opcode(&[0xa7]));
+    }
+
+    #[test]
+    fn zk_precompile_and_introspection_detectors_are_disjoint() {
+        // An introspection-range opcode does not trigger the zk-precompile
+        // detector, and vice-versa — they cover non-overlapping bytes.
+        assert!(!script_uses_zk_precompile_opcode(&[0xb4])); // OpTxOutputCount
+        assert!(!script_uses_introspection_opcode(&[0xa6])); // OpZkPrecompile
+    }
+
+    #[test]
+    fn ignores_zk_precompile_byte_inside_data_push() {
+        // OP_PUSH 1 byte [0xa6] then OP_CHECKSIG (0xac) -> no opcode executed
+        assert!(!script_uses_zk_precompile_opcode(&[0x01, 0xa6, 0xac]));
+    }
+
+    #[test]
+    fn detects_zk_precompile_via_redeem_script_reveal() {
+        // Build a redeem script that uses OpZkPrecompile (0xa6)
+        let redeem = vec![0xa6, 0xac];
+        // signature script: push a signature, then push the redeem script
+        let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // 3-byte signature push
+        sig.push(redeem.len() as u8); // OP_DATA_2
+        sig.extend_from_slice(&redeem);
+        assert!(signature_script_reveals_zk_precompile(&sig));
+        // The same reveal must not register as introspection.
+        assert!(!signature_script_reveals_introspection(&sig));
     }
 
     #[test]

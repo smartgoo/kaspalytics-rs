@@ -259,6 +259,22 @@ impl From<RpcTransactionInput> for CacheTransactionInput {
 
 pub type CacheSubnetworkId = SubnetworkId;
 
+/// A single per-second covenant-opcode credit this transaction applied to the
+/// second of a transaction that *created* one of the P2SH outputs it spent. These
+/// are recorded at acceptance so the exact same credits can be reversed on reorg,
+/// even if the creating transaction has since been evicted from the cache or had
+/// its own acceptance removed (which would otherwise make the second
+/// irrecoverable and leave the counts permanently inflated).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RevealedOpcodeCredit {
+    /// The credited second (creating transaction's `block_time / 1000`).
+    pub second: u64,
+    /// Whether the introspection-opcode transaction count was credited.
+    pub introspection: bool,
+    /// Whether the ZK-precompile transaction count was credited.
+    pub zk_precompile: bool,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CacheTransaction {
     pub id: CacheTransactionId,
@@ -276,6 +292,11 @@ pub struct CacheTransaction {
     pub accepting_block_hash: Option<Hash>,
     pub protocol: Option<TransactionProtocol>,
     pub fee: Option<u64>,
+    /// Creating-transaction-second covenant-opcode credits this transaction
+    /// applied when it was accepted, recorded so they can be reversed exactly on
+    /// reorg. Empty for transactions that revealed no covenant opcodes.
+    #[serde(default)]
+    pub revealed_opcode_credits: Vec<RevealedOpcodeCredit>,
 }
 
 impl From<RpcOptionalTransaction> for CacheTransaction {
@@ -304,6 +325,7 @@ impl From<RpcOptionalTransaction> for CacheTransaction {
             accepting_block_hash: None,
             protocol: None,
             fee: None,
+            revealed_opcode_credits: Vec::new(),
         }
     }
 }
@@ -334,6 +356,7 @@ impl From<RpcTransaction> for CacheTransaction {
             accepting_block_hash: None,
             protocol: None,
             fee: None,
+            revealed_opcode_credits: Vec::new(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use super::cache::DagCache;
-use super::model::{CacheBlock, CacheTransaction};
+use super::model::{CacheBlock, CacheTransaction, RevealedOpcodeCredit};
 use crate::analysis::transactions::protocol::inscription::parse_signature_script;
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use crate::ingest::cache::Reader;
@@ -7,11 +7,16 @@ use crate::ingest::model::CacheUtxoEntry;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcBlock, RpcChainBlockAcceptedTransactions};
+use kaspa_txscript::script_class::ScriptClass;
 use kaspalytics_utils::covenant::{
     tally_covenant_metrics, CovenantTally, ResolvedInputView, TxOutputView,
 };
 use kaspalytics_utils::log::LogTarget;
+use kaspalytics_utils::script::{
+    signature_script_reveals_introspection, signature_script_reveals_zk_precompile,
+};
 use log::warn;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(thiserror::Error, Debug)]
@@ -202,10 +207,17 @@ fn detect_transaction_protocol(
 }
 
 /// Computes a transaction's contribution to the per-second script-class and
-/// covenant metrics, using the shared tally so the daemon and CLI stay in sync.
-/// Output classes and covenant-bound outputs are counted per output; covenant
-/// spends and P2SH-revealed introspection are counted from each input's resolved
-/// UTXO entry (unresolved inputs contribute nothing).
+/// covenant metrics that are attributed to the transaction's own timestamp, using
+/// the shared tally so the daemon and CLI stay in sync. Output classes and
+/// covenant-bound outputs are counted per output; covenant spends and
+/// P2SH-revealed introspection / ZK precompile opcodes are counted from each
+/// input's resolved UTXO entry (unresolved inputs contribute nothing).
+///
+/// P2SH opcode reveals are credited to the spending transaction's second here.
+/// They are *additionally* credited to the second of the transaction that
+/// *created* the spent output via [`collect_revealed_opcode_attributions`] (when
+/// that creating transaction is still cached), mirroring how inscription
+/// protocols are also credited to the commit transaction.
 fn script_covenant_delta(transaction: &CacheTransaction) -> CovenantTally {
     let outputs = transaction.outputs.iter().map(|output| TxOutputView {
         script_public_key: &output.script_public_key,
@@ -221,6 +233,129 @@ fn script_covenant_delta(transaction: &CacheTransaction) -> CovenantTally {
     });
 
     tally_covenant_metrics(outputs, resolved_inputs)
+}
+
+/// Per-creating-transaction record of which covenant opcodes a spending
+/// transaction revealed when spending that creating transaction's P2SH outputs.
+#[derive(Default)]
+struct RevealedOpcodes {
+    /// At least one revealed redeem script used a covenant / introspection opcode.
+    introspection: bool,
+    /// At least one revealed redeem script used the ZK precompile opcode.
+    zk_precompile: bool,
+}
+
+/// Scans a spending transaction's resolved P2SH inputs and groups the covenant
+/// opcodes they reveal by the transaction that created each spent output. Only
+/// pay-to-script-hash spends can reveal these opcodes (they live in the redeem
+/// script committed by the P2SH output), and unresolved inputs are skipped.
+fn collect_revealed_opcode_attributions(
+    transaction: &CacheTransaction,
+) -> HashMap<Hash, RevealedOpcodes> {
+    let mut attributions: HashMap<Hash, RevealedOpcodes> = HashMap::new();
+
+    for input in transaction.inputs.iter() {
+        let Some(utxo) = input.utxo_entry.as_ref() else {
+            continue;
+        };
+
+        if utxo.script_public_key_type != Some(ScriptClass::ScriptHash) {
+            continue;
+        }
+
+        let introspection = signature_script_reveals_introspection(&input.signature_script);
+        let zk_precompile = signature_script_reveals_zk_precompile(&input.signature_script);
+        if !introspection && !zk_precompile {
+            continue;
+        }
+
+        let Some(previous_tx_id) = input.previous_outpoint.transaction_id else {
+            continue;
+        };
+
+        let entry = attributions.entry(previous_tx_id).or_default();
+        entry.introspection |= introspection;
+        entry.zk_precompile |= zk_precompile;
+    }
+
+    attributions
+}
+
+/// Credits the *transaction counts* for revealed covenant opcodes to the second
+/// of the transaction that *created* each spent output, so a creating transaction
+/// is counted as introspection / ZK-precompile activity at its own timestamp.
+/// Output-spent counts are not attributed here: the spend happens once, at the
+/// spending transaction, and is recorded against that transaction's second via
+/// the shared covenant tally.
+///
+/// Returns a record of every credit actually applied so the identical credits can
+/// be reversed on reorg via [`reverse_revealed_opcode_credits`]. When a creating
+/// transaction is still cached and accepted we use its timestamp; when it has aged
+/// out of cache, or is not yet accepted, we skip it (warning on eviction, mirroring
+/// inscription handling) and record nothing for it, so there is nothing to reverse.
+fn apply_revealed_opcode_credits(
+    dag_cache: &Arc<DagCache>,
+    attributions: HashMap<Hash, RevealedOpcodes>,
+) -> Vec<RevealedOpcodeCredit> {
+    let mut credits = Vec::new();
+
+    for (previous_tx_id, revealed) in attributions {
+        let second = {
+            let Some(previous_tx) = dag_cache.transactions.get(&previous_tx_id) else {
+                warn!(
+                    target: LogTarget::Daemon.as_str(),
+                    "Covenant opcode reveal detected, but previous transaction not in cache: {}",
+                    previous_tx_id
+                );
+                continue;
+            };
+
+            // Only attribute once the creating transaction is itself accepted.
+            if previous_tx.accepting_block_hash.is_none() {
+                continue;
+            }
+
+            previous_tx.block_time / 1000
+        };
+
+        // Record the credit only if the target second actually exists (and was
+        // therefore modified), so the reversal never subtracts a credit that was
+        // never applied.
+        if let Some(mut second_metrics) = dag_cache.seconds.get_mut(&second) {
+            if revealed.introspection {
+                second_metrics.introspection_opcode_tx_count += 1;
+            }
+            if revealed.zk_precompile {
+                second_metrics.zk_precompile_tx_count += 1;
+            }
+            credits.push(RevealedOpcodeCredit {
+                second,
+                introspection: revealed.introspection,
+                zk_precompile: revealed.zk_precompile,
+            });
+        }
+    }
+
+    credits
+}
+
+/// Reverses credits previously recorded by [`apply_revealed_opcode_credits`],
+/// subtracting from the exact same seconds. Because the seconds are taken from the
+/// recorded credits rather than re-derived from the creating transactions, the
+/// reversal stays correct even if those transactions have since been evicted from
+/// the cache or had their own acceptance removed.
+fn reverse_revealed_opcode_credits(dag_cache: &Arc<DagCache>, credits: &[RevealedOpcodeCredit]) {
+    for credit in credits {
+        dag_cache.seconds.entry(credit.second).and_modify(|v| {
+            if credit.introspection {
+                v.introspection_opcode_tx_count =
+                    v.introspection_opcode_tx_count.saturating_sub(1);
+            }
+            if credit.zk_precompile {
+                v.zk_precompile_tx_count = v.zk_precompile_tx_count.saturating_sub(1);
+            }
+        });
+    }
 }
 
 fn transaction_add_pipeline(
@@ -314,6 +449,7 @@ fn add_transaction_acceptance(
         };
 
         let delta = script_covenant_delta(&tx);
+        let reveal_attributions = collect_revealed_opcode_attributions(&tx);
 
         // Update metrics for given second
         dag_cache
@@ -337,6 +473,23 @@ fn add_transaction_acceptance(
                 // Increment script-class and covenant counts for given second
                 v.apply_script_covenant_delta(&delta);
             });
+
+        // Release the transaction guard before looking up creating transactions,
+        // to avoid a re-entrant borrow on the transactions DashMap.
+        drop(tx);
+
+        // Additionally credit any P2SH-revealed introspection / ZK precompile
+        // opcodes to the second of the transaction that created each spent output
+        // (the spending transaction's second was already credited above). Record
+        // the applied credits on this transaction so a reorg can reverse the exact
+        // same seconds even if those creating transactions are later evicted.
+        let credits = apply_revealed_opcode_credits(&dag_cache, reveal_attributions);
+        if !credits.is_empty() {
+            dag_cache
+                .transactions
+                .entry(transaction_id)
+                .and_modify(|v| v.revealed_opcode_credits = credits);
+        }
     }
 }
 
@@ -456,6 +609,22 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
 
                 v.remove_script_covenant_delta(&delta);
             });
+
+        // Release the transaction guard before looking up creating transactions,
+        // to avoid a re-entrant borrow on the transactions DashMap.
+        drop(tx);
+
+        // Reverse the exact creating-transaction-second credits recorded when this
+        // spending transaction was accepted (its own second is reversed via the
+        // delta above). Replaying the recorded credits — rather than recomputing
+        // them from the creating transactions — keeps the reversal correct even if
+        // those transactions have since been evicted or had acceptance removed.
+        let credits = dag_cache
+            .transactions
+            .get_mut(&transaction_id)
+            .map(|mut v| std::mem::take(&mut v.revealed_opcode_credits))
+            .unwrap_or_default();
+        reverse_revealed_opcode_credits(&dag_cache, &credits);
     }
 }
 

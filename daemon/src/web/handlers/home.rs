@@ -49,6 +49,8 @@ enum SseKey {
     ProtocolTransactionCounts24h,
     OutputScriptClassCounts24h,
     IntrospectionOpcodeTransactionCount24h,
+    ZkPrecompileTransactionCount24h,
+    ZkPrecompileOutputsSpent24h,
     CovenantCreatingTransactionCount24h,
     CovenantOutputsCreated24h,
     CovenantOutputsSpent24h,
@@ -365,6 +367,18 @@ impl SseData {
             SseField::from(tx_counter::introspection_opcode_tx_count(
                 dag_cache, threshold,
             )),
+        );
+
+        // Transactions using the ZK precompile opcode
+        self.set(
+            SseKey::ZkPrecompileTransactionCount24h,
+            SseField::from(tx_counter::zk_precompile_tx_count(dag_cache, threshold)),
+        );
+
+        // P2SH outputs spent revealing the ZK precompile opcode
+        self.set(
+            SseKey::ZkPrecompileOutputsSpent24h,
+            SseField::from(tx_counter::zk_precompile_outputs_spent(dag_cache, threshold)),
         );
 
         // Covenant id activity
