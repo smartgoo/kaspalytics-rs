@@ -26,6 +26,8 @@
 //! appear directly in the script public key.
 
 use kaspa_txscript::opcodes::codes;
+use kaspa_txscript::zk_precompiles::tags::ZkTag;
+use std::ops::BitOrAssign;
 
 /// First byte value of the introspection opcode range (`OpTxVersion`).
 pub const INTROSPECTION_OPCODE_MIN: u8 = codes::OpTxVersion;
@@ -47,6 +49,15 @@ const UNKNOWN202_OPCODE: u8 = codes::OpUnknown202;
 /// gated like the introspection opcodes but sits below their range (`0xa6` vs
 /// `0xb2..=0xd6`), so it is tracked separately.
 pub const ZK_PRECOMPILE_OPCODE: u8 = codes::OpZkPrecompile;
+
+/// ZK proof-system tag bytes, sourced from kaspa-txscript so they stay in sync
+/// with consensus. `OpZkPrecompile` selects its verifier by popping a 1-byte tag
+/// off the top of the stack. In the canonical consensus spend the redeem script
+/// is just `[OpZkPrecompile]` and the tag is supplied as a witness push by the
+/// signature script (the push immediately before the redeem-script push); a
+/// non-standard script may instead push the tag inline right before the opcode.
+pub const ZK_TAG_GROTH16: u8 = ZkTag::Groth16 as u8; // 0x20
+pub const ZK_TAG_R0SUCCINCT: u8 = ZkTag::R0Succinct as u8; // 0x21
 
 /// Byte value of the chain-block sequencing-commitment opcode
 /// (`OpChainblockSeqCommit`, `0xd4`). Unlike `OpZkPrecompile`, this opcode sits
@@ -100,29 +111,14 @@ fn scan_push(op: u8, script: &[u8], cursor: &mut usize) -> PushScan {
     }
 }
 
-/// Scans a single script body and returns true if any executed (non-pushed)
-/// opcode satisfies `matches`. Data pushes are skipped so that bytes inside
-/// pushed data are never mistaken for opcodes.
-fn script_contains_opcode(script: &[u8], matches: impl Fn(u8) -> bool) -> bool {
-    let mut cursor = 0;
-    while cursor < script.len() {
-        let op = script[cursor];
-        cursor += 1;
-
-        if matches(op) {
-            return true;
-        }
-
-        match scan_push(op, script, &mut cursor) {
-            PushScan::Data(data_len) => cursor = cursor.saturating_add(data_len),
-            // A truncated push leaves the rest of the script unparseable; stop
-            // instead of re-reading length bytes as opcodes.
-            PushScan::Truncated => break,
-            PushScan::NotPush => {}
-        }
-    }
-
-    false
+/// Returns true if `op` is an introspection opcode — one in
+/// `INTROSPECTION_OPCODE_MIN..=MAX` excluding the interior holes `OpNum2Bin` /
+/// `OpBin2Num` / `OpUnknown202`.
+fn is_introspection_opcode(op: u8) -> bool {
+    (INTROSPECTION_OPCODE_MIN..=INTROSPECTION_OPCODE_MAX).contains(&op)
+        && op != NUM2BIN_OPCODE
+        && op != BIN2NUM_OPCODE
+        && op != UNKNOWN202_OPCODE
 }
 
 /// Scans a single script body and returns true if it contains any introspection
@@ -130,19 +126,135 @@ fn script_contains_opcode(script: &[u8], matches: impl Fn(u8) -> bool) -> bool {
 /// holes `OpNum2Bin` / `OpBin2Num` / `OpUnknown202`. Data pushes are skipped so
 /// that bytes inside pushed data are never mistaken for opcodes.
 pub fn script_uses_introspection_opcode(script: &[u8]) -> bool {
-    script_contains_opcode(script, |op| {
-        (INTROSPECTION_OPCODE_MIN..=INTROSPECTION_OPCODE_MAX).contains(&op)
-            && op != NUM2BIN_OPCODE
-            && op != BIN2NUM_OPCODE
-            && op != UNKNOWN202_OPCODE
-    })
+    scan_covenant_opcodes_in_script(script).introspection
+}
+
+/// Which ZK proof-system tags a script's `OpZkPrecompile` calls consume.
+///
+/// `unknown` is set when an `OpZkPrecompile` executes but the value on top of the
+/// stack when it runs is not a recognized 1-byte tag — a non-canonical spend, or a
+/// future/unrecognized tag byte. The three flags are independent: a script (or a
+/// transaction aggregating several) can set more than one.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ZkPrecompileTagUsage {
+    pub groth16: bool,
+    pub r0succinct: bool,
+    pub unknown: bool,
+}
+
+impl ZkPrecompileTagUsage {
+    /// True if the script uses `OpZkPrecompile` with any tag (recognized or not).
+    /// Equivalent to [`script_uses_zk_precompile_opcode`].
+    pub fn any(&self) -> bool {
+        self.groth16 || self.r0succinct || self.unknown
+    }
+}
+
+impl BitOrAssign for ZkPrecompileTagUsage {
+    /// Merges another usage in, keeping any tag seen by either operand set. The
+    /// single merge point stops the several accumulation sites (per output, per
+    /// input, per creating-tx attribution) from drifting when a tag is added.
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.groth16 |= rhs.groth16;
+        self.r0succinct |= rhs.r0succinct;
+        self.unknown |= rhs.unknown;
+    }
+}
+
+/// Every covenant-opcode signal found in a single scan of one script body.
+///
+/// Detecting all three in one pass avoids re-walking the same script — and, for a
+/// P2SH spend, re-parsing the same signature script — once per signal.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CovenantOpcodeUsage {
+    /// A covenant / introspection opcode executes.
+    pub introspection: bool,
+    /// The chain-block sequencing-commitment opcode executes. Because it sits
+    /// within the introspection range, `introspection` is also set whenever this
+    /// is (an overlapping subset).
+    pub chainblock_seqcommit: bool,
+    /// Which ZK proof-system tags the executed `OpZkPrecompile` calls consume.
+    pub zk_tags: ZkPrecompileTagUsage,
+}
+
+/// Scans one script body, classifying every executed opcode against all covenant
+/// signals in a single pass. Data-push payloads are read (their bytes are never
+/// mistaken for opcodes) and a truncated push stops the scan.
+///
+/// `stack_top` seeds the value on top of the stack when the body begins
+/// executing. For a P2SH redeem script this is the item the signature script
+/// pushed immediately below the redeem push — what an `OpZkPrecompile` at the
+/// very start of the redeem pops as its tag. The canonical ZK-precompile spend
+/// has a redeem script of just `[OpZkPrecompile]` and supplies the tag as that
+/// witness push, so without the seed every real Groth16/R0Succinct spend would
+/// misclassify as `unknown`. A tag pushed inside the redeem itself overrides the
+/// seed, so an inline `[OpData1, tag, OpZkPrecompile]` is handled too.
+fn scan_covenant_opcodes(script: &[u8], stack_top: Option<&[u8]>) -> CovenantOpcodeUsage {
+    let mut usage = CovenantOpcodeUsage::default();
+    let mut last_push = stack_top;
+    let mut cursor = 0;
+
+    while cursor < script.len() {
+        let op = script[cursor];
+        cursor += 1;
+
+        if op == ZK_PRECOMPILE_OPCODE {
+            match last_push {
+                Some(&[tag]) if tag == ZK_TAG_GROTH16 => usage.zk_tags.groth16 = true,
+                Some(&[tag]) if tag == ZK_TAG_R0SUCCINCT => usage.zk_tags.r0succinct = true,
+                _ => usage.zk_tags.unknown = true,
+            }
+            // The opcode consumes the tag and pushes its own result, so a later
+            // OpZkPrecompile must be preceded by its own tag.
+            last_push = None;
+            continue;
+        }
+
+        if op == CHAINBLOCK_SEQCOMMIT_OPCODE {
+            usage.chainblock_seqcommit = true;
+        }
+        if is_introspection_opcode(op) {
+            usage.introspection = true;
+        }
+
+        match scan_push(op, script, &mut cursor) {
+            PushScan::Data(data_len) => {
+                let end = cursor.saturating_add(data_len);
+                if end > script.len() {
+                    // Truncated push; the rest is unparseable.
+                    break;
+                }
+                last_push = Some(&script[cursor..end]);
+                cursor = end;
+            }
+            PushScan::Truncated => break,
+            // A non-push opcode means the top of stack is no longer the value a
+            // following OpZkPrecompile would read as its tag.
+            PushScan::NotPush => last_push = None,
+        }
+    }
+
+    usage
+}
+
+/// Scans a script body (an output script public key, or any script executed with
+/// no incoming stack) for every covenant signal in one pass.
+pub fn scan_covenant_opcodes_in_script(script: &[u8]) -> CovenantOpcodeUsage {
+    scan_covenant_opcodes(script, None)
+}
+
+/// Scans a single script body and classifies each executed `OpZkPrecompile` by
+/// the ZK tag it consumes. With no incoming stack the tag must be the 1-byte data
+/// push immediately preceding the opcode; anything else classifies as `unknown`.
+pub fn scan_zk_precompile_tags(script: &[u8]) -> ZkPrecompileTagUsage {
+    scan_covenant_opcodes_in_script(script).zk_tags
 }
 
 /// Scans a single script body and returns true if it contains the ZK precompile
-/// opcode (`OpZkPrecompile`). Data pushes are skipped so that bytes inside pushed
-/// data are never mistaken for opcodes.
+/// opcode (`OpZkPrecompile`), regardless of tag. Data pushes are skipped so that
+/// bytes inside pushed data are never mistaken for opcodes.
 pub fn script_uses_zk_precompile_opcode(script: &[u8]) -> bool {
-    script_contains_opcode(script, |op| op == ZK_PRECOMPILE_OPCODE)
+    scan_zk_precompile_tags(script).any()
 }
 
 /// Scans a single script body and returns true if it contains the chain-block
@@ -151,13 +263,16 @@ pub fn script_uses_zk_precompile_opcode(script: &[u8]) -> bool {
 /// Because this opcode is within the introspection range, a matching script also
 /// satisfies [`script_uses_introspection_opcode`].
 pub fn script_uses_chainblock_seqcommit_opcode(script: &[u8]) -> bool {
-    script_contains_opcode(script, |op| op == CHAINBLOCK_SEQCOMMIT_OPCODE)
+    scan_covenant_opcodes_in_script(script).chainblock_seqcommit
 }
 
-/// Returns the data of the last push operation in `script`, or `None` if there
-/// is no parseable push. For a P2SH signature script this is the redeem script.
-fn last_push_payload(script: &[u8]) -> Option<&[u8]> {
+/// Returns the payloads of the last two push operations in `script`, as
+/// `(second_to_last, last)`. Either is `None` when fewer than that many parseable
+/// pushes exist. For a P2SH signature script `last` is the redeem script and
+/// `second_to_last` is the stack item the redeem script sees on top when it runs.
+fn last_two_push_payloads(script: &[u8]) -> (Option<&[u8]>, Option<&[u8]>) {
     let mut cursor = 0;
+    let mut prev: Option<&[u8]> = None;
     let mut last: Option<&[u8]> = None;
 
     while cursor < script.len() {
@@ -166,11 +281,14 @@ fn last_push_payload(script: &[u8]) -> Option<&[u8]> {
 
         match scan_push(op, script, &mut cursor) {
             PushScan::Data(data_len) => {
-                let end = cursor.checked_add(data_len)?;
+                let Some(end) = cursor.checked_add(data_len) else {
+                    break;
+                };
                 if end > script.len() {
                     // Truncated push, stop parsing.
                     break;
                 }
+                prev = last;
                 last = Some(&script[cursor..end]);
                 cursor = end;
             }
@@ -179,45 +297,27 @@ fn last_push_payload(script: &[u8]) -> Option<&[u8]> {
         }
     }
 
-    last
+    (prev, last)
 }
 
-/// Returns true if the redeem script revealed by a signature script (its final
-/// data push) uses any covenant / introspection opcode.
+/// Returns every covenant signal in the redeem script revealed by a P2SH
+/// signature script (its final push), scanned in a single pass.
+///
+/// The revealed redeem script is treated as executing on top of the stack the
+/// signature script leaves behind, so the push immediately preceding the redeem
+/// push seeds an `OpZkPrecompile`'s tag — matching the canonical spend whose
+/// redeem script is just `[OpZkPrecompile]` and whose tag is a signature-script
+/// witness.
 ///
 /// This treats the final push as a redeem script, so it is only meaningful for
-/// pay-to-script-hash spends. Callers must gate on the spent output being P2SH;
-/// applied to a plain pay-to-pubkey spend the final push is a signature and its
+/// pay-to-script-hash spends; callers must gate on the spent output being P2SH.
+/// Applied to a plain pay-to-pubkey spend the final push is a signature and its
 /// bytes would be misread as opcodes.
-pub fn signature_script_reveals_introspection(signature_script: &[u8]) -> bool {
-    match last_push_payload(signature_script) {
-        Some(redeem) => script_uses_introspection_opcode(redeem),
-        None => false,
-    }
-}
-
-/// Returns true if the redeem script revealed by a signature script (its final
-/// data push) uses the ZK precompile opcode (`OpZkPrecompile`).
-///
-/// Like [`signature_script_reveals_introspection`], this treats the final push as
-/// a redeem script, so callers must gate on the spent output being P2SH.
-pub fn signature_script_reveals_zk_precompile(signature_script: &[u8]) -> bool {
-    match last_push_payload(signature_script) {
-        Some(redeem) => script_uses_zk_precompile_opcode(redeem),
-        None => false,
-    }
-}
-
-/// Returns true if the redeem script revealed by a signature script (its final
-/// data push) uses the chain-block sequencing-commitment opcode
-/// (`OpChainblockSeqCommit`).
-///
-/// Like [`signature_script_reveals_introspection`], this treats the final push as
-/// a redeem script, so callers must gate on the spent output being P2SH.
-pub fn signature_script_reveals_chainblock_seqcommit(signature_script: &[u8]) -> bool {
-    match last_push_payload(signature_script) {
-        Some(redeem) => script_uses_chainblock_seqcommit_opcode(redeem),
-        None => false,
+pub fn signature_script_reveals_covenant_opcodes(signature_script: &[u8]) -> CovenantOpcodeUsage {
+    let (stack_top, redeem) = last_two_push_payloads(signature_script);
+    match redeem {
+        Some(redeem) => scan_covenant_opcodes(redeem, stack_top),
+        None => CovenantOpcodeUsage::default(),
     }
 }
 
@@ -288,21 +388,21 @@ mod tests {
         let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // 3-byte signature push
         sig.push(redeem.len() as u8); // OP_DATA_2
         sig.extend_from_slice(&redeem);
-        assert!(signature_script_reveals_introspection(&sig));
+        assert!(signature_script_reveals_covenant_opcodes(&sig).introspection);
     }
 
     #[test]
     fn no_reveal_when_redeem_has_no_introspection() {
         // Signature script whose final push is a redeem script of just OP_CHECKSIG
         let sig = vec![0x01, 0xac];
-        assert!(!signature_script_reveals_introspection(&sig));
+        assert!(!signature_script_reveals_covenant_opcodes(&sig).introspection);
     }
 
     #[test]
     fn handles_truncated_push_gracefully() {
         // OP_PUSHDATA1 claiming 200 bytes but none follow
         assert!(!script_uses_introspection_opcode(&[0x4c, 200]));
-        assert!(last_push_payload(&[0x4c, 200]).is_none());
+        assert_eq!(last_two_push_payloads(&[0x4c, 200]), (None, None));
     }
 
     #[test]
@@ -356,10 +456,11 @@ mod tests {
         let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // 3-byte signature push
         sig.push(redeem.len() as u8); // OP_DATA_2
         sig.extend_from_slice(&redeem);
-        assert!(signature_script_reveals_chainblock_seqcommit(&sig));
+        let reveal = signature_script_reveals_covenant_opcodes(&sig);
+        assert!(reveal.chainblock_seqcommit);
         // Being within the introspection range, the same reveal also registers
         // as introspection.
-        assert!(signature_script_reveals_introspection(&sig));
+        assert!(reveal.introspection);
     }
 
     #[test]
@@ -376,9 +477,119 @@ mod tests {
         let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // 3-byte signature push
         sig.push(redeem.len() as u8); // OP_DATA_2
         sig.extend_from_slice(&redeem);
-        assert!(signature_script_reveals_zk_precompile(&sig));
+        let reveal = signature_script_reveals_covenant_opcodes(&sig);
+        assert!(reveal.zk_tags.any());
         // The same reveal must not register as introspection.
-        assert!(!signature_script_reveals_introspection(&sig));
+        assert!(!reveal.introspection);
+    }
+
+    #[test]
+    fn classifies_zk_precompile_tags_from_inline_push() {
+        // Scanned with no incoming stack, the tag must be pushed inline right
+        // before the opcode: [OpData1, tag, OpZkPrecompile].
+        let groth16 = scan_zk_precompile_tags(&[0x01, ZK_TAG_GROTH16, 0xa6]);
+        assert_eq!(
+            groth16,
+            ZkPrecompileTagUsage { groth16: true, r0succinct: false, unknown: false }
+        );
+        assert!(groth16.any());
+
+        let r0 = scan_zk_precompile_tags(&[0x01, ZK_TAG_R0SUCCINCT, 0xa6]);
+        assert_eq!(
+            r0,
+            ZkPrecompileTagUsage { groth16: false, r0succinct: true, unknown: false }
+        );
+    }
+
+    #[test]
+    fn classifies_unrecognized_or_missing_tag_as_unknown() {
+        // OpZkPrecompile with no preceding push.
+        assert_eq!(
+            scan_zk_precompile_tags(&[0xa6]),
+            ZkPrecompileTagUsage { groth16: false, r0succinct: false, unknown: true }
+        );
+        // Preceding push is a recognized tag byte but multi-byte, so not a tag.
+        assert_eq!(
+            scan_zk_precompile_tags(&[0x02, ZK_TAG_GROTH16, 0x00, 0xa6]),
+            ZkPrecompileTagUsage { groth16: false, r0succinct: false, unknown: true }
+        );
+        // A non-push opcode sits between the tag push and the opcode.
+        assert_eq!(
+            scan_zk_precompile_tags(&[0x01, ZK_TAG_GROTH16, 0xac, 0xa6]),
+            ZkPrecompileTagUsage { groth16: false, r0succinct: false, unknown: true }
+        );
+        // Unrecognized tag byte value.
+        assert_eq!(
+            scan_zk_precompile_tags(&[0x01, 0x99, 0xa6]),
+            ZkPrecompileTagUsage { groth16: false, r0succinct: false, unknown: true }
+        );
+    }
+
+    #[test]
+    fn zk_tag_byte_inside_data_push_is_not_a_zk_precompile() {
+        // A 2-byte push [tag, OpZkPrecompile] followed by OpCheckSig executes no
+        // OpZkPrecompile at all — the 0xa6 is pushed data, not an opcode.
+        let usage = scan_zk_precompile_tags(&[0x02, ZK_TAG_GROTH16, 0xa6, 0xac]);
+        assert!(!usage.any());
+    }
+
+    #[test]
+    fn multiple_zk_precompiles_set_multiple_tags() {
+        // Two independent tag-then-opcode sequences in one script.
+        let usage = scan_zk_precompile_tags(&[
+            0x01, ZK_TAG_GROTH16, 0xa6, 0x01, ZK_TAG_R0SUCCINCT, 0xa6,
+        ]);
+        assert!(usage.groth16 && usage.r0succinct && !usage.unknown);
+    }
+
+    #[test]
+    fn signature_reveal_classifies_tag_from_canonical_witness_spend() {
+        // The canonical consensus spend: redeem script is just [OpZkPrecompile]
+        // and the 1-byte tag is a witness push in the signature script, sitting
+        // immediately before the redeem-script push (second-to-last push overall).
+        // pushes: [dummy proof] [tag] [redeem = OpZkPrecompile]
+        let sig = vec![
+            0x03, 0xaa, 0xbb, 0xcc, // dummy proof/signature push
+            0x01, ZK_TAG_R0SUCCINCT, // tag witness push (second-to-last)
+            0x01, 0xa6, // redeem script push: [OpZkPrecompile]
+        ];
+        let reveal = signature_script_reveals_covenant_opcodes(&sig);
+        assert!(reveal.zk_tags.r0succinct && !reveal.zk_tags.groth16 && !reveal.zk_tags.unknown);
+        // Aggregate detector stays consistent with the tag scan.
+        assert!(reveal.zk_tags.any());
+        // A ZK-precompile spend is not introspection.
+        assert!(!reveal.introspection);
+    }
+
+    #[test]
+    fn signature_reveal_classifies_tag_from_inline_redeem_script() {
+        // A non-standard redeem that pushes the tag inline right before the
+        // opcode ([OpData1, tag, OpZkPrecompile]) is classified from that inline
+        // push, overriding any witness seed.
+        let redeem = vec![0x01, ZK_TAG_GROTH16, 0xa6];
+        let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // 3-byte witness push
+        sig.push(redeem.len() as u8);
+        sig.extend_from_slice(&redeem);
+        let reveal = signature_script_reveals_covenant_opcodes(&sig);
+        assert!(reveal.zk_tags.groth16 && !reveal.zk_tags.r0succinct && !reveal.zk_tags.unknown);
+    }
+
+    #[test]
+    fn signature_reveal_untagged_zk_precompile_is_unknown() {
+        // Redeem [OpZkPrecompile] with a multi-byte second-to-last push (a real
+        // signature, not a 1-byte tag) cannot be classified -> unknown.
+        let sig = vec![
+            0x03, 0xaa, 0xbb, 0xcc, // multi-byte push (not a tag)
+            0x01, 0xa6, // redeem script push: [OpZkPrecompile]
+        ];
+        let reveal = signature_script_reveals_covenant_opcodes(&sig);
+        assert!(reveal.zk_tags.unknown && !reveal.zk_tags.groth16 && !reveal.zk_tags.r0succinct);
+    }
+
+    #[test]
+    fn zk_tag_constants_match_upstream() {
+        assert_eq!(ZK_TAG_GROTH16, 0x20);
+        assert_eq!(ZK_TAG_R0SUCCINCT, 0x21);
     }
 
     #[test]

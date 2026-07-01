@@ -12,10 +12,7 @@ use kaspalytics_utils::covenant::{
     tally_covenant_metrics, CovenantTally, ResolvedInputView, TxOutputView,
 };
 use kaspalytics_utils::log::LogTarget;
-use kaspalytics_utils::script::{
-    signature_script_reveals_chainblock_seqcommit, signature_script_reveals_introspection,
-    signature_script_reveals_zk_precompile,
-};
+use kaspalytics_utils::script::signature_script_reveals_covenant_opcodes;
 use log::warn;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -242,8 +239,14 @@ fn script_covenant_delta(transaction: &CacheTransaction) -> CovenantTally {
 struct RevealedOpcodes {
     /// At least one revealed redeem script used a covenant / introspection opcode.
     introspection: bool,
-    /// At least one revealed redeem script used the ZK precompile opcode.
+    /// At least one revealed redeem script used the ZK precompile opcode (any tag).
     zk_precompile: bool,
+    /// At least one revealed redeem script used a Groth16-tagged ZK precompile.
+    zk_precompile_groth16: bool,
+    /// At least one revealed redeem script used an R0Succinct-tagged ZK precompile.
+    zk_precompile_r0succinct: bool,
+    /// At least one revealed redeem script used an unknown-tag ZK precompile.
+    zk_precompile_unknown_tag: bool,
     /// At least one revealed redeem script used the chain-block
     /// sequencing-commitment opcode.
     chainblock_seqcommit: bool,
@@ -267,11 +270,9 @@ fn collect_revealed_opcode_attributions(
             continue;
         }
 
-        let introspection = signature_script_reveals_introspection(&input.signature_script);
-        let zk_precompile = signature_script_reveals_zk_precompile(&input.signature_script);
-        let chainblock_seqcommit =
-            signature_script_reveals_chainblock_seqcommit(&input.signature_script);
-        if !introspection && !zk_precompile && !chainblock_seqcommit {
+        // One scan of the revealed redeem script covers every signal.
+        let reveal = signature_script_reveals_covenant_opcodes(&input.signature_script);
+        if !reveal.introspection && !reveal.zk_tags.any() && !reveal.chainblock_seqcommit {
             continue;
         }
 
@@ -280,9 +281,12 @@ fn collect_revealed_opcode_attributions(
         };
 
         let entry = attributions.entry(previous_tx_id).or_default();
-        entry.introspection |= introspection;
-        entry.zk_precompile |= zk_precompile;
-        entry.chainblock_seqcommit |= chainblock_seqcommit;
+        entry.introspection |= reveal.introspection;
+        entry.zk_precompile |= reveal.zk_tags.any();
+        entry.zk_precompile_groth16 |= reveal.zk_tags.groth16;
+        entry.zk_precompile_r0succinct |= reveal.zk_tags.r0succinct;
+        entry.zk_precompile_unknown_tag |= reveal.zk_tags.unknown;
+        entry.chainblock_seqcommit |= reveal.chainblock_seqcommit;
     }
 
     attributions
@@ -335,6 +339,15 @@ fn apply_revealed_opcode_credits(
             if revealed.zk_precompile {
                 second_metrics.zk_precompile_tx_count += 1;
             }
+            if revealed.zk_precompile_groth16 {
+                second_metrics.zk_precompile_groth16_tx_count += 1;
+            }
+            if revealed.zk_precompile_r0succinct {
+                second_metrics.zk_precompile_r0succinct_tx_count += 1;
+            }
+            if revealed.zk_precompile_unknown_tag {
+                second_metrics.zk_precompile_unknown_tag_tx_count += 1;
+            }
             if revealed.chainblock_seqcommit {
                 second_metrics.chainblock_seqcommit_tx_count += 1;
             }
@@ -342,6 +355,9 @@ fn apply_revealed_opcode_credits(
                 second,
                 introspection: revealed.introspection,
                 zk_precompile: revealed.zk_precompile,
+                zk_precompile_groth16: revealed.zk_precompile_groth16,
+                zk_precompile_r0succinct: revealed.zk_precompile_r0succinct,
+                zk_precompile_unknown_tag: revealed.zk_precompile_unknown_tag,
                 chainblock_seqcommit: revealed.chainblock_seqcommit,
             });
         }
@@ -364,6 +380,18 @@ fn reverse_revealed_opcode_credits(dag_cache: &Arc<DagCache>, credits: &[Reveale
             }
             if credit.zk_precompile {
                 v.zk_precompile_tx_count = v.zk_precompile_tx_count.saturating_sub(1);
+            }
+            if credit.zk_precompile_groth16 {
+                v.zk_precompile_groth16_tx_count =
+                    v.zk_precompile_groth16_tx_count.saturating_sub(1);
+            }
+            if credit.zk_precompile_r0succinct {
+                v.zk_precompile_r0succinct_tx_count =
+                    v.zk_precompile_r0succinct_tx_count.saturating_sub(1);
+            }
+            if credit.zk_precompile_unknown_tag {
+                v.zk_precompile_unknown_tag_tx_count =
+                    v.zk_precompile_unknown_tag_tx_count.saturating_sub(1);
             }
             if credit.chainblock_seqcommit {
                 v.chainblock_seqcommit_tx_count =

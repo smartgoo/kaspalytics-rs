@@ -271,8 +271,14 @@ pub struct RevealedOpcodeCredit {
     pub second: u64,
     /// Whether the introspection-opcode transaction count was credited.
     pub introspection: bool,
-    /// Whether the ZK-precompile transaction count was credited.
+    /// Whether the ZK-precompile transaction count (any tag) was credited.
     pub zk_precompile: bool,
+    /// Whether the Groth16-tagged ZK-precompile transaction count was credited.
+    pub zk_precompile_groth16: bool,
+    /// Whether the R0Succinct-tagged ZK-precompile transaction count was credited.
+    pub zk_precompile_r0succinct: bool,
+    /// Whether the unknown-tag ZK-precompile transaction count was credited.
+    pub zk_precompile_unknown_tag: bool,
     /// Whether the chain-block sequencing-commitment transaction count was
     /// credited.
     pub chainblock_seqcommit: bool,

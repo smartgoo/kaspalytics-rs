@@ -52,6 +52,12 @@ enum SseKey {
     IntrospectionOpcodeOutputsSpent24h,
     ZkPrecompileTransactionCount24h,
     ZkPrecompileOutputsSpent24h,
+    ZkPrecompileGroth16TransactionCount24h,
+    ZkPrecompileGroth16OutputsSpent24h,
+    ZkPrecompileR0SuccinctTransactionCount24h,
+    ZkPrecompileR0SuccinctOutputsSpent24h,
+    ZkPrecompileUnknownTagTransactionCount24h,
+    ZkPrecompileUnknownTagOutputsSpent24h,
     ChainblockSeqcommitTransactionCount24h,
     ChainblockSeqcommitOutputsSpent24h,
     CovenantCreatingTransactionCount24h,
@@ -380,16 +386,54 @@ impl SseData {
             )),
         );
 
-        // Transactions using the ZK precompile opcode
+        // Transactions using the ZK precompile opcode (any tag)
         self.set(
             SseKey::ZkPrecompileTransactionCount24h,
             SseField::from(tx_counter::zk_precompile_tx_count(dag_cache, threshold)),
         );
 
-        // P2SH outputs spent revealing the ZK precompile opcode
+        // P2SH outputs spent revealing the ZK precompile opcode (any tag)
         self.set(
             SseKey::ZkPrecompileOutputsSpent24h,
             SseField::from(tx_counter::zk_precompile_outputs_spent(dag_cache, threshold)),
+        );
+
+        // Per-ZK-tag breakdown (overlapping subsets of the aggregate above)
+        self.set(
+            SseKey::ZkPrecompileGroth16TransactionCount24h,
+            SseField::from(tx_counter::zk_precompile_groth16_tx_count(
+                dag_cache, threshold,
+            )),
+        );
+        self.set(
+            SseKey::ZkPrecompileGroth16OutputsSpent24h,
+            SseField::from(tx_counter::zk_precompile_groth16_outputs_spent(
+                dag_cache, threshold,
+            )),
+        );
+        self.set(
+            SseKey::ZkPrecompileR0SuccinctTransactionCount24h,
+            SseField::from(tx_counter::zk_precompile_r0succinct_tx_count(
+                dag_cache, threshold,
+            )),
+        );
+        self.set(
+            SseKey::ZkPrecompileR0SuccinctOutputsSpent24h,
+            SseField::from(tx_counter::zk_precompile_r0succinct_outputs_spent(
+                dag_cache, threshold,
+            )),
+        );
+        self.set(
+            SseKey::ZkPrecompileUnknownTagTransactionCount24h,
+            SseField::from(tx_counter::zk_precompile_unknown_tag_tx_count(
+                dag_cache, threshold,
+            )),
+        );
+        self.set(
+            SseKey::ZkPrecompileUnknownTagOutputsSpent24h,
+            SseField::from(tx_counter::zk_precompile_unknown_tag_outputs_spent(
+                dag_cache, threshold,
+            )),
         );
 
         // Transactions using the chain-block sequencing-commitment opcode

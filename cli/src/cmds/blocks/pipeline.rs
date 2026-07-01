@@ -325,6 +325,21 @@ impl BlockAnalysis {
                         stats.zk_precompile_tx_count += 1;
                     }
                     stats.zk_precompile_outputs_spent += tally.zk_precompile_outputs_spent;
+                    if tally.uses_zk_precompile_groth16_opcode {
+                        stats.zk_precompile_groth16_tx_count += 1;
+                    }
+                    stats.zk_precompile_groth16_outputs_spent +=
+                        tally.zk_precompile_groth16_outputs_spent;
+                    if tally.uses_zk_precompile_r0succinct_opcode {
+                        stats.zk_precompile_r0succinct_tx_count += 1;
+                    }
+                    stats.zk_precompile_r0succinct_outputs_spent +=
+                        tally.zk_precompile_r0succinct_outputs_spent;
+                    if tally.uses_zk_precompile_unknown_tag_opcode {
+                        stats.zk_precompile_unknown_tag_tx_count += 1;
+                    }
+                    stats.zk_precompile_unknown_tag_outputs_spent +=
+                        tally.zk_precompile_unknown_tag_outputs_spent;
                     if tally.uses_chainblock_seqcommit_opcode {
                         stats.chainblock_seqcommit_tx_count += 1;
                     }

@@ -182,6 +182,67 @@ pub fn zk_precompile_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) ->
         .sum()
 }
 
+/// Count of accepted transactions using a Groth16-tagged ZK precompile since
+/// `threshold`. An overlapping subset of [`zk_precompile_tx_count`].
+pub fn zk_precompile_groth16_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.zk_precompile_groth16_tx_count)
+        .sum()
+}
+
+/// Count of P2SH outputs spent whose revealed redeem script uses a Groth16-tagged
+/// ZK precompile since `threshold`.
+pub fn zk_precompile_groth16_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.zk_precompile_groth16_outputs_spent)
+        .sum()
+}
+
+/// Count of accepted transactions using an R0Succinct-tagged ZK precompile since
+/// `threshold`. An overlapping subset of [`zk_precompile_tx_count`].
+pub fn zk_precompile_r0succinct_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.zk_precompile_r0succinct_tx_count)
+        .sum()
+}
+
+/// Count of P2SH outputs spent whose revealed redeem script uses an R0Succinct-
+/// tagged ZK precompile since `threshold`.
+pub fn zk_precompile_r0succinct_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.zk_precompile_r0succinct_outputs_spent)
+        .sum()
+}
+
+/// Count of accepted transactions using a ZK precompile with an unrecognized tag
+/// since `threshold`. An overlapping subset of [`zk_precompile_tx_count`];
+/// expected to be ~0.
+pub fn zk_precompile_unknown_tag_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.zk_precompile_unknown_tag_tx_count)
+        .sum()
+}
+
+/// Count of P2SH outputs spent whose revealed redeem script uses a ZK precompile
+/// with an unrecognized tag since `threshold`.
+pub fn zk_precompile_unknown_tag_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.zk_precompile_unknown_tag_outputs_spent)
+        .sum()
+}
+
 /// Count of accepted transactions using the chain-block sequencing-commitment
 /// opcode (`OpChainblockSeqCommit`) since `threshold`. This opcode is within the
 /// introspection range, so these transactions are a subset of

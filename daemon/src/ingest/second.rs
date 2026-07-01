@@ -42,12 +42,21 @@ pub struct SecondMetrics {
     // script uses a covenant / introspection opcode
     pub introspection_opcode_outputs_spent: u64,
 
-    // Count of accepted transactions that use the ZK precompile opcode
+    // Count of accepted transactions that use the ZK precompile opcode (any tag)
     pub zk_precompile_tx_count: u64,
 
     // Count of P2SH outputs spent by accepted transactions whose revealed redeem
-    // script uses the ZK precompile opcode
+    // script uses the ZK precompile opcode (any tag)
     pub zk_precompile_outputs_spent: u64,
+
+    // Per-ZK-tag breakdown of the aggregate zk_precompile_* metrics above. Each is
+    // an overlapping subset (a tx/redeem mixing tags counts in more than one).
+    pub zk_precompile_groth16_tx_count: u64,
+    pub zk_precompile_groth16_outputs_spent: u64,
+    pub zk_precompile_r0succinct_tx_count: u64,
+    pub zk_precompile_r0succinct_outputs_spent: u64,
+    pub zk_precompile_unknown_tag_tx_count: u64,
+    pub zk_precompile_unknown_tag_outputs_spent: u64,
 
     // Count of accepted transactions that use the chain-block sequencing-commitment
     // opcode (OpChainblockSeqCommit). This opcode is within the introspection
@@ -158,6 +167,19 @@ impl SecondMetrics {
             self.zk_precompile_tx_count += 1;
         }
         self.zk_precompile_outputs_spent += delta.zk_precompile_outputs_spent;
+        if delta.uses_zk_precompile_groth16_opcode {
+            self.zk_precompile_groth16_tx_count += 1;
+        }
+        self.zk_precompile_groth16_outputs_spent += delta.zk_precompile_groth16_outputs_spent;
+        if delta.uses_zk_precompile_r0succinct_opcode {
+            self.zk_precompile_r0succinct_tx_count += 1;
+        }
+        self.zk_precompile_r0succinct_outputs_spent += delta.zk_precompile_r0succinct_outputs_spent;
+        if delta.uses_zk_precompile_unknown_tag_opcode {
+            self.zk_precompile_unknown_tag_tx_count += 1;
+        }
+        self.zk_precompile_unknown_tag_outputs_spent +=
+            delta.zk_precompile_unknown_tag_outputs_spent;
         if delta.uses_chainblock_seqcommit_opcode {
             self.chainblock_seqcommit_tx_count += 1;
         }
@@ -196,6 +218,27 @@ impl SecondMetrics {
         self.zk_precompile_outputs_spent = self
             .zk_precompile_outputs_spent
             .saturating_sub(delta.zk_precompile_outputs_spent);
+        if delta.uses_zk_precompile_groth16_opcode {
+            self.zk_precompile_groth16_tx_count =
+                self.zk_precompile_groth16_tx_count.saturating_sub(1);
+        }
+        self.zk_precompile_groth16_outputs_spent = self
+            .zk_precompile_groth16_outputs_spent
+            .saturating_sub(delta.zk_precompile_groth16_outputs_spent);
+        if delta.uses_zk_precompile_r0succinct_opcode {
+            self.zk_precompile_r0succinct_tx_count =
+                self.zk_precompile_r0succinct_tx_count.saturating_sub(1);
+        }
+        self.zk_precompile_r0succinct_outputs_spent = self
+            .zk_precompile_r0succinct_outputs_spent
+            .saturating_sub(delta.zk_precompile_r0succinct_outputs_spent);
+        if delta.uses_zk_precompile_unknown_tag_opcode {
+            self.zk_precompile_unknown_tag_tx_count =
+                self.zk_precompile_unknown_tag_tx_count.saturating_sub(1);
+        }
+        self.zk_precompile_unknown_tag_outputs_spent = self
+            .zk_precompile_unknown_tag_outputs_spent
+            .saturating_sub(delta.zk_precompile_unknown_tag_outputs_spent);
         if delta.uses_chainblock_seqcommit_opcode {
             self.chainblock_seqcommit_tx_count =
                 self.chainblock_seqcommit_tx_count.saturating_sub(1);

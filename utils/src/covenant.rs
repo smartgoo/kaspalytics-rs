@@ -16,9 +16,7 @@
 //!   the redeem script revealed by a P2SH spend or a non-standard output script.
 
 use crate::script::{
-    script_uses_chainblock_seqcommit_opcode, script_uses_introspection_opcode,
-    script_uses_zk_precompile_opcode, signature_script_reveals_chainblock_seqcommit,
-    signature_script_reveals_introspection, signature_script_reveals_zk_precompile,
+    scan_covenant_opcodes_in_script, signature_script_reveals_covenant_opcodes,
 };
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_txscript::script_class::ScriptClass;
@@ -55,8 +53,18 @@ pub struct CovenantTally {
     /// script, uses a covenant / introspection opcode.
     pub uses_introspection_opcode: bool,
     /// True if any output script, or any resolved P2SH input's revealed redeem
-    /// script, uses the ZK precompile opcode (`OpZkPrecompile`).
+    /// script, uses the ZK precompile opcode (`OpZkPrecompile`) with any tag.
+    /// The per-tag flags below are overlapping subsets of this.
     pub uses_zk_precompile_opcode: bool,
+    /// True if any ZK precompile use carries the Groth16 tag (`0x20`). A subset
+    /// of `uses_zk_precompile_opcode`.
+    pub uses_zk_precompile_groth16_opcode: bool,
+    /// True if any ZK precompile use carries the R0Succinct tag (`0x21`). A subset
+    /// of `uses_zk_precompile_opcode`.
+    pub uses_zk_precompile_r0succinct_opcode: bool,
+    /// True if any ZK precompile use carries an unrecognized / statically
+    /// unresolved tag. A subset of `uses_zk_precompile_opcode`.
+    pub uses_zk_precompile_unknown_tag_opcode: bool,
     /// True if any output script, or any resolved P2SH input's revealed redeem
     /// script, uses the chain-block sequencing-commitment opcode
     /// (`OpChainblockSeqCommit`). This opcode is within the introspection range,
@@ -68,10 +76,20 @@ pub struct CovenantTally {
     /// not resolve every input.
     pub introspection_opcode_outputs_spent: u64,
     /// Number of P2SH outputs spent by this transaction's resolved inputs whose
-    /// revealed redeem script uses the ZK precompile opcode. Unresolved inputs
-    /// are not represented, so this is a lower bound when the caller could not
-    /// resolve every input.
+    /// revealed redeem script uses the ZK precompile opcode (any tag). Unresolved
+    /// inputs are not represented, so this is a lower bound when the caller could
+    /// not resolve every input. The per-tag counts below are overlapping subsets.
     pub zk_precompile_outputs_spent: u64,
+    /// Number of spent P2SH outputs whose revealed redeem script uses a Groth16-
+    /// tagged ZK precompile. A subset of `zk_precompile_outputs_spent`.
+    pub zk_precompile_groth16_outputs_spent: u64,
+    /// Number of spent P2SH outputs whose revealed redeem script uses an
+    /// R0Succinct-tagged ZK precompile. A subset of `zk_precompile_outputs_spent`.
+    pub zk_precompile_r0succinct_outputs_spent: u64,
+    /// Number of spent P2SH outputs whose revealed redeem script uses a ZK
+    /// precompile with an unrecognized tag. A subset of
+    /// `zk_precompile_outputs_spent`.
+    pub zk_precompile_unknown_tag_outputs_spent: u64,
     /// Number of P2SH outputs spent by this transaction's resolved inputs whose
     /// revealed redeem script uses the chain-block sequencing-commitment opcode.
     /// Unresolved inputs are not represented, so this is a lower bound when the
@@ -99,7 +117,7 @@ pub fn tally_covenant_metrics<'a>(
 ) -> CovenantTally {
     let mut tally = CovenantTally::default();
     let mut uses_introspection = false;
-    let mut uses_zk_precompile = false;
+    let mut zk_tags = crate::script::ZkPrecompileTagUsage::default();
     let mut uses_chainblock_seqcommit = false;
 
     for output in outputs {
@@ -115,16 +133,11 @@ pub fn tally_covenant_metrics<'a>(
         }
 
         // A non-standard output may carry introspection / zk-precompile opcodes
-        // directly in its script public key.
-        if script_uses_introspection_opcode(output.script_public_key.script()) {
-            uses_introspection = true;
-        }
-        if script_uses_zk_precompile_opcode(output.script_public_key.script()) {
-            uses_zk_precompile = true;
-        }
-        if script_uses_chainblock_seqcommit_opcode(output.script_public_key.script()) {
-            uses_chainblock_seqcommit = true;
-        }
+        // directly in its script public key. One scan covers every signal.
+        let output_usage = scan_covenant_opcodes_in_script(output.script_public_key.script());
+        uses_introspection |= output_usage.introspection;
+        zk_tags |= output_usage.zk_tags;
+        uses_chainblock_seqcommit |= output_usage.chainblock_seqcommit;
     }
 
     for input in resolved_inputs {
@@ -137,15 +150,27 @@ pub fn tally_covenant_metrics<'a>(
         // Gating on the spent output's class avoids misreading signature bytes
         // as opcodes on a non-P2SH spend.
         if ScriptClass::from_script(input.spent_script_public_key) == ScriptClass::ScriptHash {
-            if signature_script_reveals_introspection(input.signature_script) {
+            // One scan of the revealed redeem script covers every signal.
+            let reveal = signature_script_reveals_covenant_opcodes(input.signature_script);
+            if reveal.introspection {
                 uses_introspection = true;
                 tally.introspection_opcode_outputs_spent += 1;
             }
-            if signature_script_reveals_zk_precompile(input.signature_script) {
-                uses_zk_precompile = true;
+            let input_zk_tags = reveal.zk_tags;
+            zk_tags |= input_zk_tags;
+            if input_zk_tags.any() {
                 tally.zk_precompile_outputs_spent += 1;
             }
-            if signature_script_reveals_chainblock_seqcommit(input.signature_script) {
+            if input_zk_tags.groth16 {
+                tally.zk_precompile_groth16_outputs_spent += 1;
+            }
+            if input_zk_tags.r0succinct {
+                tally.zk_precompile_r0succinct_outputs_spent += 1;
+            }
+            if input_zk_tags.unknown {
+                tally.zk_precompile_unknown_tag_outputs_spent += 1;
+            }
+            if reveal.chainblock_seqcommit {
                 uses_chainblock_seqcommit = true;
                 tally.chainblock_seqcommit_outputs_spent += 1;
             }
@@ -153,7 +178,10 @@ pub fn tally_covenant_metrics<'a>(
     }
 
     tally.uses_introspection_opcode = uses_introspection;
-    tally.uses_zk_precompile_opcode = uses_zk_precompile;
+    tally.uses_zk_precompile_opcode = zk_tags.any();
+    tally.uses_zk_precompile_groth16_opcode = zk_tags.groth16;
+    tally.uses_zk_precompile_r0succinct_opcode = zk_tags.r0succinct;
+    tally.uses_zk_precompile_unknown_tag_opcode = zk_tags.unknown;
     tally.uses_chainblock_seqcommit_opcode = uses_chainblock_seqcommit;
     tally
 }
@@ -216,6 +244,29 @@ mod tests {
         let redeem = vec![codes::OpZkPrecompile, codes::OpCheckSig];
         let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // dummy signature push
         sig.push(redeem.len() as u8); // OP_DATA_2
+        sig.extend_from_slice(&redeem);
+        sig
+    }
+
+    /// A signature script for the canonical consensus ZK-precompile spend: the
+    /// redeem script is just `[OpZkPrecompile]` and the 1-byte tag is a witness
+    /// push in the signature script, immediately before the redeem push. Mirrors
+    /// `pay_to_script_hash_signature_script(redeem, prefix)` where the prefix ends
+    /// in `add_data(&[tag])`.
+    fn sig_revealing_zk_tag(tag: u8) -> Vec<u8> {
+        vec![
+            0x03, 0xaa, 0xbb, 0xcc, // dummy proof/signature push
+            0x01, tag, // tag witness push (second-to-last)
+            0x01, codes::OpZkPrecompile, // redeem script push: [OpZkPrecompile]
+        ]
+    }
+
+    /// A signature script for a non-standard spend that pushes the tag inline in
+    /// the redeem script itself (`[OpData1, tag, OpZkPrecompile]`).
+    fn sig_revealing_zk_tag_inline(tag: u8) -> Vec<u8> {
+        let redeem = vec![0x01, tag, codes::OpZkPrecompile];
+        let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // dummy witness push
+        sig.push(redeem.len() as u8);
         sig.extend_from_slice(&redeem);
         sig
     }
@@ -314,7 +365,8 @@ mod tests {
     fn detects_zk_precompile_revealed_by_p2sh_input() {
         // A P2SH input whose redeem script uses OpZkPrecompile sets the
         // zk-precompile flag without setting the introspection flag (the opcode
-        // sits below the introspection range).
+        // sits below the introspection range). This redeem carries no tag push,
+        // so it classifies as the unknown-tag bucket.
         let spent = p2sh();
         let sig = sig_revealing_zk_precompile();
 
@@ -331,6 +383,69 @@ mod tests {
         assert!(!tally.uses_introspection_opcode);
         assert_eq!(tally.zk_precompile_outputs_spent, 1);
         assert_eq!(tally.introspection_opcode_outputs_spent, 0);
+        // Untagged reveal → unknown-tag bucket, not groth16/r0succinct.
+        assert!(tally.uses_zk_precompile_unknown_tag_opcode);
+        assert!(!tally.uses_zk_precompile_groth16_opcode);
+        assert!(!tally.uses_zk_precompile_r0succinct_opcode);
+        assert_eq!(tally.zk_precompile_unknown_tag_outputs_spent, 1);
+    }
+
+    #[test]
+    fn classifies_zk_precompile_tag_buckets_from_p2sh_reveals() {
+        use crate::script::{ZK_TAG_GROTH16, ZK_TAG_R0SUCCINCT};
+        let spent = p2sh();
+        let groth16_sig = sig_revealing_zk_tag(ZK_TAG_GROTH16);
+        let r0_sig = sig_revealing_zk_tag(ZK_TAG_R0SUCCINCT);
+
+        let tally = tally_covenant_metrics(
+            std::iter::empty(),
+            vec![
+                ResolvedInputView {
+                    spent_script_public_key: &spent,
+                    spent_is_covenant: false,
+                    signature_script: &groth16_sig,
+                },
+                ResolvedInputView {
+                    spent_script_public_key: &spent,
+                    spent_is_covenant: false,
+                    signature_script: &r0_sig,
+                },
+            ],
+        );
+
+        // Aggregate counts both spent outputs once; each tag bucket counts its own.
+        assert!(tally.uses_zk_precompile_opcode);
+        assert_eq!(tally.zk_precompile_outputs_spent, 2);
+        assert!(tally.uses_zk_precompile_groth16_opcode);
+        assert_eq!(tally.zk_precompile_groth16_outputs_spent, 1);
+        assert!(tally.uses_zk_precompile_r0succinct_opcode);
+        assert_eq!(tally.zk_precompile_r0succinct_outputs_spent, 1);
+        // No untagged reveals here.
+        assert!(!tally.uses_zk_precompile_unknown_tag_opcode);
+        assert_eq!(tally.zk_precompile_unknown_tag_outputs_spent, 0);
+        // ZK precompile is disjoint from introspection.
+        assert!(!tally.uses_introspection_opcode);
+    }
+
+    #[test]
+    fn classifies_zk_precompile_tag_from_inline_redeem_reveal() {
+        // A non-standard redeem that carries the tag inline still classifies.
+        use crate::script::ZK_TAG_GROTH16;
+        let spent = p2sh();
+        let sig = sig_revealing_zk_tag_inline(ZK_TAG_GROTH16);
+
+        let tally = tally_covenant_metrics(
+            std::iter::empty(),
+            vec![ResolvedInputView {
+                spent_script_public_key: &spent,
+                spent_is_covenant: false,
+                signature_script: &sig,
+            }],
+        );
+
+        assert!(tally.uses_zk_precompile_groth16_opcode);
+        assert_eq!(tally.zk_precompile_groth16_outputs_spent, 1);
+        assert!(!tally.uses_zk_precompile_unknown_tag_opcode);
     }
 
     #[test]
@@ -383,6 +498,9 @@ mod tests {
 
         assert_eq!(tally.output_count_nonstandard, 1);
         assert!(tally.uses_zk_precompile_opcode);
+        // Untagged output-script use → unknown-tag bucket.
+        assert!(tally.uses_zk_precompile_unknown_tag_opcode);
+        assert!(!tally.uses_zk_precompile_groth16_opcode);
         assert!(!tally.uses_introspection_opcode);
         assert_eq!(tally.zk_precompile_outputs_spent, 0);
     }

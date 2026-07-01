@@ -65,12 +65,21 @@ pub struct Stats {
     // introspection opcode
     pub introspection_opcode_outputs_spent: u64,
 
-    // Count of transactions using the ZK precompile opcode
+    // Count of transactions using the ZK precompile opcode (any tag)
     pub zk_precompile_tx_count: u64,
 
     // Count of P2SH outputs spent whose revealed redeem script uses the ZK
-    // precompile opcode
+    // precompile opcode (any tag)
     pub zk_precompile_outputs_spent: u64,
+
+    // Per-ZK-tag breakdown of the aggregate zk_precompile_* metrics above. Each is
+    // an overlapping subset (a tx/redeem mixing tags counts in more than one).
+    pub zk_precompile_groth16_tx_count: u64,
+    pub zk_precompile_groth16_outputs_spent: u64,
+    pub zk_precompile_r0succinct_tx_count: u64,
+    pub zk_precompile_r0succinct_outputs_spent: u64,
+    pub zk_precompile_unknown_tag_tx_count: u64,
+    pub zk_precompile_unknown_tag_outputs_spent: u64,
 
     // Count of transactions using the chain-block sequencing-commitment opcode
     // (OpChainblockSeqCommit). This opcode is within the introspection range, so
@@ -117,6 +126,12 @@ impl Stats {
             introspection_opcode_outputs_spent: 0,
             zk_precompile_tx_count: 0,
             zk_precompile_outputs_spent: 0,
+            zk_precompile_groth16_tx_count: 0,
+            zk_precompile_groth16_outputs_spent: 0,
+            zk_precompile_r0succinct_tx_count: 0,
+            zk_precompile_r0succinct_outputs_spent: 0,
+            zk_precompile_unknown_tag_tx_count: 0,
+            zk_precompile_unknown_tag_outputs_spent: 0,
             chainblock_seqcommit_tx_count: 0,
             chainblock_seqcommit_outputs_spent: 0,
             covenant_creating_tx_count: 0,
@@ -262,6 +277,18 @@ impl Stats {
                 per_second_stats.introspection_opcode_outputs_spent;
             target.zk_precompile_tx_count += per_second_stats.zk_precompile_tx_count;
             target.zk_precompile_outputs_spent += per_second_stats.zk_precompile_outputs_spent;
+            target.zk_precompile_groth16_tx_count +=
+                per_second_stats.zk_precompile_groth16_tx_count;
+            target.zk_precompile_groth16_outputs_spent +=
+                per_second_stats.zk_precompile_groth16_outputs_spent;
+            target.zk_precompile_r0succinct_tx_count +=
+                per_second_stats.zk_precompile_r0succinct_tx_count;
+            target.zk_precompile_r0succinct_outputs_spent +=
+                per_second_stats.zk_precompile_r0succinct_outputs_spent;
+            target.zk_precompile_unknown_tag_tx_count +=
+                per_second_stats.zk_precompile_unknown_tag_tx_count;
+            target.zk_precompile_unknown_tag_outputs_spent +=
+                per_second_stats.zk_precompile_unknown_tag_outputs_spent;
             target.chainblock_seqcommit_tx_count +=
                 per_second_stats.chainblock_seqcommit_tx_count;
             target.chainblock_seqcommit_outputs_spent +=
@@ -369,13 +396,16 @@ impl Stats {
                     introspection_opcode_tx_count, introspection_opcode_outputs_spent,
                     zk_precompile_tx_count,
                     zk_precompile_outputs_spent,
+                    zk_precompile_groth16_tx_count, zk_precompile_groth16_outputs_spent,
+                    zk_precompile_r0succinct_tx_count, zk_precompile_r0succinct_outputs_spent,
+                    zk_precompile_unknown_tag_tx_count, zk_precompile_unknown_tag_outputs_spent,
                     chainblock_seqcommit_tx_count,
                     chainblock_seqcommit_outputs_spent,
                     covenant_creating_tx_count,
                     covenant_outputs_created, covenant_outputs_spent
                 )
                 VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
             "#,
         )
         .bind(date)
@@ -387,6 +417,12 @@ impl Stats {
         .bind(self.introspection_opcode_outputs_spent as i64)
         .bind(self.zk_precompile_tx_count as i64)
         .bind(self.zk_precompile_outputs_spent as i64)
+        .bind(self.zk_precompile_groth16_tx_count as i64)
+        .bind(self.zk_precompile_groth16_outputs_spent as i64)
+        .bind(self.zk_precompile_r0succinct_tx_count as i64)
+        .bind(self.zk_precompile_r0succinct_outputs_spent as i64)
+        .bind(self.zk_precompile_unknown_tag_tx_count as i64)
+        .bind(self.zk_precompile_unknown_tag_outputs_spent as i64)
         .bind(self.chainblock_seqcommit_tx_count as i64)
         .bind(self.chainblock_seqcommit_outputs_spent as i64)
         .bind(self.covenant_creating_tx_count as i64)
@@ -459,6 +495,30 @@ impl fmt::Debug for Stats {
             .field(
                 "zk_precompile_outputs_spent",
                 &self.zk_precompile_outputs_spent,
+            )
+            .field(
+                "zk_precompile_groth16_tx_count",
+                &self.zk_precompile_groth16_tx_count,
+            )
+            .field(
+                "zk_precompile_groth16_outputs_spent",
+                &self.zk_precompile_groth16_outputs_spent,
+            )
+            .field(
+                "zk_precompile_r0succinct_tx_count",
+                &self.zk_precompile_r0succinct_tx_count,
+            )
+            .field(
+                "zk_precompile_r0succinct_outputs_spent",
+                &self.zk_precompile_r0succinct_outputs_spent,
+            )
+            .field(
+                "zk_precompile_unknown_tag_tx_count",
+                &self.zk_precompile_unknown_tag_tx_count,
+            )
+            .field(
+                "zk_precompile_unknown_tag_outputs_spent",
+                &self.zk_precompile_unknown_tag_outputs_spent,
             )
             .field(
                 "chainblock_seqcommit_tx_count",
