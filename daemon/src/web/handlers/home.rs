@@ -370,103 +370,88 @@ impl SseData {
             ),
         );
 
+        // Covenant / introspection / ZK-tag / chainblock 24h counters. All of
+        // these read fields off the same seconds-cache entries, so fold them into
+        // a single filtered pass instead of one full-map scan per key.
+        let covenant = tx_counter::covenant_window_sums(dag_cache, threshold);
+
         // Transactions using covenant / introspection opcodes
         self.set(
             SseKey::IntrospectionOpcodeTransactionCount24h,
-            SseField::from(tx_counter::introspection_opcode_tx_count(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.introspection_tx),
         );
 
         // P2SH outputs spent revealing a covenant / introspection opcode
         self.set(
             SseKey::IntrospectionOpcodeOutputsSpent24h,
-            SseField::from(tx_counter::introspection_opcode_outputs_spent(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.introspection_outputs_spent),
         );
 
         // Transactions using the ZK precompile opcode (any tag)
         self.set(
             SseKey::ZkPrecompileTransactionCount24h,
-            SseField::from(tx_counter::zk_precompile_tx_count(dag_cache, threshold)),
+            SseField::from(covenant.zk_tx),
         );
 
         // P2SH outputs spent revealing the ZK precompile opcode (any tag)
         self.set(
             SseKey::ZkPrecompileOutputsSpent24h,
-            SseField::from(tx_counter::zk_precompile_outputs_spent(dag_cache, threshold)),
+            SseField::from(covenant.zk_outputs_spent),
         );
 
         // Per-ZK-tag breakdown (overlapping subsets of the aggregate above)
         self.set(
             SseKey::ZkPrecompileGroth16TransactionCount24h,
-            SseField::from(tx_counter::zk_precompile_groth16_tx_count(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.zk_groth16_tx),
         );
         self.set(
             SseKey::ZkPrecompileGroth16OutputsSpent24h,
-            SseField::from(tx_counter::zk_precompile_groth16_outputs_spent(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.zk_groth16_outputs_spent),
         );
         self.set(
             SseKey::ZkPrecompileR0SuccinctTransactionCount24h,
-            SseField::from(tx_counter::zk_precompile_r0succinct_tx_count(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.zk_r0succinct_tx),
         );
         self.set(
             SseKey::ZkPrecompileR0SuccinctOutputsSpent24h,
-            SseField::from(tx_counter::zk_precompile_r0succinct_outputs_spent(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.zk_r0succinct_outputs_spent),
         );
         self.set(
             SseKey::ZkPrecompileUnknownTagTransactionCount24h,
-            SseField::from(tx_counter::zk_precompile_unknown_tag_tx_count(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.zk_unknown_tag_tx),
         );
         self.set(
             SseKey::ZkPrecompileUnknownTagOutputsSpent24h,
-            SseField::from(tx_counter::zk_precompile_unknown_tag_outputs_spent(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.zk_unknown_tag_outputs_spent),
         );
 
         // Transactions using the chain-block sequencing-commitment opcode
         // (subset of the introspection count)
         self.set(
             SseKey::ChainblockSeqcommitTransactionCount24h,
-            SseField::from(tx_counter::chainblock_seqcommit_tx_count(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.chainblock_seqcommit_tx),
         );
 
         // P2SH outputs spent revealing the chain-block sequencing-commitment opcode
         self.set(
             SseKey::ChainblockSeqcommitOutputsSpent24h,
-            SseField::from(tx_counter::chainblock_seqcommit_outputs_spent(
-                dag_cache, threshold,
-            )),
+            SseField::from(covenant.chainblock_seqcommit_outputs_spent),
         );
 
         // Covenant id activity
         self.set(
             SseKey::CovenantCreatingTransactionCount24h,
-            SseField::from(tx_counter::covenant_creating_tx_count(dag_cache, threshold)),
+            SseField::from(covenant.covenant_creating_tx),
         );
 
         self.set(
             SseKey::CovenantOutputsCreated24h,
-            SseField::from(tx_counter::covenant_outputs_created(dag_cache, threshold)),
+            SseField::from(covenant.covenant_outputs_created),
         );
 
         self.set(
             SseKey::CovenantOutputsSpent24h,
-            SseField::from(tx_counter::covenant_outputs_spent(dag_cache, threshold)),
+            SseField::from(covenant.covenant_outputs_spent),
         );
 
         self.set(

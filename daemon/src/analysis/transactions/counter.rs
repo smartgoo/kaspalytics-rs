@@ -144,150 +144,76 @@ pub fn output_script_class_counts(
     counts
 }
 
-/// Count of accepted transactions using a covenant / introspection opcode since `threshold`.
-pub fn introspection_opcode_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.introspection_opcode_tx_count)
-        .sum()
+/// All covenant / introspection / ZK-tag / chainblock 24h SSE counters, computed
+/// in a single filtered pass over the seconds cache. Each field mirrors the
+/// like-named [`SecondMetrics`](crate::ingest::second::SecondMetrics) field summed
+/// over entries whose second `>= threshold`. Folding them into one pass avoids the
+/// dozen independent full-map scans the SSE broadcast hot path would otherwise do.
+#[derive(Default)]
+pub struct CovenantWindowSums {
+    /// Accepted transactions using a covenant / introspection opcode.
+    pub introspection_tx: u64,
+    /// P2SH outputs spent whose revealed redeem script uses a covenant /
+    /// introspection opcode.
+    pub introspection_outputs_spent: u64,
+    /// Accepted transactions using the ZK precompile opcode (any tag).
+    pub zk_tx: u64,
+    /// P2SH outputs spent whose revealed redeem script uses the ZK precompile
+    /// opcode (any tag).
+    pub zk_outputs_spent: u64,
+    /// Accepted transactions using a Groth16-tagged ZK precompile (overlapping
+    /// subset of `zk_tx`).
+    pub zk_groth16_tx: u64,
+    /// P2SH outputs spent revealing a Groth16-tagged ZK precompile.
+    pub zk_groth16_outputs_spent: u64,
+    /// Accepted transactions using an R0Succinct-tagged ZK precompile (overlapping
+    /// subset of `zk_tx`).
+    pub zk_r0succinct_tx: u64,
+    /// P2SH outputs spent revealing an R0Succinct-tagged ZK precompile.
+    pub zk_r0succinct_outputs_spent: u64,
+    /// Accepted transactions using a ZK precompile with an unrecognized tag
+    /// (overlapping subset of `zk_tx`; expected to be ~0).
+    pub zk_unknown_tag_tx: u64,
+    /// P2SH outputs spent revealing a ZK precompile with an unrecognized tag.
+    pub zk_unknown_tag_outputs_spent: u64,
+    /// Accepted transactions using the chain-block sequencing-commitment opcode
+    /// (`OpChainblockSeqCommit`; subset of `introspection_tx`).
+    pub chainblock_seqcommit_tx: u64,
+    /// P2SH outputs spent revealing the chain-block sequencing-commitment opcode.
+    pub chainblock_seqcommit_outputs_spent: u64,
+    /// Accepted transactions creating at least one covenant-bound output.
+    pub covenant_creating_tx: u64,
+    /// Covenant-bound outputs created.
+    pub covenant_outputs_created: u64,
+    /// Covenant-bound outputs spent.
+    pub covenant_outputs_spent: u64,
 }
 
-/// Count of P2SH outputs spent whose revealed redeem script uses a covenant /
-/// introspection opcode since `threshold`.
-pub fn introspection_opcode_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
+/// Computes every covenant / introspection / ZK-tag / chainblock 24h counter in a
+/// single filtered pass over the seconds cache. Values are identical to summing
+/// each field independently; this exists to avoid a dozen separate full-map scans
+/// on the SSE broadcast hot path.
+pub fn covenant_window_sums(dag_cache: &Arc<DagCache>, threshold: u64) -> CovenantWindowSums {
+    let mut s = CovenantWindowSums::default();
+    for entry in dag_cache
         .seconds_iter()
         .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.introspection_opcode_outputs_spent)
-        .sum()
-}
-
-/// Count of accepted transactions using the ZK precompile opcode since `threshold`.
-pub fn zk_precompile_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_tx_count)
-        .sum()
-}
-
-/// Count of P2SH outputs spent whose revealed redeem script uses the ZK precompile
-/// opcode since `threshold`.
-pub fn zk_precompile_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_outputs_spent)
-        .sum()
-}
-
-/// Count of accepted transactions using a Groth16-tagged ZK precompile since
-/// `threshold`. An overlapping subset of [`zk_precompile_tx_count`].
-pub fn zk_precompile_groth16_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_groth16_tx_count)
-        .sum()
-}
-
-/// Count of P2SH outputs spent whose revealed redeem script uses a Groth16-tagged
-/// ZK precompile since `threshold`.
-pub fn zk_precompile_groth16_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_groth16_outputs_spent)
-        .sum()
-}
-
-/// Count of accepted transactions using an R0Succinct-tagged ZK precompile since
-/// `threshold`. An overlapping subset of [`zk_precompile_tx_count`].
-pub fn zk_precompile_r0succinct_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_r0succinct_tx_count)
-        .sum()
-}
-
-/// Count of P2SH outputs spent whose revealed redeem script uses an R0Succinct-
-/// tagged ZK precompile since `threshold`.
-pub fn zk_precompile_r0succinct_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_r0succinct_outputs_spent)
-        .sum()
-}
-
-/// Count of accepted transactions using a ZK precompile with an unrecognized tag
-/// since `threshold`. An overlapping subset of [`zk_precompile_tx_count`];
-/// expected to be ~0.
-pub fn zk_precompile_unknown_tag_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_unknown_tag_tx_count)
-        .sum()
-}
-
-/// Count of P2SH outputs spent whose revealed redeem script uses a ZK precompile
-/// with an unrecognized tag since `threshold`.
-pub fn zk_precompile_unknown_tag_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.zk_precompile_unknown_tag_outputs_spent)
-        .sum()
-}
-
-/// Count of accepted transactions using the chain-block sequencing-commitment
-/// opcode (`OpChainblockSeqCommit`) since `threshold`. This opcode is within the
-/// introspection range, so these transactions are a subset of
-/// [`introspection_opcode_tx_count`].
-pub fn chainblock_seqcommit_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.chainblock_seqcommit_tx_count)
-        .sum()
-}
-
-/// Count of P2SH outputs spent whose revealed redeem script uses the chain-block
-/// sequencing-commitment opcode since `threshold`.
-pub fn chainblock_seqcommit_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.chainblock_seqcommit_outputs_spent)
-        .sum()
-}
-
-/// Count of accepted transactions creating at least one covenant-bound output since `threshold`.
-pub fn covenant_creating_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.covenant_creating_tx_count)
-        .sum()
-}
-
-/// Count of covenant-bound outputs created since `threshold`.
-pub fn covenant_outputs_created(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.covenant_outputs_created)
-        .sum()
-}
-
-/// Count of covenant-bound outputs spent since `threshold`.
-pub fn covenant_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
-    dag_cache
-        .seconds_iter()
-        .filter(|entry| *entry.key() >= threshold)
-        .map(|entry| entry.covenant_outputs_spent)
-        .sum()
+    {
+        s.introspection_tx += entry.introspection_opcode_tx_count;
+        s.introspection_outputs_spent += entry.introspection_opcode_outputs_spent;
+        s.zk_tx += entry.zk_precompile_tx_count;
+        s.zk_outputs_spent += entry.zk_precompile_outputs_spent;
+        s.zk_groth16_tx += entry.zk_precompile_groth16_tx_count;
+        s.zk_groth16_outputs_spent += entry.zk_precompile_groth16_outputs_spent;
+        s.zk_r0succinct_tx += entry.zk_precompile_r0succinct_tx_count;
+        s.zk_r0succinct_outputs_spent += entry.zk_precompile_r0succinct_outputs_spent;
+        s.zk_unknown_tag_tx += entry.zk_precompile_unknown_tag_tx_count;
+        s.zk_unknown_tag_outputs_spent += entry.zk_precompile_unknown_tag_outputs_spent;
+        s.chainblock_seqcommit_tx += entry.chainblock_seqcommit_tx_count;
+        s.chainblock_seqcommit_outputs_spent += entry.chainblock_seqcommit_outputs_spent;
+        s.covenant_creating_tx += entry.covenant_creating_tx_count;
+        s.covenant_outputs_created += entry.covenant_outputs_created;
+        s.covenant_outputs_spent += entry.covenant_outputs_spent;
+    }
+    s
 }
