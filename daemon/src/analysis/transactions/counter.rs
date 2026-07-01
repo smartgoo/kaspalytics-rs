@@ -182,6 +182,28 @@ pub fn zk_precompile_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) ->
         .sum()
 }
 
+/// Count of accepted transactions using the chain-block sequencing-commitment
+/// opcode (`OpChainblockSeqCommit`) since `threshold`. This opcode is within the
+/// introspection range, so these transactions are a subset of
+/// [`introspection_opcode_tx_count`].
+pub fn chainblock_seqcommit_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.chainblock_seqcommit_tx_count)
+        .sum()
+}
+
+/// Count of P2SH outputs spent whose revealed redeem script uses the chain-block
+/// sequencing-commitment opcode since `threshold`.
+pub fn chainblock_seqcommit_outputs_spent(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
+    dag_cache
+        .seconds_iter()
+        .filter(|entry| *entry.key() >= threshold)
+        .map(|entry| entry.chainblock_seqcommit_outputs_spent)
+        .sum()
+}
+
 /// Count of accepted transactions creating at least one covenant-bound output since `threshold`.
 pub fn covenant_creating_tx_count(dag_cache: &Arc<DagCache>, threshold: u64) -> u64 {
     dag_cache

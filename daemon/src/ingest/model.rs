@@ -273,6 +273,9 @@ pub struct RevealedOpcodeCredit {
     pub introspection: bool,
     /// Whether the ZK-precompile transaction count was credited.
     pub zk_precompile: bool,
+    /// Whether the chain-block sequencing-commitment transaction count was
+    /// credited.
+    pub chainblock_seqcommit: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

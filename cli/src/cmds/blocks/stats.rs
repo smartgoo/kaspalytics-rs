@@ -72,6 +72,15 @@ pub struct Stats {
     // precompile opcode
     pub zk_precompile_outputs_spent: u64,
 
+    // Count of transactions using the chain-block sequencing-commitment opcode
+    // (OpChainblockSeqCommit). This opcode is within the introspection range, so
+    // these transactions are also counted in introspection_opcode_tx_count.
+    pub chainblock_seqcommit_tx_count: u64,
+
+    // Count of P2SH outputs spent whose revealed redeem script uses the
+    // chain-block sequencing-commitment opcode
+    pub chainblock_seqcommit_outputs_spent: u64,
+
     // Count of transactions creating at least one covenant-bound output
     pub covenant_creating_tx_count: u64,
 
@@ -108,6 +117,8 @@ impl Stats {
             introspection_opcode_outputs_spent: 0,
             zk_precompile_tx_count: 0,
             zk_precompile_outputs_spent: 0,
+            chainblock_seqcommit_tx_count: 0,
+            chainblock_seqcommit_outputs_spent: 0,
             covenant_creating_tx_count: 0,
             covenant_outputs_created: 0,
             covenant_outputs_spent: 0,
@@ -251,6 +262,10 @@ impl Stats {
                 per_second_stats.introspection_opcode_outputs_spent;
             target.zk_precompile_tx_count += per_second_stats.zk_precompile_tx_count;
             target.zk_precompile_outputs_spent += per_second_stats.zk_precompile_outputs_spent;
+            target.chainblock_seqcommit_tx_count +=
+                per_second_stats.chainblock_seqcommit_tx_count;
+            target.chainblock_seqcommit_outputs_spent +=
+                per_second_stats.chainblock_seqcommit_outputs_spent;
             target.covenant_creating_tx_count += per_second_stats.covenant_creating_tx_count;
             target.covenant_outputs_created += per_second_stats.covenant_outputs_created;
             target.covenant_outputs_spent += per_second_stats.covenant_outputs_spent;
@@ -354,11 +369,13 @@ impl Stats {
                     introspection_opcode_tx_count, introspection_opcode_outputs_spent,
                     zk_precompile_tx_count,
                     zk_precompile_outputs_spent,
+                    chainblock_seqcommit_tx_count,
+                    chainblock_seqcommit_outputs_spent,
                     covenant_creating_tx_count,
                     covenant_outputs_created, covenant_outputs_spent
                 )
                 VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             "#,
         )
         .bind(date)
@@ -370,6 +387,8 @@ impl Stats {
         .bind(self.introspection_opcode_outputs_spent as i64)
         .bind(self.zk_precompile_tx_count as i64)
         .bind(self.zk_precompile_outputs_spent as i64)
+        .bind(self.chainblock_seqcommit_tx_count as i64)
+        .bind(self.chainblock_seqcommit_outputs_spent as i64)
         .bind(self.covenant_creating_tx_count as i64)
         .bind(self.covenant_outputs_created as i64)
         .bind(self.covenant_outputs_spent as i64)
@@ -440,6 +459,14 @@ impl fmt::Debug for Stats {
             .field(
                 "zk_precompile_outputs_spent",
                 &self.zk_precompile_outputs_spent,
+            )
+            .field(
+                "chainblock_seqcommit_tx_count",
+                &self.chainblock_seqcommit_tx_count,
+            )
+            .field(
+                "chainblock_seqcommit_outputs_spent",
+                &self.chainblock_seqcommit_outputs_spent,
             )
             .field(
                 "covenant_creating_tx_count",

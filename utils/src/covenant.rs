@@ -16,7 +16,8 @@
 //!   the redeem script revealed by a P2SH spend or a non-standard output script.
 
 use crate::script::{
-    script_uses_introspection_opcode, script_uses_zk_precompile_opcode,
+    script_uses_chainblock_seqcommit_opcode, script_uses_introspection_opcode,
+    script_uses_zk_precompile_opcode, signature_script_reveals_chainblock_seqcommit,
     signature_script_reveals_introspection, signature_script_reveals_zk_precompile,
 };
 use kaspa_consensus_core::tx::ScriptPublicKey;
@@ -56,6 +57,11 @@ pub struct CovenantTally {
     /// True if any output script, or any resolved P2SH input's revealed redeem
     /// script, uses the ZK precompile opcode (`OpZkPrecompile`).
     pub uses_zk_precompile_opcode: bool,
+    /// True if any output script, or any resolved P2SH input's revealed redeem
+    /// script, uses the chain-block sequencing-commitment opcode
+    /// (`OpChainblockSeqCommit`). This opcode is within the introspection range,
+    /// so whenever this is true `uses_introspection_opcode` is also true.
+    pub uses_chainblock_seqcommit_opcode: bool,
     /// Number of P2SH outputs spent by this transaction's resolved inputs whose
     /// revealed redeem script uses a covenant / introspection opcode. Unresolved
     /// inputs are not represented, so this is a lower bound when the caller could
@@ -66,6 +72,11 @@ pub struct CovenantTally {
     /// are not represented, so this is a lower bound when the caller could not
     /// resolve every input.
     pub zk_precompile_outputs_spent: u64,
+    /// Number of P2SH outputs spent by this transaction's resolved inputs whose
+    /// revealed redeem script uses the chain-block sequencing-commitment opcode.
+    /// Unresolved inputs are not represented, so this is a lower bound when the
+    /// caller could not resolve every input.
+    pub chainblock_seqcommit_outputs_spent: u64,
     /// Number of covenant-bound outputs created by this transaction.
     pub covenant_outputs_created: u64,
     /// Number of covenant-bound outputs spent by this transaction's resolved
@@ -89,6 +100,7 @@ pub fn tally_covenant_metrics<'a>(
     let mut tally = CovenantTally::default();
     let mut uses_introspection = false;
     let mut uses_zk_precompile = false;
+    let mut uses_chainblock_seqcommit = false;
 
     for output in outputs {
         match ScriptClass::from_script(output.script_public_key) {
@@ -110,6 +122,9 @@ pub fn tally_covenant_metrics<'a>(
         if script_uses_zk_precompile_opcode(output.script_public_key.script()) {
             uses_zk_precompile = true;
         }
+        if script_uses_chainblock_seqcommit_opcode(output.script_public_key.script()) {
+            uses_chainblock_seqcommit = true;
+        }
     }
 
     for input in resolved_inputs {
@@ -130,11 +145,16 @@ pub fn tally_covenant_metrics<'a>(
                 uses_zk_precompile = true;
                 tally.zk_precompile_outputs_spent += 1;
             }
+            if signature_script_reveals_chainblock_seqcommit(input.signature_script) {
+                uses_chainblock_seqcommit = true;
+                tally.chainblock_seqcommit_outputs_spent += 1;
+            }
         }
     }
 
     tally.uses_introspection_opcode = uses_introspection;
     tally.uses_zk_precompile_opcode = uses_zk_precompile;
+    tally.uses_chainblock_seqcommit_opcode = uses_chainblock_seqcommit;
     tally
 }
 
@@ -194,6 +214,17 @@ mod tests {
     /// precompile opcode. Mirrors a real P2SH OpZkPrecompile reveal.
     fn sig_revealing_zk_precompile() -> Vec<u8> {
         let redeem = vec![codes::OpZkPrecompile, codes::OpCheckSig];
+        let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // dummy signature push
+        sig.push(redeem.len() as u8); // OP_DATA_2
+        sig.extend_from_slice(&redeem);
+        sig
+    }
+
+    /// A signature script whose final push is a redeem script using the
+    /// chain-block sequencing-commitment opcode. Mirrors a real P2SH
+    /// OpChainblockSeqCommit reveal.
+    fn sig_revealing_chainblock_seqcommit() -> Vec<u8> {
+        let redeem = vec![codes::OpChainblockSeqCommit, codes::OpCheckSig];
         let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // dummy signature push
         sig.push(redeem.len() as u8); // OP_DATA_2
         sig.extend_from_slice(&redeem);
@@ -300,6 +331,45 @@ mod tests {
         assert!(!tally.uses_introspection_opcode);
         assert_eq!(tally.zk_precompile_outputs_spent, 1);
         assert_eq!(tally.introspection_opcode_outputs_spent, 0);
+    }
+
+    #[test]
+    fn detects_chainblock_seqcommit_revealed_by_p2sh_input() {
+        // A P2SH input whose redeem script uses OpChainblockSeqCommit sets the
+        // chainblock flag AND, because that opcode is within the introspection
+        // range, the introspection flag too (an overlapping subset).
+        let spent = p2sh();
+        let sig = sig_revealing_chainblock_seqcommit();
+
+        let tally = tally_covenant_metrics(
+            std::iter::empty(),
+            vec![ResolvedInputView {
+                spent_script_public_key: &spent,
+                spent_is_covenant: false,
+                signature_script: &sig,
+            }],
+        );
+
+        assert!(tally.uses_chainblock_seqcommit_opcode);
+        assert!(tally.uses_introspection_opcode);
+        assert!(!tally.uses_zk_precompile_opcode);
+        assert_eq!(tally.chainblock_seqcommit_outputs_spent, 1);
+        assert_eq!(tally.introspection_opcode_outputs_spent, 1);
+    }
+
+    #[test]
+    fn detects_chainblock_seqcommit_in_nonstandard_output_script() {
+        let out = spk(vec![codes::OpChainblockSeqCommit, codes::OpCheckSig]);
+
+        let tally = tally_covenant_metrics(
+            vec![TxOutputView { script_public_key: &out, is_covenant: false }],
+            std::iter::empty(),
+        );
+
+        assert_eq!(tally.output_count_nonstandard, 1);
+        assert!(tally.uses_chainblock_seqcommit_opcode);
+        assert!(tally.uses_introspection_opcode);
+        assert_eq!(tally.chainblock_seqcommit_outputs_spent, 0);
     }
 
     #[test]

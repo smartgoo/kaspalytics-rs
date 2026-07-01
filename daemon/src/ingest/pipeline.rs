@@ -13,7 +13,8 @@ use kaspalytics_utils::covenant::{
 };
 use kaspalytics_utils::log::LogTarget;
 use kaspalytics_utils::script::{
-    signature_script_reveals_introspection, signature_script_reveals_zk_precompile,
+    signature_script_reveals_chainblock_seqcommit, signature_script_reveals_introspection,
+    signature_script_reveals_zk_precompile,
 };
 use log::warn;
 use std::collections::HashMap;
@@ -243,6 +244,9 @@ struct RevealedOpcodes {
     introspection: bool,
     /// At least one revealed redeem script used the ZK precompile opcode.
     zk_precompile: bool,
+    /// At least one revealed redeem script used the chain-block
+    /// sequencing-commitment opcode.
+    chainblock_seqcommit: bool,
 }
 
 /// Scans a spending transaction's resolved P2SH inputs and groups the covenant
@@ -265,7 +269,9 @@ fn collect_revealed_opcode_attributions(
 
         let introspection = signature_script_reveals_introspection(&input.signature_script);
         let zk_precompile = signature_script_reveals_zk_precompile(&input.signature_script);
-        if !introspection && !zk_precompile {
+        let chainblock_seqcommit =
+            signature_script_reveals_chainblock_seqcommit(&input.signature_script);
+        if !introspection && !zk_precompile && !chainblock_seqcommit {
             continue;
         }
 
@@ -276,6 +282,7 @@ fn collect_revealed_opcode_attributions(
         let entry = attributions.entry(previous_tx_id).or_default();
         entry.introspection |= introspection;
         entry.zk_precompile |= zk_precompile;
+        entry.chainblock_seqcommit |= chainblock_seqcommit;
     }
 
     attributions
@@ -328,10 +335,14 @@ fn apply_revealed_opcode_credits(
             if revealed.zk_precompile {
                 second_metrics.zk_precompile_tx_count += 1;
             }
+            if revealed.chainblock_seqcommit {
+                second_metrics.chainblock_seqcommit_tx_count += 1;
+            }
             credits.push(RevealedOpcodeCredit {
                 second,
                 introspection: revealed.introspection,
                 zk_precompile: revealed.zk_precompile,
+                chainblock_seqcommit: revealed.chainblock_seqcommit,
             });
         }
     }
@@ -353,6 +364,10 @@ fn reverse_revealed_opcode_credits(dag_cache: &Arc<DagCache>, credits: &[Reveale
             }
             if credit.zk_precompile {
                 v.zk_precompile_tx_count = v.zk_precompile_tx_count.saturating_sub(1);
+            }
+            if credit.chainblock_seqcommit {
+                v.chainblock_seqcommit_tx_count =
+                    v.chainblock_seqcommit_tx_count.saturating_sub(1);
             }
         });
     }

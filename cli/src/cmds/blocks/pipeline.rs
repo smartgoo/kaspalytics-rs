@@ -325,6 +325,11 @@ impl BlockAnalysis {
                         stats.zk_precompile_tx_count += 1;
                     }
                     stats.zk_precompile_outputs_spent += tally.zk_precompile_outputs_spent;
+                    if tally.uses_chainblock_seqcommit_opcode {
+                        stats.chainblock_seqcommit_tx_count += 1;
+                    }
+                    stats.chainblock_seqcommit_outputs_spent +=
+                        tally.chainblock_seqcommit_outputs_spent;
                     stats.covenant_outputs_created += tally.covenant_outputs_created;
                     if tally.covenant_outputs_created > 0 {
                         stats.covenant_creating_tx_count += 1;

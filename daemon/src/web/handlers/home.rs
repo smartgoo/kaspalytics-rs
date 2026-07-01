@@ -52,6 +52,8 @@ enum SseKey {
     IntrospectionOpcodeOutputsSpent24h,
     ZkPrecompileTransactionCount24h,
     ZkPrecompileOutputsSpent24h,
+    ChainblockSeqcommitTransactionCount24h,
+    ChainblockSeqcommitOutputsSpent24h,
     CovenantCreatingTransactionCount24h,
     CovenantOutputsCreated24h,
     CovenantOutputsSpent24h,
@@ -388,6 +390,23 @@ impl SseData {
         self.set(
             SseKey::ZkPrecompileOutputsSpent24h,
             SseField::from(tx_counter::zk_precompile_outputs_spent(dag_cache, threshold)),
+        );
+
+        // Transactions using the chain-block sequencing-commitment opcode
+        // (subset of the introspection count)
+        self.set(
+            SseKey::ChainblockSeqcommitTransactionCount24h,
+            SseField::from(tx_counter::chainblock_seqcommit_tx_count(
+                dag_cache, threshold,
+            )),
+        );
+
+        // P2SH outputs spent revealing the chain-block sequencing-commitment opcode
+        self.set(
+            SseKey::ChainblockSeqcommitOutputsSpent24h,
+            SseField::from(tx_counter::chainblock_seqcommit_outputs_spent(
+                dag_cache, threshold,
+            )),
         );
 
         // Covenant id activity

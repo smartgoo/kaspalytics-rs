@@ -1,27 +1,58 @@
 //! Helpers for detecting covenant / introspection opcode usage in scripts.
 //!
-//! The covenant ("introspection") opcodes were added to kaspa-txscript and
-//! occupy the contiguous byte range `OpTxVersion..=OpBlake3WithKey`
-//! (`0xb2..=0xda`) — every opcode gated on `covenants_enabled`. They only ever
-//! execute inside a script body, so for a standard pay-to-script-hash spend they
-//! live in the redeem script, which is revealed as the final data push of the
-//! signature script. For a non-standard output they may appear directly in the
-//! script public key.
+//! The covenant-gated opcodes added to kaspa-txscript span `OpZkPrecompile`
+//! (`0xa6`) and the contiguous block `OpTxVersion..=OpBlake3WithKey`
+//! (`0xb2..=0xda`). Not all of them are *introspection* opcodes, so the
+//! "introspection" detector covers only the genuine introspection subset:
+//!
+//! - **Transaction introspection** — `OpTxVersion..=OpTxInputScriptSigLen`
+//!   (`0xb2..=0xc9`), reading fields of the spending transaction.
+//! - **Covenant / auth / chain introspection** — `OpAuthOutputCount`,
+//!   `Op*CovenantId`, `OpCov*`, `OpChainblockSeqCommit`, up to
+//!   `OpOutputAuthorizingInput` (`0xd6`).
+//!
+//! Deliberately *excluded* from "introspection" even though they fall in or
+//! near that span: the numeric-conversion opcodes `OpNum2Bin` (`0xcd`) and
+//! `OpBin2Num` (`0xce`) and the invalid/disabled opcode `OpUnknown202` (`0xca`)
+//! — interior holes — and the crypto opcodes `OpCheckSigFromStack{,ECDSA}` /
+//! `OpBlake3{,WithKey}` (`0xd7..=0xda`), which sit above the range max.
+//! `OpZkPrecompile` (`0xa6`) sits below the range and is tracked separately, as
+//! is `OpChainblockSeqCommit` (`0xd4`), which remains *inside* the introspection
+//! range and is therefore an overlapping subset.
+//!
+//! These opcodes only ever execute inside a script body, so for a standard
+//! pay-to-script-hash spend they live in the redeem script, revealed as the
+//! final data push of the signature script. For a non-standard output they may
+//! appear directly in the script public key.
 
 use kaspa_txscript::opcodes::codes;
 
-/// First byte value of the covenant / introspection opcode range (`OpTxVersion`).
-pub const COVENANT_OPCODE_MIN: u8 = codes::OpTxVersion;
+/// First byte value of the introspection opcode range (`OpTxVersion`).
+pub const INTROSPECTION_OPCODE_MIN: u8 = codes::OpTxVersion;
 
-/// Last byte value of the covenant / introspection opcode range
-/// (`OpBlake3WithKey` — the final covenant-gated opcode, after the
-/// `OpCheckSigFromStack{,ECDSA}` and `OpBlake3` additions).
-pub const COVENANT_OPCODE_MAX: u8 = codes::OpBlake3WithKey;
+/// Last byte value of the introspection opcode range (`OpOutputAuthorizingInput`
+/// — the final covenant/chain-introspection opcode). The crypto opcodes
+/// `OpCheckSigFromStack{,ECDSA}` and `OpBlake3{,WithKey}` (`0xd7..=0xda`) sit
+/// above this and are not introspection.
+pub const INTROSPECTION_OPCODE_MAX: u8 = codes::OpOutputAuthorizingInput;
+
+/// Opcodes that fall inside `INTROSPECTION_OPCODE_MIN..=MAX` but are not
+/// introspection, so they are excluded as interior holes: the numeric-conversion
+/// opcodes `OpNum2Bin` / `OpBin2Num` and the invalid/disabled `OpUnknown202`.
+const NUM2BIN_OPCODE: u8 = codes::OpNum2Bin;
+const BIN2NUM_OPCODE: u8 = codes::OpBin2Num;
+const UNKNOWN202_OPCODE: u8 = codes::OpUnknown202;
 
 /// Byte value of the ZK precompile opcode (`OpZkPrecompile`). It is covenant-
-/// gated like the introspection opcodes but sits below their contiguous range
-/// (`0xa6` vs `0xb2..=0xda`), so it is tracked separately.
+/// gated like the introspection opcodes but sits below their range (`0xa6` vs
+/// `0xb2..=0xd6`), so it is tracked separately.
 pub const ZK_PRECOMPILE_OPCODE: u8 = codes::OpZkPrecompile;
+
+/// Byte value of the chain-block sequencing-commitment opcode
+/// (`OpChainblockSeqCommit`, `0xd4`). Unlike `OpZkPrecompile`, this opcode sits
+/// *inside* the introspection range, so a script using it is counted by both the
+/// introspection detector and this dedicated one (an overlapping subset).
+pub const CHAINBLOCK_SEQCOMMIT_OPCODE: u8 = codes::OpChainblockSeqCommit;
 
 /// Outcome of attempting to read a data push at the current cursor position.
 enum PushScan {
@@ -94,12 +125,16 @@ fn script_contains_opcode(script: &[u8], matches: impl Fn(u8) -> bool) -> bool {
     false
 }
 
-/// Scans a single script body and returns true if it contains any opcode in the
-/// covenant / introspection range. Data pushes are skipped so that bytes inside
-/// pushed data are never mistaken for opcodes.
+/// Scans a single script body and returns true if it contains any introspection
+/// opcode — those in `INTROSPECTION_OPCODE_MIN..=MAX` excluding the interior
+/// holes `OpNum2Bin` / `OpBin2Num` / `OpUnknown202`. Data pushes are skipped so
+/// that bytes inside pushed data are never mistaken for opcodes.
 pub fn script_uses_introspection_opcode(script: &[u8]) -> bool {
     script_contains_opcode(script, |op| {
-        (COVENANT_OPCODE_MIN..=COVENANT_OPCODE_MAX).contains(&op)
+        (INTROSPECTION_OPCODE_MIN..=INTROSPECTION_OPCODE_MAX).contains(&op)
+            && op != NUM2BIN_OPCODE
+            && op != BIN2NUM_OPCODE
+            && op != UNKNOWN202_OPCODE
     })
 }
 
@@ -108,6 +143,15 @@ pub fn script_uses_introspection_opcode(script: &[u8]) -> bool {
 /// data are never mistaken for opcodes.
 pub fn script_uses_zk_precompile_opcode(script: &[u8]) -> bool {
     script_contains_opcode(script, |op| op == ZK_PRECOMPILE_OPCODE)
+}
+
+/// Scans a single script body and returns true if it contains the chain-block
+/// sequencing-commitment opcode (`OpChainblockSeqCommit`). Data pushes are
+/// skipped so that bytes inside pushed data are never mistaken for opcodes.
+/// Because this opcode is within the introspection range, a matching script also
+/// satisfies [`script_uses_introspection_opcode`].
+pub fn script_uses_chainblock_seqcommit_opcode(script: &[u8]) -> bool {
+    script_contains_opcode(script, |op| op == CHAINBLOCK_SEQCOMMIT_OPCODE)
 }
 
 /// Returns the data of the last push operation in `script`, or `None` if there
@@ -164,6 +208,19 @@ pub fn signature_script_reveals_zk_precompile(signature_script: &[u8]) -> bool {
     }
 }
 
+/// Returns true if the redeem script revealed by a signature script (its final
+/// data push) uses the chain-block sequencing-commitment opcode
+/// (`OpChainblockSeqCommit`).
+///
+/// Like [`signature_script_reveals_introspection`], this treats the final push as
+/// a redeem script, so callers must gate on the spent output being P2SH.
+pub fn signature_script_reveals_chainblock_seqcommit(signature_script: &[u8]) -> bool {
+    match last_push_payload(signature_script) {
+        Some(redeem) => script_uses_chainblock_seqcommit_opcode(redeem),
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,13 +231,38 @@ mod tests {
         assert!(script_uses_introspection_opcode(&[0xb4]));
         // OpTxVersion (0xb2), bottom of range
         assert!(script_uses_introspection_opcode(&[0xb2]));
-        // OpBlake3WithKey (0xda), top of range
-        assert!(script_uses_introspection_opcode(&[0xda]));
-        // OpBlake3 (0xd9) and OpCheckSigFromStackECDSA (0xd8) inside the range
-        assert!(script_uses_introspection_opcode(&[0xd9]));
-        assert!(script_uses_introspection_opcode(&[0xd8]));
-        // 0xdb (OpUnknown219) is just past the range and must not match
-        assert!(!script_uses_introspection_opcode(&[0xdb]));
+        // OpOutputAuthorizingInput (0xd6), top of range
+        assert!(script_uses_introspection_opcode(&[0xd6]));
+        // OpChainblockSeqCommit (0xd4) is within the range
+        assert!(script_uses_introspection_opcode(&[0xd4]));
+    }
+
+    #[test]
+    fn excludes_crypto_opcodes_above_range() {
+        // The crypto opcodes now sit above the introspection range max (0xd6)
+        // and must not match: OpCheckSigFromStack (0xd7),
+        // OpCheckSigFromStackECDSA (0xd8), OpBlake3 (0xd9), OpBlake3WithKey (0xda).
+        assert!(!script_uses_introspection_opcode(&[0xd7]));
+        assert!(!script_uses_introspection_opcode(&[0xd8]));
+        assert!(!script_uses_introspection_opcode(&[0xd9]));
+        assert!(!script_uses_introspection_opcode(&[0xda]));
+    }
+
+    #[test]
+    fn excludes_interior_holes() {
+        // OpUnknown202 (0xca, invalid), OpNum2Bin (0xcd) and OpBin2Num (0xce)
+        // fall inside 0xb2..=0xd6 but are not introspection, so they are
+        // excluded as interior holes...
+        assert!(!script_uses_introspection_opcode(&[0xca]));
+        assert!(!script_uses_introspection_opcode(&[0xcd]));
+        assert!(!script_uses_introspection_opcode(&[0xce]));
+        // ...while their in-range neighbors still match: OpTxInputScriptSigLen
+        // (0xc9), OpAuthOutputCount (0xcb), OpAuthOutputIdx (0xcc) and
+        // OpInputCovenantId (0xcf).
+        assert!(script_uses_introspection_opcode(&[0xc9]));
+        assert!(script_uses_introspection_opcode(&[0xcb]));
+        assert!(script_uses_introspection_opcode(&[0xcc]));
+        assert!(script_uses_introspection_opcode(&[0xcf]));
     }
 
     #[test]
@@ -238,6 +320,46 @@ mod tests {
         // detector, and vice-versa — they cover non-overlapping bytes.
         assert!(!script_uses_zk_precompile_opcode(&[0xb4])); // OpTxOutputCount
         assert!(!script_uses_introspection_opcode(&[0xa6])); // OpZkPrecompile
+    }
+
+    #[test]
+    fn detects_chainblock_seqcommit_opcode() {
+        // OpChainblockSeqCommit (0xd4) standing alone
+        assert!(script_uses_chainblock_seqcommit_opcode(&[0xd4]));
+        // Neighboring opcodes must not match
+        assert!(!script_uses_chainblock_seqcommit_opcode(&[0xd3])); // OpCovOutputIdx
+        assert!(!script_uses_chainblock_seqcommit_opcode(&[0xd5])); // OpOutputCovenantId
+        // A zk-precompile byte must not trigger the chainblock detector
+        assert!(!script_uses_chainblock_seqcommit_opcode(&[0xa6]));
+    }
+
+    #[test]
+    fn chainblock_seqcommit_overlaps_introspection() {
+        // OpChainblockSeqCommit (0xd4) is intentionally within the introspection
+        // range, so a script using it satisfies BOTH detectors (an overlapping
+        // subset, unlike the disjoint zk-precompile opcode).
+        assert!(script_uses_chainblock_seqcommit_opcode(&[0xd4]));
+        assert!(script_uses_introspection_opcode(&[0xd4]));
+    }
+
+    #[test]
+    fn ignores_chainblock_seqcommit_byte_inside_data_push() {
+        // OP_PUSH 1 byte [0xd4] then OP_CHECKSIG (0xac) -> no opcode executed
+        assert!(!script_uses_chainblock_seqcommit_opcode(&[0x01, 0xd4, 0xac]));
+    }
+
+    #[test]
+    fn detects_chainblock_seqcommit_via_redeem_script_reveal() {
+        // Build a redeem script that uses OpChainblockSeqCommit (0xd4)
+        let redeem = vec![0xd4, 0xac];
+        // signature script: push a signature, then push the redeem script
+        let mut sig = vec![0x03, 0xaa, 0xbb, 0xcc]; // 3-byte signature push
+        sig.push(redeem.len() as u8); // OP_DATA_2
+        sig.extend_from_slice(&redeem);
+        assert!(signature_script_reveals_chainblock_seqcommit(&sig));
+        // Being within the introspection range, the same reveal also registers
+        // as introspection.
+        assert!(signature_script_reveals_introspection(&sig));
     }
 
     #[test]

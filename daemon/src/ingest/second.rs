@@ -49,6 +49,15 @@ pub struct SecondMetrics {
     // script uses the ZK precompile opcode
     pub zk_precompile_outputs_spent: u64,
 
+    // Count of accepted transactions that use the chain-block sequencing-commitment
+    // opcode (OpChainblockSeqCommit). This opcode is within the introspection
+    // range, so these transactions are also counted in introspection_opcode_tx_count.
+    pub chainblock_seqcommit_tx_count: u64,
+
+    // Count of P2SH outputs spent by accepted transactions whose revealed redeem
+    // script uses the chain-block sequencing-commitment opcode
+    pub chainblock_seqcommit_outputs_spent: u64,
+
     // Count of accepted transactions that create at least one covenant-bound output
     pub covenant_creating_tx_count: u64,
 
@@ -149,6 +158,10 @@ impl SecondMetrics {
             self.zk_precompile_tx_count += 1;
         }
         self.zk_precompile_outputs_spent += delta.zk_precompile_outputs_spent;
+        if delta.uses_chainblock_seqcommit_opcode {
+            self.chainblock_seqcommit_tx_count += 1;
+        }
+        self.chainblock_seqcommit_outputs_spent += delta.chainblock_seqcommit_outputs_spent;
         if delta.covenant_outputs_created > 0 {
             self.covenant_creating_tx_count += 1;
         }
@@ -183,6 +196,13 @@ impl SecondMetrics {
         self.zk_precompile_outputs_spent = self
             .zk_precompile_outputs_spent
             .saturating_sub(delta.zk_precompile_outputs_spent);
+        if delta.uses_chainblock_seqcommit_opcode {
+            self.chainblock_seqcommit_tx_count =
+                self.chainblock_seqcommit_tx_count.saturating_sub(1);
+        }
+        self.chainblock_seqcommit_outputs_spent = self
+            .chainblock_seqcommit_outputs_spent
+            .saturating_sub(delta.chainblock_seqcommit_outputs_spent);
         if delta.covenant_outputs_created > 0 {
             self.covenant_creating_tx_count = self.covenant_creating_tx_count.saturating_sub(1);
         }
