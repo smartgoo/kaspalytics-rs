@@ -1,6 +1,6 @@
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use chrono::{DateTime, Utc};
-use kaspa_consensus_core::subnets::SubnetworkId;
+use kaspa_consensus_core::subnets::{SubnetworkId, SUBNETWORK_ID_COINBASE};
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionId, TransactionIndexType};
 use kaspa_consensus_core::BlueWorkType;
 use kaspa_hashes::Hash;
@@ -306,6 +306,24 @@ pub struct CacheTransaction {
     /// reorg. Empty for transactions that revealed no covenant opcodes.
     #[serde(default)]
     pub revealed_opcode_credits: Vec<RevealedOpcodeCredit>,
+}
+
+impl CacheTransaction {
+    /// True for the block's coinbase transaction.
+    pub fn is_coinbase(&self) -> bool {
+        self.subnetwork_id == SUBNETWORK_ID_COINBASE
+    }
+
+    /// True for any transaction a user broadcast, i.e. everything except the
+    /// coinbase. This deliberately includes subnetwork-tagged transactions:
+    /// per KIP-21 a non-zero 4-byte namespace (Igra Labs L2 uses `0x97b1...`)
+    /// is the user lane, not a system transaction. Every consumer that counts,
+    /// tags, or persists transactions must agree on this predicate — the DB
+    /// writer once tested `subnetwork_id == SUBNETWORK_ID_NATIVE` instead and
+    /// silently dropped all Igra activity that the ingest pipeline had counted.
+    pub fn is_user_transaction(&self) -> bool {
+        !self.is_coinbase()
+    }
 }
 
 impl From<RpcOptionalTransaction> for CacheTransaction {

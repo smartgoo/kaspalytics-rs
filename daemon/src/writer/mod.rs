@@ -5,7 +5,6 @@ use crate::analysis::address_activity::AddressActivityWindow;
 use crate::ingest::model::{CacheTransaction, PruningBatch};
 use chrono::{DateTime, Utc};
 use insert::*;
-use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspalytics_utils::log::LogTarget;
 use log::{debug, info};
 use model::DbNotableTx;
@@ -213,20 +212,20 @@ impl Writer {
     pub async fn handle(&mut self, batch: PruningBatch) {
         let start = Instant::now();
 
-        // Only accepted native (non-coinbase) transactions.
-        let accepted_native: Vec<&CacheTransaction> = batch
+        // Only accepted user transactions — same predicate the ingest pipeline
+        // uses to count and protocol-tag them, so the tables this writer
+        // maintains cannot drift from the in-memory per-second metrics.
+        let accepted_user_txs: Vec<&CacheTransaction> = batch
             .transactions
             .iter()
-            .filter(|tx| {
-                tx.accepting_block_hash.is_some() && tx.subnetwork_id == SUBNETWORK_ID_NATIVE
-            })
+            .filter(|tx| tx.accepting_block_hash.is_some() && tx.is_user_transaction())
             .collect();
 
         // On the first batch with accepted transactions, compute the resync cutoff
         // and delete stale minutely rows. This prevents double-counting on any
         // restart — whether from a fresh sync, an old cache, or a clean restart.
         if self.resync_cutoff_ms.is_none() {
-            if let Some(earliest) = accepted_native.iter().map(|tx| tx.block_time).min() {
+            if let Some(earliest) = accepted_user_txs.iter().map(|tx| tx.block_time).min() {
                 let cutoff_ms = ceil_to_next_minute_ms(earliest);
                 let cutoff_dt = DateTime::<Utc>::from_timestamp_millis(cutoff_ms as i64).unwrap();
 
@@ -248,7 +247,7 @@ impl Writer {
         let mut notable_insert: Vec<DbNotableTx> = Vec::new();
         let mut notable_delete: Vec<Vec<u8>> = Vec::new();
 
-        for tx in &accepted_native {
+        for tx in &accepted_user_txs {
             let (ins, del) = self.notable_tracker.evaluate(tx);
             notable_insert.extend(ins);
             notable_delete.extend(del);
@@ -257,7 +256,7 @@ impl Writer {
         // ── 2. Protocol activity — aggregate per (minute_bucket, protocol_id) ──
         let mut protocol_map: HashMap<(DateTime<Utc>, i32), (i64, i64)> = HashMap::new();
 
-        for tx in &accepted_native {
+        for tx in &accepted_user_txs {
             if let Some(protocol) = &tx.protocol {
                 // Skip the partial minute at the resync boundary.
                 if let Some(cutoff_ms) = self.resync_cutoff_ms {
@@ -284,7 +283,7 @@ impl Writer {
         // Group address spending by minute bucket (BTreeMap keeps minutes ordered).
         let mut by_minute: BTreeMap<u64, HashMap<String, (u64, u64)>> = BTreeMap::new();
 
-        for tx in &accepted_native {
+        for tx in &accepted_user_txs {
             let minute_ms = (tx.block_time / 60_000) * 60_000;
             // Skip the partial minute at the resync boundary.
             if let Some(cutoff_ms) = self.resync_cutoff_ms {

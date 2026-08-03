@@ -89,9 +89,7 @@ fn convert_cache_transaction_to_response(
     transaction_id: String,
     cache_tx: &crate::ingest::model::CacheTransaction,
 ) -> TransactionResponse {
-    use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
-
-    let is_coinbase = cache_tx.subnetwork_id == SUBNETWORK_ID_COINBASE;
+    let is_coinbase = cache_tx.is_coinbase();
 
     // Convert inputs
     let mut total_input_amount = 0i64;
@@ -167,15 +165,10 @@ fn convert_cache_transaction_to_response(
         std::cmp::max(0, total_input_amount - total_output_amount)
     };
 
-    // Format subnetwork ID
-    let subnetwork_id_text =
-        if cache_tx.subnetwork_id == kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE {
-            "0000000000000000000000000000000000000000".to_string()
-        } else if cache_tx.subnetwork_id == SUBNETWORK_ID_COINBASE {
-            "0100000000000000000000000000000000000000".to_string()
-        } else {
-            format!("{:?}", cache_tx.subnetwork_id)
-        };
+    // Format subnetwork ID. Display hex-encodes all 20 bytes, so native,
+    // coinbase and user-lane subnetworks (e.g. Igra's 97b1...) all render
+    // consistently.
+    let subnetwork_id_text = cache_tx.subnetwork_id.to_string();
 
     // Create transaction data
     let transaction_data = TransactionData {

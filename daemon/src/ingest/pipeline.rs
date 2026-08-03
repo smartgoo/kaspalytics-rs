@@ -4,7 +4,6 @@ use crate::analysis::transactions::protocol::inscription::parse_signature_script
 use crate::analysis::transactions::protocol::TransactionProtocol;
 use crate::ingest::cache::Reader;
 use crate::ingest::model::CacheUtxoEntry;
-use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::{RpcBlock, RpcChainBlockAcceptedTransactions};
 use kaspa_txscript::script_class::ScriptClass;
@@ -423,7 +422,7 @@ fn transaction_add_pipeline(
 
     // Transaction is not in cache
     // Run process to determine TX type, protocol
-    if transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
+    if transaction.is_coinbase() {
         dag_cache
             .seconds
             .entry(block_time / 1000)
@@ -464,7 +463,7 @@ fn add_transaction_acceptance(
     let tx_timestamp = tx.block_time;
 
     // Increment transaction counts
-    if tx.subnetwork_id == SUBNETWORK_ID_COINBASE {
+    if tx.is_coinbase() {
         dag_cache
             .seconds
             .entry(tx_timestamp / 1000)
@@ -628,7 +627,7 @@ fn remove_transaction_acceptance(dag_cache: Arc<DagCache>, transaction_id: Hash)
     let tx_timestamp = tx.block_time;
 
     // Increment transaction counts
-    if tx.subnetwork_id == SUBNETWORK_ID_COINBASE {
+    if tx.is_coinbase() {
         dag_cache
             .seconds
             .entry(tx_timestamp / 1000)
