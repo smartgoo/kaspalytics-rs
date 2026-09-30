@@ -7,9 +7,31 @@ use cmds::{blocks::pipeline::BlockAnalysis, utxo::pipeline::UtxoBasedPipeline};
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspalytics_utils::log::LogTarget;
 use kaspalytics_utils::{database, TARGET_FD_LIMIT};
-use log::{debug, info};
+use log::{debug, error, info};
 use std::sync::Arc;
 use std::time::Instant;
+
+/// Chains onto the existing panic hook to log and email an alert on failure.
+///
+/// CLI commands return `()` and unwrap internally, so a panic is the only way
+/// a command reports failure. Hooking it gives one notification point that
+/// covers every command, rather than only the success emails commands send
+/// themselves.
+fn install_failure_alert_hook(config: kaspalytics_utils::config::Config, command: String) {
+    let default_hook = std::panic::take_hook();
+
+    std::panic::set_hook(Box::new(move |panic_info| {
+        default_hook(panic_info);
+
+        error!(target: LogTarget::Cli.as_str(), "{} command failed: {}", command, panic_info);
+
+        let _ = kaspalytics_utils::email::send_email(
+            &config,
+            format!("{} command failed!", command),
+            format!("{}", panic_info),
+        );
+    }));
+}
 
 #[tokio::main]
 async fn main() {
@@ -19,6 +41,8 @@ async fn main() {
     config.log_level = cli.global_args.log_level;
 
     kaspalytics_utils::log::init_logger(&config, "cli").unwrap();
+
+    install_failure_alert_hook(config.clone(), format!("{:?}", cli.command));
 
     let (soft, hard) = rlimit::getrlimit(rlimit::Resource::NOFILE).unwrap();
     debug!(target: LogTarget::Cli.as_str(), "fd limit before: soft = {}, hard = {}", soft, hard);

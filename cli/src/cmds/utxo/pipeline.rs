@@ -16,12 +16,13 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use kaspalytics_utils::config::Config;
 use kaspalytics_utils::kaspad::db::UtxoIndexSecondary;
 use kaspalytics_utils::log::LogTarget;
-use log::debug;
+use log::{debug, error};
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use tokio::time::sleep;
 
 #[derive(Default)]
 struct UtxoSetLoadResults {
@@ -360,14 +361,52 @@ impl UtxoBasedPipeline {
 }
 
 impl UtxoBasedPipeline {
+    // CoinGecko's free tier sporadically rate limits (HTTP 403), and the top of
+    // the hour is a burst window. Retry rather than losing a whole day's
+    // snapshot to a transient price lookup.
+    async fn get_kas_price_usd(&self) -> Result<Decimal, reqwest::Error> {
+        let mut attempt = 1;
+        let max_attempts = 10;
+        let retry_delay = std::time::Duration::from_secs(60);
+
+        loop {
+            debug!(
+                target: LogTarget::Cli.as_str(),
+                "Retrieving KAS/USD price, attempt {}/{}...",
+                attempt, max_attempts
+            );
+
+            match kaspalytics_utils::coingecko::get_simple_price().await {
+                Ok(price) => return Ok(price.kaspa.usd),
+                Err(err) if attempt < max_attempts => {
+                    error!(
+                        target: LogTarget::Cli.as_str(),
+                        "KAS/USD price lookup failed on attempt {}/{}: {}. Retrying in {:?}...",
+                        attempt, max_attempts, err, retry_delay
+                    );
+
+                    attempt += 1;
+                    sleep(retry_delay).await;
+                }
+                Err(err) => {
+                    error!(
+                        target: LogTarget::Cli.as_str(),
+                        "KAS/USD price lookup failed after {} attempts: {}",
+                        max_attempts, err
+                    );
+
+                    return Err(err);
+                }
+            }
+        }
+    }
+}
+
+impl UtxoBasedPipeline {
     pub async fn run(&mut self) {
         // Get KAS/USD price
-        debug!(target: LogTarget::Cli.as_str(), "Retrieving KAS/USD price...");
-        let kas_price_usd = kaspalytics_utils::coingecko::get_simple_price()
-            .await
-            .unwrap()
-            .kaspa
-            .usd;
+        // On failure, panic alerts via the hook installed in main
+        let kas_price_usd = self.get_kas_price_usd().await.unwrap();
 
         // Get UTXO tips from utxoindex db
         debug!(target: LogTarget::Cli.as_str(), "Loading UTXO tips from RocksDB...");
